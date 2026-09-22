@@ -379,14 +379,25 @@ def load_corpus() -> dict:
                 c.get("severity", "?")
             )
     names = sorted(f"{cat}/{n}" for cat, ns in cats.items() for n in ns)
-    digest = hashlib.sha256("\n".join(names).encode()).hexdigest()
+    # MEMBERSHIP, not assertions. This is a digest over `category/name` -- it identifies WHICH
+    # checks the corpus below contains and says nothing about WHAT they assert. That is the
+    # right quantity for the scope line it anchors, and it is the wrong quantity for a verdict:
+    # `GUIDE-CONFORMANCE` §3.1 item 7 requires a published number be dual-anchored on the oracle
+    # commit AND a `check_set_digest` over the exact assertions in the run, and bans by name the
+    # family of "a value that tracks which checks ran rather than what they assert".
+    #
+    # Renamed 2026-09-15 from `digest` / "corpus digest". Nothing was wrong with the value or
+    # with the one packet that quoted it as a scope; the NAME was arch's §5.1 term for the
+    # sha256 of a fixture corpus artifact, and a membership value wearing that name is how the
+    # substitution §3.7 bans gets made later by a reader who only sees the print line.
+    membership = hashlib.sha256("\n".join(names).encode()).hexdigest()
     return {
         "categories": cats,
         "reports": parsed,
         "files": len(files),
         "synthetic_dropped": synthetic,
         "checks": len(names),
-        "digest": digest,
+        "membership": membership,
     }
 
 
@@ -716,7 +727,7 @@ def self_test() -> int:
             }
             corpus = {"categories": {"fake": {c: {"PASS"} for c in corpus_checks}},
                       "checks": len(corpus_checks), "reports": 1, "files": 1,
-                      "synthetic_dropped": 0, "digest": ""}
+                      "synthetic_dropped": 0, "membership": ""}
             res = Result()
             evaluate(contract, snap, corpus, res)
             return res
@@ -817,7 +828,8 @@ def main() -> int:
     print(f"executed corpus: {corpus['checks']} checks over "
           f"{len(corpus['categories'])} categories, from {corpus['reports']} reports "
           f"({corpus['synthetic_dropped']} synthetic core-profile carve-outs dropped)")
-    print(f"corpus digest:   {corpus['digest'][:16]}")
+    print(f"corpus membership (sha256 over category/name -- NOT a check_set_digest, "
+          f"§3.1(7)): {corpus['membership'][:16]}")
 
     if not corpus["checks"]:
         print("\nREFUSING: the executed corpus is empty. Run `make conformance` first — a "
