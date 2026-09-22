@@ -1,0 +1,17 @@
+# Local agent context — injectable, never committed ([ADR-0020]).
+AGENTS.local.md
+.agents/
+
+# Nothing secret belongs here; refuse it if it ever lands.
+*.pem
+*.secret
+*.key
+*-pat*
+
+# Scratch / build output.
+/scratch/
+/output/
+/target/
+/build/
+__pycache__/
+*.pyc
