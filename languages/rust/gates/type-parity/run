@@ -10,9 +10,18 @@
 # into a composition is one whose entities nobody is shipping.
 set -eu
 EXT="${1:?usage: run <extension>}"
-COMPOSITION="${COMPOSITION:-content-history}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+TARGET="$(basename "$TARGET_DIR")"
+
+# WHICH composition's stage holds this cell -- RESOLVED, never defaulted. This line read
+# `COMPOSITION="${COMPOSITION:-content-history}"` in all three arms, which is the (extension
+# -> composition) mapping as a LITERAL while the Makefile made the extension axis a wildcard.
+# See `tools/gate-composition`. This arm reaches the cell by crate path rather than through a
+# stage, so the resolution changes only WHICH stage the existence check below is made against
+# -- which is still the right stage, and was not before.
+COMPOSITION="${COMPOSITION:-$("$ROOT/tools/gate-composition" "$TARGET" "$EXT")}"
 STAGE="$TARGET_DIR/output/$COMPOSITION/build"
 [ -d "$STAGE" ] || { echo "REFUSING: no staged build at $STAGE -- run: make build TARGET=$(basename "$TARGET_DIR") COMPOSITION=$COMPOSITION" >&2; exit 2; }
 

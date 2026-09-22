@@ -25,6 +25,7 @@
 #   make citations        every path a declaration file cites resolves (D18)
 #   make toolchain        the host contract is declared, and the host half stays stdlib-only
 #   make req-coverage     every requirement the spec declares is mapped to an instrument
+#   make seed-policy      is authorization OBSERVABLE on this peer at all? (the posture gate)
 #   make ext-checks       the authored extension checks, both arms (Kind C -- never a verdict)
 #   make clean            remove every target's output/
 #   make reap             remove any container this repo left behind (label-scoped, safe)
@@ -57,6 +58,7 @@ COMPOSITIONS  = $(notdir $(wildcard languages/$(TARGET)/compositions/*))
 PROBE_TARGETS  = $(patsubst languages/%/gates/host-seam/run,%,$(wildcard languages/*/gates/host-seam/run))
 PARITY_TARGETS = $(patsubst languages/%/gates/chunking-parity/run,%,$(wildcard languages/*/gates/chunking-parity/run))
 TYPES_TARGETS  = $(patsubst languages/%/gates/type-parity/run,%,$(wildcard languages/*/gates/type-parity/run))
+SEEDPOL_TARGETS = $(patsubst languages/%/gates/seed-policy/run,%,$(wildcard languages/*/gates/seed-policy/run))
 # The extension axis of type-parity is a wildcard too: the gate is per (extension x arm),
 # so a new contract directory joins the cohort without a Makefile edit, exactly as a new
 # target directory does.
@@ -141,6 +143,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
         parity clean sdk-parity structure drivers error-codes error-codes-control \
         scale scale-control type-parity glue glue-control \
         req-coverage req-coverage-control ext-checks ext-checks-control \
+        seed-policy seed-policy-control \
         expectation expectation-control diff-arms-control \
         citations citations-control toolchain toolchain-control \
         spec-lists spec-lists-control routing routing-control \
@@ -367,7 +370,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage spec-lists toolchain
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage spec-lists toolchain seed-policy
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -513,6 +516,29 @@ probe:
 			./languages/$$t/gates/host-seam/run || exit 1; \
 	done
 
+# ── seed policy ─────────────────────────────────────────────────────────────────
+# Can this target's peer be put in a posture where authorization is OBSERVABLE at all?
+# Not a question about an extension -- a question about what we are able to measure.
+# `gates/seed-policy/README.md`. An arm exits 2 (REFUSING) on a peer whose seed policy is
+# a boolean, which is `python` and `rust` today (keystone K-7).
+seed-policy:
+	@echo "seed-policy arms: $(SEEDPOL_TARGETS)"
+	@for t in $(SEEDPOL_TARGETS); do \
+		echo "=== seed-policy: $$t ==="; \
+		$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+			./languages/$$t/gates/seed-policy/run || exit 1; \
+	done
+
+# The planted defect: the permission predicate replaced by `() => true`. It must redden the
+# NARROW arm and leave `default -> *` alone -- an instrument whose control moves an arm that
+# was already green has not been controlled (D15).
+seed-policy-control:
+	@for t in $(SEEDPOL_TARGETS); do \
+		echo "=== seed-policy control: $$t ==="; \
+		$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+			./languages/$$t/gates/seed-policy/run --self-test || exit 1; \
+	done
+
 # ── chunking parity ─────────────────────────────────────────────────────────────
 # One corpus, every target's transcription of §3.6, compared byte for byte.
 #
@@ -556,25 +582,44 @@ parity:
 # The extension is an axis here, unlike chunking-parity: types are per-extension, so the
 # runner is a double loop over two wildcards and the counts are ECHOED before each verdict.
 #
-# TYPES_MIN_PORTS floors at the number of arms that EXIST rather than at a constant, and
-# a target whose arm cannot run for the day (a peer mid-rebuild, a missing stage) shows up
-# as a smaller echoed list rather than as a quietly narrower verdict.
+# THE ARM SET IS PER (EXTENSION x TARGET), NOT PER TARGET, and that is a 2026-09-12
+# correction rather than a refinement.
+#
+# `TYPES_MIN_PORTS` used to floor at `$(words $(TYPES_TARGETS))` -- every target that has a
+# type-parity ARM -- on the reasoning that a target whose arm cannot run shows up as a smaller
+# echoed list rather than as a quietly narrower verdict. That reasoning is right and the
+# DENOMINATOR was wrong: the arm axis and the CELL axis are not the same set. `rust` has a
+# type-parity arm and no `compute` cell, so a per-target floor demands a report from a port
+# that has nothing to report, and `make type-parity` can never go green until every target
+# has every extension.
+#
+# The floor is now the number of targets that have a CELL for THIS extension -- the same
+# "what exists" rule, one axis finer -- computed by wildcard, printed per extension, and
+# handed to `compare.py` which refuses below two on its own account. An extension whose cell
+# count drops still shows up as a smaller echoed list, which is the property the old comment
+# was protecting.
 TYPES_OUT        = output/type-parity
-TYPES_MIN_PORTS ?= $(words $(TYPES_TARGETS))
+# A target is an arm for <ext> only if it HAS an <ext> cell. Wildcard, never a list.
+types_arms = $(patsubst languages/%/extensions/$(1),%,$(wildcard $(foreach t,$(TYPES_TARGETS),languages/$(t)/extensions/$(1))))
 
 type-parity:
-	@echo "type-parity arms ($(TYPES_MIN_PORTS)): $(TYPES_TARGETS)"
+	@echo "type-parity targets with an arm: $(TYPES_TARGETS)"
 	@echo "type-parity extensions: $(TYPES_EXTS)"
 	@mkdir -p $(TYPES_OUT)
 	@for e in $(TYPES_EXTS); do \
-		rm -f $(TYPES_OUT)/$$e-*.json; \
+		arms=""; n=0; \
 		for t in $(TYPES_TARGETS); do \
+			if [ -d "languages/$$t/extensions/$$e" ]; then arms="$$arms $$t"; n=$$((n + 1)); fi; \
+		done; \
+		echo "=== type-parity: $$e -- $$n port(s) with a cell:$$arms"; \
+		rm -f $(TYPES_OUT)/$$e-*.json; \
+		for t in $$arms; do \
 			echo "=== type-parity: $$e x $$t ==="; \
 			$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
 				./languages/$$t/gates/type-parity/run $$e \
 				> $(TYPES_OUT)/$$e-$$t.json || exit 1; \
 		done; \
-		./gates/type-parity/compare.py --min-ports $(TYPES_MIN_PORTS) \
+		./gates/type-parity/compare.py --min-ports $$n \
 			$(TYPES_OUT)/$$e-*.json || exit 1; \
 	done
 

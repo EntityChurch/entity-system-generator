@@ -1,0 +1,13 @@
+#!/bin/sh
+# ONE UNIFORM ENTRY POINT PER (gate x target) -- `gates/README.md`, the matrix as data. A new
+# target is a directory, never a Makefile edit.
+#
+#   gates/<gate>/run            exit 0 = the gate passed for this target
+#                               exit 2 = REFUSING; nothing was measured (D15, sharpened)
+set -eu
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+cd "$ROOT"
+
+exec node languages/typescript/gates/seed-policy/probe-policy.mjs "$@"

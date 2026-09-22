@@ -6,6 +6,101 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**`python` × `COMPUTE` is BUILT, COMPOSED AND MEASURED: 125 PASS · 0 WARN · 3 FAIL of 128, from a
+bare arm of 0 of 128. 0 core regressions across 778 core checks, 115 unit tests. The second port
+of the largest extension in the corpus, and it matched the first exactly.**
+
+**The number that is worth more than the total is the NAME SET.** The improvement sets are
+identical across the two ports — 125 of 125 in `compute` and 63 of 63 in `core`, compared as SETS
+before either baseline was blessed. Two derivations of one spec, on two runtimes whose value models
+disagree about what an integer is, agreeing on every check the oracle scores and on every check it
+does not. **That is still not independence** (L18): both ports were written by one team from one
+reading of one pinned snapshot, and a cohort agreeing is a cohort agreeing. What it does settle is
+narrower and real — the 33 type entities are byte-identical to `entity-core-go`'s own transcription,
+because the 63 `type_compute_*_match` checks are a hash comparison against a third codebase.
+
+**The pre-registered band was 118–125 and the measurement is the top of it.** The seven checks of
+margin were not a safety cushion; they were seven NAMED places where this runtime's own semantics
+differ from §4.1's, written into `[gate.expectation]` before the run: `%` floors where §4.1
+truncates; float `/` by zero raises where IEEE returns `±Inf`; `bool` is an `int` SUBCLASS so
+`eq(true, 1)` must be forced false; `[-1]` is a legal read where §2.2 says `index_out_of_range`;
+`bool({})` and `bool(b"")` are falsy where §4.5's list has neither; `//` floors where an exact
+quotient wants truncation; `sorted()` is lex where `canonical_sorted` is length-then-lex. Every one
+has a unit test with a control, and every one cost zero checks. **What the band was really pricing
+is how much of a host language an implementer adopts without noticing** — and on this substrate the
+answer is that they are all catchable, provided the port is written against the spec's helpers
+rather than the host's operators. `evaluator.ts` carries a comment predicting the first of them,
+written at port one by someone who could not check it.
+
+**THE FIFTH FACE IS NOT INSTALLABLE HERE, AND IT COSTS NOTHING — which is a new shape.**
+`Peer.setExpressionEvaluator` is keystone's H7 and exists on ONE of the 46 peers.
+`Peer._entity_native_dispatch` on this one evaluates the built-in `compute/literal` shape and then
+answers `501 unsupported_expression`, with no consultation step between the two at any visibility,
+so the face reads `not-installable` rather than `not-installed`. **Exactly one of the 128 checks
+reaches the entity-native path, and it already FAILS on the port that HAS the seam** — for the
+unrelated K-5 reason. So `rust × CONTENT` showed four faces getting different answers on one peer
+with the extension doing nothing; this shows a peer hosting four of five faces, missing the fifth,
+and working completely. **A face can be absent, correctly reported, and cost nothing; the score is
+still not a statement about it.** Not routed as an ask: requesting a seam that would not move a
+number is tracking another seat's queue.
+
+**The substrate model learned a THIRD ROW KIND, so the tier stays CORE by its own criterion.** The
+existing kinds record what a peer CANNOT DO and what cannot be MEASURED. The new one records what a
+**runtime does by itself** — nothing is missing, the peer is not narrower, the language simply has
+an opinion and §4.1 has a different one. `AGENTS.md` says revisit *"when a port stops changing the
+shape of the table"*; this port added a kind at the eighth composition.
+
+**Three instrument defects, all found by running, all in gates that were otherwise working — and
+all one shape: a GATE'S OWN CONFIGURATION is the thing nothing watches.** D16's ninth instance,
+turned inward from the seventh and eighth.
+
+- **`[sdk_surface]` was authored at port one, citing D16 by name, and parsed by nothing for two
+  days** (AP-37). `sdk-parity.py` refuses below two ports, so the block sat in the wrong FORM — 67
+  raw identifiers where the key is `kind:snake_case` — until the second port made it run, and then
+  it died with `IndexError` mid-`make check`. **The crash was the lucky outcome**: without it all
+  67 would have read as *missing from both ports*, and sixty-seven false reds is how a gate stops
+  being believed. *A gate whose refusal threshold is N leaves every declaration below N unread.*
+- **The `python` surface extractor returned 3 names of 75** (AP-38), because `(.*?)\]` stopped at a
+  `]` inside an explanatory comment. The vacuity refusal could not catch it — **three is not
+  zero** — which is D15's clause-2 gap arriving at a refusal threshold rather than at a corpus
+  assertion. The `typescript` arm had been fixed for the identical cause six days earlier; the arm
+  one directory over had not, because arms are per-target by design and nothing compares them.
+- **`make type-parity` could not measure COMPUTE on any target, and had not been able to since the
+  contract landed** (AP-39). The extension axis was a wildcard *"so a new contract directory joins
+  the cohort without a Makefile edit"*; the three arms each hardcoded
+  `COMPOSITION="${COMPOSITION:-content-history}"`, a stage that holds `extension-content` and
+  `extension-history` and nothing else. It refused honestly (`UNKNOWN`, exit 3) for three days
+  inside `make check`. **A gate with three axes can be data in two of them and a literal in the
+  third**, and `check-drivers.py` cannot see it because that gate fails a value which DIFFERS
+  across targets and this one was identical in all three — recorded as a declared limit of D17's
+  enforcement point, not as a new gate.
+
+After the fix: **the first full-parity result this repo has produced.** `75 required · 75 in every
+port · 0 drift · 0 undeclared` on the first two-port run, against CONTENT's opening `24 required ·
+9 substrate · 18 drift` and HISTORY's second port at 22 names with 20 differing. Not virtue — the
+flat-constants decision was already paid for, and this port was written with `[sdk_surface]` open
+beside it. **The gate earned its keep by being consulted before the port rather than after**, which
+is the first time that has happened here. And `make type-parity` now reports 2 ports agreeing on
+all 33 compute type entities by content hash AND field map.
+
+**One finding routed, and the contract had pre-committed to routing it.** §3.5 pins
+`count_out_of_range`'s code and its refuse-not-clamp rule and leaves the BOUND unstated;
+`[assumptions].range_max_length` said at port one that *"a `python` or `rust` port will have a
+different one … the second port is where it either agrees or produces a routing packet."* It
+disagrees: `2**32 - 2` on V8, `sys.maxsize` on CPython, each port reading *"the maximum
+representable array length"* as its own runtime's — the only reading the sentence offers. §3.5
+declined to clamp **because the refusal is observable**, which makes its trigger part of the
+program's meaning. Neither port was changed and no number was standardised across them: picking a
+value the spec left open, on a sample of two, is L18 with a decimal point. `A-26`.
+
+**Two divergences between our own two ports, declared rather than reconciled**, and they are a new
+category in `[assumptions]` — ours-vs-ours, where the spec does not care and there is nobody to
+ask. A malformed expression is a `compute/error` at 200 here and an exception out of the handler
+there (§2.4/F10 makes this port right). The reserved relative forms §1.4 names — `./x`, `../x`,
+`*/x` — are refused here and accepted there, **because one port called the peer's own
+`canonicalize` and the other wrote three characters of it**: D12's *use the peer's primitive* is
+usually argued from semantics, and here it bought a §1.4 refusal nobody had noticed was required.
+
 **`typescript` × `COMPUTE` is BUILT, COMPOSED AND MEASURED: 125 PASS · 0 WARN · 3 FAIL of 128,
 from a bare arm of 0 of 128. 125 improvements, 0 core regressions across 777 core checks, 52 unit
 tests.** The largest extension in the corpus — 33 owned types against HISTORY's six, 128 oracle
@@ -108,11 +203,18 @@ table names none of the five codes §3.2/§3.3/§3.4 raise**, one of which §10.
 them on each GRANT ENTRY — so a literal transcription reads nothing, falls back to peer defaults,
 and produces the constraint escalation §5.5 exists to prevent.
 
-**Two of those five are invisible to the conformance corpus in principle, and that is stated rather
-than implied.** `validate-peer` launches its host with `--debug-open-grants`, so every install-time
-capability check passes whatever the audit collected — an under-authorizing audit scores identically
-to a correct one. The evidence is a diff of two listings plus our own tests, and it is filed that
-way.
+**Two of those five are unmeasured in the posture we run the conformance suite in — and the posture
+is ours, which is a correction to what this log said a day earlier.** It previously read *"invisible
+to the conformance corpus in principle,"* attributed to the validator launching its host with the
+degenerate `default → *` grant policy. The validator launches nothing; it dials an address. **Our
+own harness** starts the peer under test that way, so every install-time capability check passes
+whatever the audit collected and an under-authorizing audit scores identically to a correct one.
+
+That distinction is not pedantic. `ENTITY-CORE-PROTOCOL` §6.9a (Peer Authority Bootstrap) deprecated
+the wide-open debug grant in v7.74 and schedules its removal for v7.75, replacing it with a **declared seed
+policy** — and under any policy narrower than `*` the two readings of §3.3 answer differently. So
+these findings are measurable; they are simply not measured by a suite we hand a wide-open peer. The
+evidence on file remains a diff of two listings plus our own tests, and it is still filed that way.
 
 **A control that stayed GREEN with the code deleted, and it changed a discipline.** The test for
 §7.2's convergence check asserted the two things a consumer can see — the result hash did not move,
@@ -130,7 +232,7 @@ the dispatch boundary and a caller reaching `system/compute:eval` could read any
 predicate is public, and this repo is the seat that routed it — keystone H9, landed, recorded CLOSED
 on our own tracker.** One tree, two answers, and nothing joins a tracker row to an assumption block.
 The check is now per tree read on both capability-bearing paths, with its own negative control,
-because `--debug-open-grants` means the oracle cannot distinguish a real check from `return true`.
+because a peer running the wide-open grant policy cannot distinguish a real check from `return true`.
 
 **Three normative rules were got wrong and fixed by the oracle telling us, and they are the ones
 worth carrying to the next port.** §2.2 rules 8/10/11: `add`/`sub`/`mul` are **sign-agnostic**

@@ -474,6 +474,22 @@ This is V8's own limit. A `python` or `rust` port will have a different one, so 
 is `[substrate]`-shaped and the second port is where it either agrees or produces a
 routing packet. Recorded here rather than routed yet: one port cannot show a
 disagreement.
+
+** THE SECOND PORT ARRIVED AND IT DISAGREES. ROUTED 2026-09-12. ** `python`'s own maximum
+list length is `sys.maxsize` = 2^63 - 1, against V8's 2^32 - 2. So
+`range(5_000_000_000)` is `count_out_of_range` on one of our ports and an accepted (if
+unrunnable) program on the other — a BOUNDARY VALUE a program can observe, in a position
+§3.5 pins the CODE and the refuse-not-clamp rule for and leaves the number unstated.
+
+** NEITHER PORT WAS CHANGED, AND THAT IS THE POINT OF ROUTING IT. ** Each declares its own
+runtime's limit, which is what this row's `value` field says the rule is. Picking one number
+for both would be this repo standardising a value §3.5 left open, on two samples, which is
+L18 with a decimal point — and picking V8's on a runtime with no such limit would refuse
+programs for a reason that does not exist there. `ROUTING-2026-09-12-b-arch-*`.
+
+No oracle vector reaches it: `grep -c "builtins/range" ../entity-core-go/cmd/internal/validate/compute.go`
+-> `0`. Both ports have a unit test asserting the refuse-not-clamp rule and the code; neither
+asserts the bound, because the bound is the thing in dispute.
 """ }
 
 builtins_override_guard = { value = "enforced in this extension, by us, from port one", cite = "§4 / §3.5's override prohibition, v3.29", note = """
@@ -524,15 +540,84 @@ WHAT IT IS NOW, per entry point, because the three do not get the same answer:
 The third row is why `CAPABILITY_CHECK_IS_DISPATCH_SCOPED` still exists as a named export
 rather than being deleted; it now reads `false` and documents the split.
 
-** AND THE CHECK CARRIES ITS OWN NEGATIVE CONTROL, BECAUSE THE ORACLE STRUCTURALLY CANNOT.
-** `validate-peer` runs against a host launched with `--debug-open-grants`, so every
-capability in the corpus is the wide-open `*` admin grant and every `check_path_permission`
-answers true. A port that implemented §6.2 per read and one that answered `true`
-unconditionally produce the same 128 numbers. `test/reactive.test.ts` drives a narrow
+** AND THE CHECK CARRIES ITS OWN NEGATIVE CONTROL, BECAUSE THE POSTURE WE LAUNCH IN CANNOT.
+** CORRECTED 2026-09-11 — the earlier wording here said *"`validate-peer` runs against a host
+launched with `--debug-open-grants`"*, which attributes OUR harness configuration to the oracle.
+`validate-peer` launches nothing: it dials `-addr` (`cmd/validate-peer/main.go:24`, `entity-core-go`
+@ `b320c1e`), and `grep -rn "open.grants" cmd/validate-peer/ cmd/internal/validate/ | wc -l` → `4`,
+all of them comments or a REGISTRY check name, none a launch flag. **We** pass
+`--debug-open-grants` to the host under test, at `tools/host-launch:137`, and `-open-access` to the
+go reference peer at `tools/host-launch:220`.
+
+The EFFECT claim stands and is unchanged: that flag selects the degenerate `default → *` seed
+policy, so every capability in the corpus is the wide-open `*` admin grant and every
+`check_path_permission` answers true. A port that implemented §6.2 per read and one that answered
+`true` unconditionally produce the same 128 numbers. **What changes is whose choice it is** — the
+posture is ours, it is DEPRECATED (V7 §6.9a, v7.74; removed v7.75), and on this target the peer
+library takes a real `SeedPolicy` object instead
+(`protocol-generator/typescript/src/peer.ts:59`,
+`protocol-generator/typescript/src/capability/seed-policy.ts:23`, keystone @ `0f99563d`).
+See `[substrate.seed_policy_surface]`. `test/reactive.test.ts` drives a narrow
 `app/*` grant through `ComputeHandler.handle` and requires `permission_denied` on a path
 outside it — twice, once at the evaluator and once through a real `HandlerContext`, because
 the first of those would pass with the handler's wiring removed.
 """ }
+
+# ── The three below are all 2026-09-12, all from the SECOND port ────────────────────
+#
+# **THEY ARE A NEW CATEGORY OF ASSUMPTION AND THE CATEGORY IS WORTH NAMING: OURS-vs-OURS.**
+# Every other entry in this block is a reading of a spec that is ambiguous or of a peer that is
+# narrow. These three are places where the two PORTS answer differently and the spec does not
+# care — so there is nothing to route and nobody to ask, and the only thing that stops them
+# becoming a bug report is being written down. In all three the `python` reading is the more
+# spec-faithful one and the `typescript` port carries the worklist item.
+
+malformed_expression_disposition = { value = "python: `compute/error{invalid_expression}` at 200. typescript: an exception out of the handler.", cite = "§2.4 / §3.2 F10", note = """
+A required expression field that is absent or the wrong ECF type — `compute/lookup/scope` with
+no `name`, `compute/arithmetic` with no `left`. `typescript`'s `Ecf.requireText` THROWS, so
+that port answers 5xx; this port raises a private `_Malformed` carrier, catches it at the top
+of `_evaluate_inner`, and returns a value at 200.
+
+§2.4 and §3.2's F10 say an evaluation fault is a VALUE, so this port's answer is the faithful
+one. No oracle vector reaches it — every `compute` vector sends a well-formed graph — so this
+is a worklist item against the other port, not a finding about anyone.
+""" }
+
+reserved_relative_path_forms = { value = "python: `invalid_expression`. typescript: accepted, then `not_found`.", cite = "§1.4 / §5.4 via §2.1's `system/tree/path`", note = """
+`./x`, `../x` and `*/x` are the reserved forms core §1.4/§5.4 name as errors. This port
+canonicalizes through **the peer's own** `entity_core.peer.capability.canonicalize`, which
+returns `None` for all three; `typescript`'s port re-derives the rule inline as
+`path.startsWith("/") ? path : "/" + peer + "/" + path`, which accepts them and produces a path
+that resolves to nothing.
+
+** THE INTERESTING PART IS WHY, NOT WHICH. ** The divergence is not a reading — it is that one
+port called the primitive and one port wrote three characters of it. D12's *use the peer's
+own function* is usually argued from correctness-of-semantics; here it bought a §1.4 refusal
+nobody in this repo had noticed was required. Worklist item against the other port.
+""" }
+
+grant_covers_absent_operation = { value = "python: asks the peer about the empty string, which a non-`*` grant refuses. typescript: skips the operations dimension.", cite = "§3.3 Phase 2 check_grant_covers", note = """
+A `compute/apply` with a `path` and no `operation` — which §4.1 rejects at EVALUATION as
+`invalid_expression`, so no well-formed graph reaches it.
+
+The two ports differ because they reach the §5.2 conjunction differently. `typescript` walks
+`capability.grants` directly, because that peer exposes a `CapabilityToken` with typed grant
+records, and skips a dimension it has no value for. Here every scope helper is
+leading-underscore, so the four dimensions are asked through the public `check_permission` by
+SYNTHESISING an EXECUTE — and an EXECUTE has an `operation` field that is either a string or
+absent, with no "do not ask" spelling.
+
+** THE SYNTHESIS IS LEGITIMATE HERE AND WAS NOT IN HISTORY §4.2's CASE, AND THE DIFFERENCE IS
+THE SHAPE OF THE QUESTION. ** §4.2 asks about a PATH and the peer has a path-shaped primitive
+(`check_path_permission`, our own H9). §3.3 asks about a (handler, operation, resource) TRIPLE,
+which IS a dispatch authorization and is exactly what `check_permission` reads off an EXECUTE.
+The synthetic entity is a carrier for three arguments; it is never dispatched, signed or sent.
+
+Stricter than the sibling, unreachable for any well-formed graph, and invisible under the `*`
+posture the suite runs in. Declared rather than reconciled because a difference nobody wrote
+down is the one that becomes a bug report.
+""" }
+
 
 # ── The five below are all 2026-09-10, all from building §3.3 and §7 ────────────────
 
@@ -554,10 +639,15 @@ what Phase 2 capability-checks. A literal transcription authorizes a `compute/lo
 at the top level of an expression and SKIPS the same read one function-argument deep. That
 is an under-authorization, not a missed wake-up.
 
-** NO ORACLE CHECK CAN SEE IT AND THAT IS STATED RATHER THAN IMPLIED. ** The D8 rows
-(`d8_reeval_dep_in_apply_arg`) measure §7.1's walker through re-evaluation. Nothing measures
-§3.3's, because `--debug-open-grants` makes every Phase 2 check pass. The evidence for A-17
-is a diff of two listings plus our own test, not a failing check.
+** NO ORACLE CHECK SEES IT IN THE POSTURE WE RUN, AND THAT IS NOT THE SAME AS "CANNOT". **
+CORRECTED 2026-09-11. The D8 rows (`d8_reeval_dep_in_apply_arg`) measure §7.1's walker through
+re-evaluation. Nothing measures §3.3's, because the host WE launch runs the degenerate
+`default → *` seed policy (`tools/host-launch:137`) and every Phase 2 check passes whatever
+`read_paths` contains. **The earlier wording said "unmeasurable" and that was wrong**: it is
+unmeasured under a launch configuration this repo owns and can change. A narrow seed policy makes
+the two listings answer differently, and the TS peer accepts one today. The evidence for A-17 is
+still a diff of two listings plus our own test, not a failing check — but the reason no check
+fails is a posture, not a property of the wire.
 
 §3.3 itself permits the fix in as many words — *"Implementations MAY factor them into one
 walker with multiple visitors"* — so we run one walker and both halves get the stronger
@@ -588,8 +678,9 @@ every `compute/apply` with a non-null `path` to `handler_targets`, builtins incl
 Phase 2 then demands the caller's grant cover handler `system/compute/builtins/map`,
 operation `eval` — a handler that does not exist, on a path §3.5 says *"MAY NOT resolve to a
 distinct handler entity in the tree"*. Under any grant narrower than `*` the listing rejects
-a legal `map`; under `--debug-open-grants` the two readings are indistinguishable, which is
-why the corpus is silent.
+a legal `map`; under the degenerate `default → *` seed policy **we** launch with
+(`tools/host-launch:137`) the two readings are indistinguishable, which is why the corpus is
+silent. Corrected 2026-09-11: the silence is a property of our launch posture, not of the oracle.
 
 We implement the prose: a builtin dispatches no EXECUTE (§2.1 Q23's own premise), so there
 is no handler+operation pair to authorize, and `store` is gated by its literal `write_path`
@@ -647,8 +738,8 @@ either direction, so this is a choice and not a measurement.
 [substrate.evaluator_seam]
 must = "§6.13 / core §6.6 — an installed evaluator is consulted for an entity-native body the built-in `compute/literal` path does not handle"
 typescript = "INSTALLED, read back — `Peer.setExpressionEvaluator` accepts our evaluator and `peer.expressionEvaluator` returns the same object"
-python = "unknown -- no port"
-rust = "unknown -- no port"
+python = "NOT INSTALLABLE — `Peer._entity_native_dispatch` (`src/entity_core/peer/peer.py:276`) evaluates the built-in `compute/literal` shape in-process and then answers `501 unsupported_expression`. There is no consultation step between the two at any visibility, and no member of any spelling. Measured 2026-09-12 through `install_compute`'s own detector, which is three-valued and reports `not-installable` on this peer."
+rust = "NOT INSTALLABLE — `Peer::entity_native_dispatch` (`src/peer/core.rs:1364`), same shape, same `err_out(501, \"unsupported_expression\", ...)` at :1391. Read, not executed: there is no `rust` compute port yet, so this row is a source read and reads `unknown` in every roster column until one exists."
 other_peers = "unknown (43). `setExpressionEvaluator` is keystone's H7 and landed on `typescript` on 2026-09-04; the other 45 have never been asked, and 20 of the 46 have no `compute/literal` ladder to hang one off at all (keystone's census)."
 probe = "languages/typescript/gates/host-seam/probe-entity-native.mjs"
 note = """
@@ -658,12 +749,39 @@ tree, while the built-in literal path still answers FIRST and the evaluator is n
 consulted for it. That ordering is the whole safety argument — `core_register_body_binding`
 drives the literal path on all 46 peers, so installing an evaluator cannot move a
 conformance result.
+
+** THE SECOND PORT TURNED THIS ROW INTO THE FIRST FACE-LEVEL ASYMMETRY IN THE CORPUS ON A
+PEER THAT HOSTS EVERYTHING ELSE (2026-09-12). ** `rust × CONTENT` established that four faces
+get different answers on one peer, and there the un-installable handler meant the extension
+did nothing at runtime. Here `python` hosts `types`, `handler`, `emit_consumer` and `sdk`
+and does not host the fifth — and the extension works completely.
+
+** AND THE FACE COSTS NOTHING MEASURABLE, WHICH IS THE HALF WORTH KEEPING. ** Exactly ONE of
+the 128 `compute` checks reaches the entity-native path — `v314_compute_apply_to_entity_native`
+— and it already FAILS on `typescript`, where the seam IS installed, for an unrelated reason:
+`compute/apply` handler mode needs a re-entrant LOCAL dispatch no peer exposes (keystone K-5).
+So the two ports score 125 of 128 with four faces and with five.
+
+    $ grep -rniE "expression_evaluator|set_evaluator|setevaluator|unsupported_expression|entity_native_dispatch" \\
+          protocol-generator/{python,rust,typescript}/src   # entity-core-keystone
+    24 hits · 5 files   -- the python and rust hits are the private dispatch and its 501
+
+**Run with several spellings on purpose, and the count is cited beside the file count.** A
+claim that a seam is ABSENT is a negative claim about another seat's surface (D22), and D14's
+declared limit is that `grep -c X` proves what `X` matches and nothing about how the thing is
+spelled. `open.grants` not matching `open-access` cost this repo a wrong number routed to two
+seats eight days ago.
+
+**NOT ROUTED as an ask.** We do not need the seam: it buys zero checks on either port, and
+asking keystone to land H7 twice more to move a number that would not move is the shape
+`AGENTS.md` calls tracking another repo's queue. The detection stays in `install_compute`, so
+the day it lands the composition reports `installed` with no edit here.
 """
 
 [substrate.type_constraints_unrenderable]
 must = "§2.2 — `compute/arithmetic`, `compute/compare` and `compute/logic` each declare `constraints: {op: {one_of: [...]}}`"
 typescript = "NOT RENDERABLE — the peer's `TypeDef` renders name/extends/fields/layout and `FSpec` renders type_ref/optional/array_of/map_of/union_of/key_type/byte_size. There is no constraints slot."
-python = "unknown -- no port"
+python = "NOT RENDERABLE — same shape, different builders: `_type_def` renders name/extends/fields/layout and `_fref`/`_opt`/`_farray`/`_fmap_of`/`_funion` carry the same seven field-spec keys (`entity_core/peer/typedefs.py`). No constraints slot. MEASURED rather than read: `make type-parity` reports the two ports AGREE on all 33 type entities by content hash, which is only possible if both omit the block."
 rust = "unknown -- no port"
 note = """
 The `one_of` is enforced in the EVALUATOR and is absent from the published type entity.
@@ -676,7 +794,7 @@ this or their type entities diverge, and `gates/type-parity` is where that would
 [substrate.content_store_put_returns_void]
 must = "§4.1 — `result_fields[name] = ctx.content_store.put(materialize(value, ctx))`"
 typescript = "SIGNATURE DIFFERS — `ContentStore.put(entity): void`. The hash comes off `entity.contentHash` / `entity.contentHashHex`."
-python = "unknown -- no port"
+python = "SIGNATURE DIFFERS, SAME WAY — `Store.put_entity(e) -> None`. The hash comes off `e.hash`. Both ports meet §4.1's `result_fields[name] = ctx.content_store.put(...)` by taking the hash off the entity, so the pseudocode's return value is a third-implementation detail rather than a portable one."
 rust = "unknown -- no port"
 note = """
 Trivial to adapt and recorded anyway, because a template derived from §4.1's pseudocode
@@ -689,7 +807,7 @@ the schema.
 [substrate.ecf_signed_and_float_constructors]
 must = "§2.2 — arithmetic produces negative integers and IEEE-754 binary64 floats"
 typescript = "THE ERGONOMIC LAYER IS NARROWER THAN THE VALUE MODEL — `Ecf` exports `uint(bigint)` and no signed-int or float constructor. The extension reaches `codec.ecfInt` / `codec.ecfFloat` directly."
-python = "unknown -- no port"
+python = "NOT APPLICABLE — there is no ergonomic layer to be narrower than the model. The codec tree IS the host's own types (`None/bool/int/float/str/bytes/list/dict`), so a negative integer is `-1` and there is nothing to construct it with. The cost lands elsewhere, as `[substrate.native_value_model]`: what `typescript` pays in a missing constructor this port pays in `bool` being an `int` subclass."
 rust = "unknown -- no port"
 note = """
 NOT a defect in the peer: `Ecf` is the protocol layer's ergonomic surface and the protocol
@@ -697,6 +815,203 @@ entities it builds have no negative or float fields. COMPUTE is the first extens
 repo whose VALUES are arithmetic, so it is the first to need the wider layer. Recorded
 because "the SDK-ergonomic layer is narrower than the codec" is exactly the kind of per-peer
 fact a second port meets and a template hides.
+"""
+
+# ══ ROWS THE SECOND PORT ADDED (2026-09-12). ═══════════════════════════════════════
+#
+# **THEY ARE ALL ONE KIND, AND IT IS A KIND THE FOUR ROWS ABOVE DO NOT CONTAIN.** Those record
+# what a peer CANNOT DO — a missing seam, an unrenderable constraint, a narrower ergonomic
+# layer. These record what a runtime DOES BY ITSELF: `%` that floors, a `/` that raises, a
+# `bool` that is an `int`, a `put` that suppresses. Nothing is missing in any of them. The peer
+# is not narrower; the LANGUAGE has an opinion, and §4.1 has a different one.
+#
+# That is the substrate model learning a new row KIND at the EIGHTH composition, which is the
+# same event `[substrate.oracle_read_path]` was at the sixth — and it is why the tier stays
+# CORE. `AGENTS.md`'s revisit criterion is *"when a port stops changing the shape of the
+# table"*, and this port added a kind. A model whose row kinds are still being discovered has
+# not generalised.
+
+[substrate.native_value_model]
+must = "§2.2 / §4.1 / §4.5 — arithmetic, comparison, truthiness and type-class equality over ECF values"
+typescript = "TAGGED — the codec hands the evaluator `{kind:'int'|'bool'|'float'|...}` nodes, so every type test is a `.kind` read and the compiler keeps the three apart."
+python = "NATIVE — the codec tree is `None/bool/int/float/str/bytes/list/dict`, so every type test is an `isinstance` and **`bool` is an `int` SUBCLASS**. Seven §4.1 rules have a silent wrong answer here that cannot exist over there."
+rust = "unknown -- no port"
+note = """
+The seven, every one of them carrying a unit test with a control, and all seven pre-registered
+in `languages/python/compositions/compute/SYSTEM.toml [gate.expectation]` BEFORE the run:
+
+  1. `%` is FLOORED here and TRUNCATED in §4.1 (`-7 % 2` is `1` vs `-1`).
+  2. float `/` by zero RAISES where §4.1 says IEEE `±Inf`/`NaN`.
+  3. `bool` is an `int`, so `eq(true, 1)` must be forced to FALSE across type classes.
+  4. `[-1]` is a legal read where §2.2 says `index_out_of_range`.
+  5. `bool({})` and `bool(b"")` are False where §4.5's falsy list has neither.
+  6. `//` floors where an exact-quotient `div` wants truncation toward zero.
+  7. `sorted()` is lexicographic where §4.1's `canonical_sorted` is length-then-lex.
+
+** ALL SEVEN COST ZERO CHECKS, AND THAT IS THE RESULT RATHER THAN THE LIST. ** The band was
+118–125 and the measurement is 125. What the band was really pricing is how many of a
+runtime's own semantics an implementer can adopt without noticing, and on this substrate the
+answer is that they are all catchable — provided the port is written against the spec's
+helpers rather than against the host's operators. `evaluator.ts` carries a comment predicting
+exactly item 1 ("a silent cross-port divergence if the python port reaches for its own
+operator"), written at port 1 by someone who could not check it. That comment is worth more
+than this row.
+"""
+
+[substrate.one_store_object]
+must = "§1.7 — the two storage layers: content store (`hash -> entity`) and entity tree (`path -> hash`)"
+typescript = "TWO OBJECTS — `ContentStore` and `EntityTree`, the second constructed OVER the first. Building them independently gives a tree whose `get` cannot see what the evaluator wrote."
+python = "ONE OBJECT — `entity_core.peer.store.Store` holds both maps behind one `threading.Lock`. `tree.get` is `store.get_at`, `contentStore.get` is `store.get_by_hash`. The two LAYERS are the same two; only the object count differs."
+rust = "unknown -- no port"
+note = """
+Cosmetic at the call sites and NOT cosmetic at the SDK boundary, which is why it is a row:
+`typescript` declares a `ComputePeerServices` structural interface naming the members it
+reads, because its two callers hold two different objects (a `Peer` and a `PeerServices`).
+Here every caller holds the peer and reads `.store` and `.local_peer`, so there is no subset
+to name — which is one of the three `[sdk_surface].substrate` entries and the only difference
+between the two ports' public surfaces that is not a language idiom.
+"""
+
+[substrate.tree_put_suppresses_identical_bind]
+must = "§7.2 — *\"if the new result hash equals the current one, no write occurs\"* (the convergence check that stops a cascade)"
+typescript = "SUPPRESSED BY THE PEER — `EntityTree.put` emits only when the bound hash changed."
+python = "SUPPRESSED BY THE PEER — `Store.bind` computes `changed = prev != nxt` and fires no `TreeEvent` when it is false (`peer/store.py:158-165`)."
+rust = "unknown -- no port"
+note = """
+** THE ROW EXISTS BECAUSE OUR CLAUSE IS REDUNDANT ON BOTH PEERS, AND D15's SHARPENED CLAUSE
+SAYS TO RECORD THAT RATHER THAN DELETE THE CLAUSE. ** AP-33: the `typescript` convergence test
+asserted the two things a consumer can see — the result hash did not move, no bind event fired
+— and PASSED with our implementation of §7.2's check REMOVED, because the peer produces the
+same reading. The instrument was fine; the property was not ours.
+
+§7.2 addresses US and §9.4 leaves delivery implementation-defined, so a peer whose `bind`
+emitted unconditionally would cascade forever on a converged subgraph. The assertion only the
+SUBJECT can satisfy is `_re_evaluate`'s own return value — `None` on convergence, a hash
+otherwise — and that is what both ports' tests assert.
+
+** AND IT BIT THE INSTRUMENT A THIRD TIME, IN THIS PORT, FROM THE OTHER SIDE. ** The first
+draft of `test_a_self_feeding_cascade_terminates...` built an expression that ERRORED on round
+one; round two wrote the same error entity, `changed` was false, and the cascade stopped after
+two steps with the subgraph ACTIVE. The test failed asserting `frozen` and the PORT WAS RIGHT.
+A cascade test whose value CONVERGES is not testing §7.3's bound at all — it reports "bounded"
+for a peer with no bound. Both ports now use a strictly-increasing expression, and this port
+keeps the converging one as the explicit negative control.
+"""
+
+[substrate.exec_context_handler_grant]
+must = "§6.8a / SYSTEM-COMPOSITION §1.4 — the execution context a tree write carries"
+typescript = "NO SLOT — `EmitContext` carries `author`/`callerCapability`/`chainId`/`parentChainId`/`requestId`/`cascadeDepth`/`handlerPattern`/`operation`. There is no handler-grant field to fill."
+python = "SLOT EXISTS AND IS LEFT EMPTY — `ExecContext` has `caller_capability` AND `handler_grant` as separate slots (`peer/store.py:52-61`). §7.2's authority IS the installation grant, so recording it would be defensible; we leave it `None`."
+rust = "unknown -- no port"
+note = """
+**Left empty for a CROSS-PORT reason, not a semantic one.** A composition running COMPUTE
+beside HISTORY has a recorder reading these slots, and §2.1 tells it to record the context
+*\"without interpretation\"*. If this port filled `handler_grant` and `typescript` could not,
+one reactive write would be attributed two ways depending on the language — a provenance
+difference produced by our own choice rather than by the peer.
+
+The honest alternative is to fill it on both and ask keystone for the slot on `typescript`,
+which is an ask worth one line the day a composition actually pairs the two. Recorded here so
+that day starts from a decision instead of from a discovery.
+"""
+
+[substrate.python_boundary_is_convention]
+must = "§3.4-shaped: the evaluator is module-private, because `evaluate` takes its whole authority as an argument"
+typescript = "ENFORCED AT RESOLVE TIME — `package.json`'s `exports` map makes a deep import into `internal/evaluator.js` fail before any code runs, and the test asserts on the resolver's refusal."
+python = "CONVENTION ONLY — underscore, `__all__`, and a test. `import entity_compute._internal.evaluator` works, and `test_export_surface.py` asserts BOTH that the convention holds AND that it can be walked around."
+rust = "unknown -- no port"
+note = """
+The same three-way split CONTENT §3.4 clause 1 has, and **the exposure is larger for this
+extension than for either of the first two.** HISTORY's private surface let a caller forge an
+audit entry; CONTENT's let one reach a chunker. `evaluate` takes an `EvalContext`, so a caller
+that constructs one with `has_content_store_access=True` holds §4.2 Tier 0 — the evaluator as
+the content-store oracle §4.2 exists to prevent — and can pass `can_read_path=lambda _: True`,
+which is §6.2's capability check removed.
+
+Asserting only the first half would be reporting the `typescript` port's guarantee while
+shipping this one's, which is why both halves are asserted.
+"""
+
+[substrate.seed_policy_surface]
+must = "ENTITY-CORE-PROTOCOL §6.9a Peer Authority Bootstrap (v7.74 Phase 2, normative) — the declared identity→capability seed policy, which REPLACES the hardcoded open/floor fork §6.9a calls non-conformant"
+typescript = "POLICY IS A VALUE — `Peer({seedPolicy})` takes a `SeedPolicy`; `SeedPolicy.standard()` / `.debugOpen()` / `.discoveryFloor()` / `.openGrants()` / `.ownerGrants()` are constructors, and `debugOpenGrants` is explicitly *\"ignored when seedPolicy is supplied\"*. A narrow, arbitrary policy is constructible by us TODAY, with no keystone change. The host BINARY still exposes only the boolean flag."
+python = "POLICY IS A BOOLEAN — `Peer(seed, open_grants: bool)`; the two scopes are hardcoded branches (`_open_grants_scope()` vs `_discovery_floor()`, `peer/peer.py:451`). There is no third option and no policy object. Blocked on keystone."
+rust = "POLICY IS A BOOLEAN — `opts.open_grants`; `open_grants_scope()` vs the floor, `peer/core.rs:402`. No policy object. Blocked on keystone."
+probe = "languages/typescript/gates/seed-policy/probe-policy.mjs -- MEASURED on typescript, three arms, `make seed-policy`. The AXIS is `policy_discriminates` and nothing else: in-process predicate behaviour, NOT wire reach. `python`/`rust` read `unknown` -- their arms do not exist because there is no narrow policy to construct."
+note = """
+** THE ROW IS NOT ABOUT AN EXTENSION LIMIT. IT IS ABOUT WHAT POSTURE WE CAN MEASURE IN. **
+Found 2026-09-11 when the operator challenged this tree's standing claim that
+`--debug-open-grants` was what the oracle runs under. It is not the oracle's; it is ours
+(`tools/host-launch:137`). And the flag is DEPRECATED — V7 §6.9a, v7.74, **removed in v7.75**.
+`entity-core-go`'s own `entity-peer` already marks its spelling `-open-access` as
+*"[DEPRECATED in v7.74; removed in v7.75] ... Migrate to --seed-policy / WithSeedPolicy"*
+(`cmd/entity-peer/main.go:76`, core-go @ `b320c1e`), and we pass it to the reference peer at
+`tools/host-launch:220`.
+
+** THE ASYMMETRY IS THE FINDING, AND IT SPLITS THE WORK IN TWO. ** On `typescript` the seed
+policy is a first-class value, so the narrow-grant posture that makes §3.3's Phase 2 check
+DISCRIMINATING is available to this repo now — which is why A-17's "unmeasurable" was
+downgraded to "unmeasured" in the two rows above. On `python` and `rust` the peer library
+offers a boolean and nothing else: you may have `default → *` or the discovery floor, and
+**no seed policy in between can be expressed at all**. That is not a posture we can choose.
+
+** AND NO HOST BINARY IN THE COHORT IMPLEMENTS THE REPLACEMENT. ** Measured across the three
+conformance hosts keystone ships (@ `0f99563d`): `--seed-policy` is accepted by NONE of them.
+`protocol-generator/typescript/test/host.ts` and
+`protocol-generator/python/src/entity_core/host.py` both print a deprecation warning naming
+`--seed-policy` as the thing to prefer — a flag neither binary has a case for.
+`protocol-generator/rust/src/bin/host.rs` `die`s on an unknown argument, so the advice is a
+hard exit there. Keystone HAS the cross-peer canonical format already
+(`protocol-generator/shared/seed-policy/seed-policy.schema.json` plus three worked examples,
+one of which is `examples/debug-open.json`, described in its own `_comment` as *"the explicit,
+conformant replacement for the DEPRECATED --debug-open-grants flag ... Use ONLY to drive the
+validate-peer grant-gated surface"*). The convention exists; the CLI plumbing does not.
+
+** AND IT IS MEASURED, NOT READ (2026-09-11). ** `make seed-policy`, three arms over
+`Permissions.checkPathPermission` on this peer, IN-PROCESS:
+
+    default -> * (deprecated)   in-scope=true   out-of-scope=true    <- the posture we run
+    narrow (app/allowed/*)      in-scope=true   out-of-scope=false   <- observable
+    discovery floor             in-scope=false  out-of-scope=false   <- the scope IS read
+
+**The third arm is load-bearing and is why this is three arms rather than two.** Without it,
+*"narrow refuses"* is equally well explained by a policy that refuses everything, and a
+two-arm gate passes either way. The planted-defect control (`--self-test`, the predicate
+replaced by `() => true`) reddens the narrow arm and leaves `default -> *` **unmoved** — which
+is the point, because the degenerate arm permits both paths whether the predicate works or
+not. That insensitivity is the finding stated as a measurement.
+
+**So A-17's downgrade from "unmeasurable" to "unmeasured" is now established rather than
+argued.** What the gate does NOT show: that a capability DELIVERED by §4.6 authenticate from a
+declared policy reaches an install audit over the wire. That is D13's Reach layer, it needs a
+host accepting `--seed-policy`, and no host binary in the cohort has one.
+
+** WHY WE CANNOT SIMPLY MIGRATE OUR CONFORMANCE ARM, and it is a control-arm problem. ** The
+BARE arm of `make conformance` launches keystone's OWN `test/host.js`
+(`languages/typescript/host-entry`), which speaks only the deprecated flag. A one-variable
+differential requires both arms to take the same posture, so we cannot move the composed arm
+to a declared policy while the bare arm cannot follow. Routed to keystone; not worked around
+here (`AGENTS.md`: a peer that cannot host what we need is a finding about the seam, never a
+patched peer).
+
+** CORRECTED 2026-09-12 — THERE IS NO DEADLINE, AND THAT IS WORSE THAN A DEADLINE. ** This
+block said *"when v7.75 removes the flag, our bare arm stops booting — a scheduled break with a
+known date."* `entity-core-keystone` checked the clock. **v7.75 has already landed and the
+removal did not happen:**
+
+    §4.8 store-safety           "(v7.75)"   ENTITY-CORE-PROTOCOL :2004   <- landed
+    §4.9 resilience             "(v7.75)"   :2008                         <- landed
+    §4.10 resource bounds       "(v7.75)"   :2024                         <- landed
+    "Non-functional floor under --profile core (v7.75)"  :4433            <- landed
+    entity-core-go profile.go:45-46  "v7.75 §9.0 fold"                    <- consumed
+
+    :4037  "...deprecated in v7.74, removed in v7.75."                    <- still future tense
+    :4126  "Deprecated in v7.74; removed in v7.75."                       <- still future tense
+
+Spec @ 0.8.2.20. **A retirement scheduled against a version that shipped without performing it
+is expired text, not a date**, and we planned against it as though it were a countdown. Nothing
+in this tree should carry a v7.75 migration deadline until arch re-anchors the sentence. Routed
+as an erratum; keystone is carrying the same item, so we cite rather than duplicate.
 """
 
 # ── [contract.error_codes] — §9.1's code set, TRANSCRIBED ───────────────────────────
@@ -1047,69 +1362,130 @@ scope entity that contains it (§4.3 `load_scope`).
 
 # ── [sdk_surface] — D16. Ungated by anything upstream, so ours to set ───────────────
 #
-# ONE language cell today, so this block is a declaration of intent rather than a live
-# comparison — `tools/sdk-parity.py` needs two. It is written NOW rather than at the second
-# port precisely because that is D16: an axis with no upstream authority gets its gate at
-# the SECOND implementation, and CONTENT's 18 drift entries were one decision made once in
-# `typescript` and never made again.
-#
 # THE DECISION, made deliberately and matching HISTORY: FLAT names are the contract in every
-# port. There is no `ComputeTypes` bundle object and there will not be one.
+# port. There is no `ComputeTypes` bundle object and there will not be one. CONTENT's 18 drift
+# entries were one decision made once in `typescript` and never made again.
+#
+# ** REWRITTEN 2026-09-12, AT THE SECOND PORT, AND THE REASON IS THE FINDING. **
+#
+# This block shipped on 2026-09-10 as 67 RAW typescript identifiers — `"LITERAL"`,
+# `"isComputeExpression"` — where the gate's key form is `kind:snake_case`. It was written
+# "NOW rather than at the second port, precisely because that is D16", and that intent was
+# right; what nobody checked is that `tools/sdk-parity.py` REFUSES below two ports, so the
+# block was authored, reviewed, cited in a handoff and **parsed by nothing for two days**.
+#
+# The moment `python` landed, `tuple("LITERAL".split(":", 1))` produced a ONE-tuple and the
+# gate died with `IndexError: tuple index out of range` — a traceback in the middle of
+# `make check`, which is neither a verdict nor a refusal. Had it not crashed the answer would
+# have been worse: a one-tuple matches no port key, so all 67 would have read as
+# `REQUIRED ... missing from python, typescript`. Sixty-seven fabricated failures on the
+# second port's first run, and a false red costs the instrument (AP-4).
+#
+# **D16's shape in this gate's own declaration file**: a declaration written for a gate that
+# cannot run yet is a declaration nothing reads, and *the thing we own is the thing nothing
+# watches*. The gate now refuses a malformed entry by name (`_declared_key`), which is the
+# enforcement point this paragraph would otherwise be a wish without.
+#
+# ── AND THE MEASURED RESULT, WHICH IS THE FIRST OF ITS KIND IN THIS REPO ─────────────
+#
+# **75 required, in every port, 0 drift, on the first two-port run.** CONTENT's first run was
+# `24 required · 9 substrate · 18 drift · 51 union`; HISTORY's second port opened at 22 names
+# in both with 20 differing. This is full parity out of the gate, and the reason is not virtue:
+# it is that HISTORY already paid for the flat-constants decision and the second port was
+# written with `[sdk_surface]` open beside it. The gate earned its keep by being consulted
+# BEFORE the port rather than after — which is the first time that has happened here.
 [sdk_surface]
 required = [
-  # type-path constants — 33, flat
-  "LITERAL", "LOOKUP_SCOPE", "LOOKUP_TREE", "LOOKUP_HASH", "APPLY", "IF", "LET", "LAMBDA",
-  "ARITHMETIC", "COMPARE", "LOGIC", "FIELD", "CONSTRUCT", "INDEX", "LENGTH", "NUMERIC_CAST",
-  "CLOSURE", "SCOPE", "SCOPE_BINDING", "RESULT", "ERROR",
-  "SUBGRAPH", "INSTALL_REQUEST", "INSTALL_RESULT",
-  "MAP_ARGS", "FILTER_ARGS", "FOLD_ARGS", "RANGE_ARGS", "GROUP_BY_ARGS", "GROUP",
-  "CONCAT_ARGS", "ASSOC_ARGS", "STORE_ARGS",
-  # the three collections
-  "CORE_EXPRESSION_TYPES", "INLINE_EXPRESSION_TYPES", "ALL_TYPES",
-  # paths and limits
-  "COMPUTE_PATTERN", "BUILTINS_PREFIX", "PROCESSES_PREFIX",
-  "DEFAULT_MAX_OPS", "DEFAULT_MAX_DEPTH", "RECOMMENDED_MAX_CASCADE_DEPTH",
-  # §9.1's codes
-  "CODE_BUDGET_EXHAUSTED", "CODE_DEPTH_EXCEEDED", "CODE_TYPE_MISMATCH",
-  "CODE_DIVISION_BY_ZERO", "CODE_NOT_FOUND", "CODE_UNKNOWN_TYPE",
-  "CODE_MISSING_ARGUMENT", "CODE_INVALID_EXPRESSION", "CODE_CASCADE_LIMIT",
-  "CODE_PERMISSION_DENIED", "CODE_INSTALLATION_GRANT_INVALID",
-  "CODE_INDEX_OUT_OF_RANGE", "CODE_CAST_OUT_OF_RANGE", "CODE_COUNT_OUT_OF_RANGE",
-  "CODE_SCOPE_UNREACHABLE", "CODE_AMBIGUOUS_RESOURCE",
-  # operations
-  "isComputeExpression", "isComputeType",
-  "computeTypeDefs", "computeTypeEntities", "publishComputeTypes", "computeEntity",
-  "ComputeHandler", "ComputeEvaluator", "installCompute",
-  "assertNotBuiltinOverride", "DEFAULT_LIMITS",
-  # ── §7, added 2026-09-10 ──────────────────────────────────────────────────────────
+  # ── the 33 type-path constants, FLAT ───────────────────────────────────────────────
+  "const:literal", "const:lookup_scope", "const:lookup_tree", "const:lookup_hash",
+  "const:apply", "const:if", "const:let", "const:lambda",
+  "const:arithmetic", "const:compare", "const:logic", "const:field", "const:construct",
+  "const:index", "const:length", "const:numeric_cast",
+  "const:closure", "const:scope", "const:scope_binding", "const:result", "const:error",
+  "const:subgraph", "const:install_request", "const:install_result",
+  "const:map_args", "const:filter_args", "const:fold_args", "const:range_args",
+  "const:group_by_args", "const:group", "const:concat_args", "const:assoc_args",
+  "const:store_args",
+  # ── the three collections ─────────────────────────────────────────────────────────
+  "const:core_expression_types", "const:inline_expression_types", "const:all_types",
+  # ── paths and limits ──────────────────────────────────────────────────────────────
+  "const:compute_pattern", "const:builtins_prefix", "const:processes_prefix",
+  "const:default_max_ops", "const:default_max_depth", "const:recommended_max_cascade_depth",
+  # ── §9.1's sixteen codes ──────────────────────────────────────────────────────────
+  "const:code_budget_exhausted", "const:code_depth_exceeded", "const:code_type_mismatch",
+  "const:code_division_by_zero", "const:code_not_found", "const:code_unknown_type",
+  "const:code_missing_argument", "const:code_invalid_expression", "const:code_cascade_limit",
+  "const:code_permission_denied", "const:code_installation_grant_invalid",
+  "const:code_index_out_of_range", "const:code_cast_out_of_range",
+  "const:code_count_out_of_range", "const:code_scope_unreachable",
+  "const:code_ambiguous_resource",
+  # ── operations ────────────────────────────────────────────────────────────────────
+  "fn:is_compute_expression", "fn:is_compute_type",
+  "fn:compute_type_defs", "fn:compute_type_entities", "fn:publish_compute_types",
+  "fn:compute_entity",
+  "fn:install_compute", "fn:assert_not_builtin_override",
+  "type:compute_handler", "type:compute_installation",
+  "type:compute_evaluator", "type:eval_outcome", "type:evaluator_limits",
+  "const:default_limits",
+  # `CAPABILITY_CHECK_IS_DISPATCH_SCOPED` — **PROMOTED OUT OF `substrate` AT THE SECOND
+  # PORT, AND THE PROMOTION IS A CORRECTION.** It was declared substrate-conditional when
+  # `typescript` was the only port, on the reading that the value is a per-peer fact. It is
+  # not: BOTH ports export it and both read `false`. What differs is the REASON — there the
+  # H7 evaluator seam exists and cannot narrow §6.2 (its `ExpressionRequest` carries the
+  # `Execute` and no verified token); here the seam does not exist at all, so no entry point
+  # takes that shortcut. **A constant whose VALUE is the same on every port and whose
+  # JUSTIFICATION differs is `required` with a substrate row behind it, not
+  # substrate-conditional** — `[sdk_surface].substrate` is about which ports EXPORT a name,
+  # and using it to mean "the ports agree for different reasons" is a second meaning for one
+  # key. The two reasons live in `[substrate.evaluator_seam]`, which is where a per-peer fact
+  # belongs.
+  "const:capability_check_is_dispatch_scoped",
+  # ── §7 ────────────────────────────────────────────────────────────────────────────
   #
-  # `ReactiveEngine` is PUBLIC and `internal/evaluator.js` is not, and the difference is
-  # the authority argument rather than a judgement about who deserves an API. `evaluate`
-  # takes its whole authority as a parameter — a caller builds an `EvalContext` and sets
-  # `hasContentStoreAccess: true`, which is §4.2 Tier 0. `ReactiveEngine` has no such
-  # door: every re-evaluation reads its authority from the installation grant recorded on
-  # the subgraph metadata, so holding the engine lets a caller register a dependency and
-  # trigger a re-evaluation and widens nothing that evaluation may read.
+  # `ReactiveEngine` is PUBLIC and the internal evaluator is not, and the difference is the
+  # authority argument rather than a judgement about who deserves an API. `evaluate` takes
+  # its whole authority as a parameter — a caller builds an eval context and sets
+  # content-store access, which is §4.2 Tier 0. `ReactiveEngine` has no such door: every
+  # re-evaluation reads its authority from the installation grant recorded on the subgraph
+  # metadata, so holding the engine lets a caller register a dependency and trigger a
+  # re-evaluation and widens nothing that evaluation may read.
   #
-  # It is here because it IS the `emit_consumer` face's object, exactly as
-  # `HistoryRecorder` is HISTORY's, and an in-process embedder wanting reactive mode
-  # without the wire has to reach it.
-  "ReactiveEngine",
+  # It is here because it IS the `emit_consumer` face's object, exactly as `HistoryRecorder`
+  # is HISTORY's, and an in-process embedder wanting reactive mode without the wire has to
+  # reach it.
+  "type:reactive_engine",
   # §3.3's `deterministic_id`, exported because it is a CROSS-PEER identity and not an
   # internal detail: *"a subgraph installed by Peer A at root path `app/cell/A1` is
-  # discoverable at the same `system/compute/processes/{subgraph_id}` on any peer"*. A
-  # caller that wants to inspect a subgraph needs the derivation, and re-deriving it is
-  # how two ports disagree about a normative string nothing on the wire checks.
-  "deterministicId",
+  # discoverable at the same `system/compute/processes/{subgraph_id}` on any peer"*. A caller
+  # that wants to inspect a subgraph needs the derivation, and re-deriving it is how two ports
+  # disagree about a normative string nothing on the wire checks. Both ports are pinned to
+  # `entity-core-go`'s four output vectors in their own suites, which makes this the one
+  # encoding in the corpus with three implementations agreeing by measurement.
+  "fn:deterministic_id",
 ]
-substrate = [
-  # Still substrate, and now reading `false`. It names the one entry point that CANNOT
-  # narrow §6.2 per tree read — the H7 evaluator seam, whose `ExpressionRequest` carries
-  # the `Execute` and no verified token. The other two do. See
-  # `[assumptions].capability_check_scope` for what this constant used to claim and why
-  # that was AP-34.
-  "CAPABILITY_CHECK_IS_DISPATCH_SCOPED",
-]
+
+# Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate forces it. Exporting one
+# of these from a port NOT listed is a failure: if the substrate does not force it, it is not
+# substrate-conditional, it is drift with an excuse.
+#
+# **ALL THREE ARE THE SAME FACT, AND IT IS THE ONE DIFFERENCE THE SECOND PORT PRODUCED.**
+# `typescript` is statically typed with structural interfaces, so an options bag and a
+# services subset are NAMES a consumer imports to type against; `python` is duck-typed and
+# expresses both as keyword arguments and a duck-typed parameter, so there is nothing to
+# name. Not a choice either port can make differently without stopping being idiomatic —
+# which is exactly HISTORY's `type:history_handler_options` row, three times.
+[sdk_surface.substrate."type:compute_handler_options"]
+ports  = ["typescript"]
+reason = "the options-object constructor idiom. `python`'s `ComputeHandler` and `install_compute` take `max_operations` / `max_depth` as keyword arguments — the same configuration with no type to name."
+
+[sdk_surface.substrate."type:evaluate_options"]
+ports  = ["typescript"]
+reason = "`ComputeEvaluator.evaluateAt`'s third parameter. `python`'s `evaluate_at` takes the same six settings as keyword-only arguments, which is this language's form of the same API and leaves no name for a consumer to import."
+
+[sdk_surface.substrate."type:compute_peer_services"]
+ports  = ["typescript"]
+reason = "the structural subset of the peer this extension reads. `typescript` needs the name because its TWO callers hold two different objects (a `Peer` and a `PeerServices`) and the interface is what lets one implementation serve both; on `python` every caller holds the peer itself, and the two members read (`.store`, `.local_peer`) are the same two on every path. Compounded by a real substrate difference: that peer exposes `tree` and `contentStore` as separate members where this one has a single lock-guarded `Store` holding both of §1.7's layers — so there is no four-member subset to name even if the language wanted one. See [substrate.one_store_object]."
+
 drift = []
 
 # ── [conformance] — D16's fourth instance. The requirement map ──────────────────────
@@ -1423,12 +1799,13 @@ which a walker written to the pre-v3.27 listing misses entirely, and its positiv
 (`reactive_final_result`) proves the direct-dependency path works on the peer first — so a
 failure is attributable to walk completeness rather than to a broken reactive mechanism.
 
-** THE SAME COMPLETENESS PROPERTY IN §3.3's WALKER IS UNMEASURED AND UNMEASURABLE HERE
+** THE SAME COMPLETENESS PROPERTY IN §3.3's WALKER IS UNMEASURED IN THE POSTURE WE LAUNCH
 (A-17). ** §3.3's `audit_walk` builds `read_paths`, which Phase 2 capability-checks, and its
 listing descends only scalar fields — so a transcription authorizes a top-level tree read
-and skips the same read inside `apply.args`. `validate-peer` runs `--debug-open-grants`, so
-every Phase 2 check passes whatever the audit collected and an under-authorizing audit
-scores identically. Our test asserts the property over every container shape §2.1's grammar
+and skips the same read inside `apply.args`. **We** launch with `--debug-open-grants`
+(`tools/host-launch:137`), so every Phase 2 check passes whatever the audit collected and an
+under-authorizing audit scores identically. Corrected 2026-09-11: this row previously read
+"UNMEASURABLE", which was wrong — the posture is ours and a narrow seed policy discriminates. Our test asserts the property over every container shape §2.1's grammar
 allows rather than over v3.27's two enumerated exceptions, and was verified red against the
 §3.3-listing walker planted as a defect.
 """
@@ -1510,8 +1887,9 @@ oracle = ["compute/v314_builtin_store_roundtrip"]
 ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
 gap    = """
 THE WRITE IS MEASURED; THE GATE IS MEASURED ONLY BY US, AND ONLY ON THE READ HALF.
-`v314_builtin_store_roundtrip` proves `store` writes and the value reads back — under
-`--debug-open-grants`, so the capability check cannot refuse. §6.3's table gives the two
+`v314_builtin_store_roundtrip` proves `store` writes and the value reads back — under the
+degenerate `default → *` seed policy we launch with (`tools/host-launch:137`), so the
+capability check cannot refuse in that arm. §6.3's table gives the two
 operations different authorities (a tree READ rides `ctx.capability`; a `store` WRITE rides
 the caller's with the handler forbidden from substituting its own grant), and this port
 implements them as two predicates for that reason. Ours drives a narrow `app/*` grant and

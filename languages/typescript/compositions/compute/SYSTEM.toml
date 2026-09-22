@@ -267,9 +267,17 @@ reaches, and that number is one of the two things this build exists to produce.
 # to arch (`ROUTING-2026-09-10-d-arch-the-install-audit-is-downstream-of-its-own-section`),
 # of which three are §3.3's own listing disagreeing with prose in §3.3 or §2.1 — the same
 # mechanism `ROUTING-2026-09-10-arch-*` §1 named for §4.1, in a second pseudocode block.
-# ** Two of those three are invisible to this category in principle: ** `validate-peer`
-# runs `--debug-open-grants`, so every install-time capability check passes whatever the
-# audit collected, and an under-authorizing audit scores identically to a correct one.
+# ** Two of those three are unmeasured in the posture WE launch in — corrected 2026-09-11. **
+# This comment used to say "invisible to this category in principle" and credited
+# `validate-peer` with the launch. The oracle dials `-addr` and launches nothing;
+# `tools/host-launch:137` passes `--debug-open-grants`, which selects the degenerate
+# `default → *` seed policy DEPRECATED by V7 §6.9a (v7.74), with removal STATED for v7.75 —
+# a version that has since landed without performing it, so that is expired text and not a
+# date we may plan against (corrected 2026-09-12, by keystone). Under the degenerate policy
+# every install-time capability check passes whatever the audit collected and an
+# under-authorizing audit scores identically to a correct one. Under a narrower declared
+# policy the two readings diverge — see `[substrate.seed_policy_surface]` in the contract,
+# and note the bare arm is keystone's own binary and cannot follow us off the flag.
 
 # ── [compute] — what the composition configures ─────────────────────────────────────
 [compute]

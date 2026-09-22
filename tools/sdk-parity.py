@@ -171,12 +171,60 @@ def surfaces(ext_dir: Path) -> dict[str, dict[tuple[str, str], str]]:
     return out
 
 
+#: The three kinds `key()` can produce, and therefore the only prefixes a declaration may
+#: carry. Named rather than inlined so the refusal below can print the set.
+KINDS = ("const", "fn", "type")
+
+
+def _declared_key(spelled: str, where: str) -> tuple[str, str]:
+    """Parse one `[sdk_surface]` entry into the `(kind, snake_case)` key `key()` produces.
+
+    REFUSES on a malformed entry rather than returning something comparable, and that
+    refusal is D15's vacuity clause applied to this gate's own INPUT rather than to the
+    ports'.
+
+    ** IT WAS ADDED ON AN INCIDENT, 2026-09-12, AND THE INCIDENT IS THE ARGUMENT. **
+    `extension-contracts/compute/EXTENSION.toml` shipped `[sdk_surface].required` as 67
+    RAW typescript names -- `"LITERAL"`, `"isComputeExpression"` -- with no `kind:` prefix,
+    because COMPUTE had one port and this gate REFUSES below two. So the block was written,
+    reviewed, cited in a handoff, and parsed by nothing for three days. The moment the
+    second port landed, `tuple("LITERAL".split(":", 1))` produced a ONE-tuple and
+    `failures.append(f"... {k[1]} ...")` died with `IndexError: tuple index out of range` --
+    a traceback in the middle of `make check`, which is neither a verdict nor a refusal.
+    D16's shape in this gate's own declaration file: *the thing we own is the thing nothing
+    watches*, and a refusal that only fires above two ports leaves the one-port case
+    unread.
+
+    Had the crash not happened the answer would have been WORSE: a one-tuple matches no
+    port key, so all 67 would have been reported as `REQUIRED ... missing from python,
+    typescript` -- sixty-seven false reds in front of a reader on day one, and a false red
+    costs the instrument (AP-4).
+    """
+    parts = spelled.split(":", 1)
+    if len(parts) != 2 or parts[0] not in KINDS or not parts[1]:
+        raise Refusal(
+            f"{where} entry {spelled!r} is not a `kind:snake_case` key. Every entry must be "
+            f"one of {list(KINDS)} followed by a colon and the normalised name (see `key()`). "
+            "REFUSING rather than comparing: an unparsable declaration compares equal to "
+            "nothing, so every required name would read as missing from every port."
+        )
+    return (parts[0], parts[1])
+
+
 def declared(manifest: dict) -> tuple[dict, dict, dict]:
     block = manifest.get("sdk_surface", {})
-    req = {tuple(k.split(":", 1)) for k in block.get("required", [])}
     sub = block.get("substrate", {})
     dri = block.get("drift", {})
-    return {tuple(k.split(":", 1)): None for k in block.get("required", [])}, sub, dri
+    req = {_declared_key(k, "[sdk_surface].required"): None
+           for k in block.get("required", [])}
+    # The other two blocks are keyed by the same spelling and are parsed at their use sites;
+    # validate them HERE so a malformed key in either is one refusal rather than three
+    # separate surprises further down.
+    for spelled in sub:
+        _declared_key(spelled, "[sdk_surface.substrate]")
+    for spelled in dri:
+        _declared_key(spelled, "[sdk_surface.drift]")
+    return req, sub, dri
 
 
 def main() -> int:
@@ -203,7 +251,14 @@ def main() -> int:
               "result.", file=sys.stderr)
         return 2
 
-    required, substrate, drift = declared(manifest)
+    # Parsed AFTER the port check and inside its own guard: a malformed declaration is a
+    # refusal about this gate's input, not a verdict about the ports (see `_declared_key`).
+    try:
+        required, substrate, drift = declared(manifest)
+    except Refusal as e:
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return 2
+
     name_of = {k: v for p in ports.values() for k, v in p.items()}
     union = set(name_of)
 

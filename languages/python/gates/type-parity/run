@@ -7,10 +7,19 @@
 # so what it measures is what the packaging boundary actually publishes.
 set -eu
 EXT="${1:?usage: run <extension>}"
-COMPOSITION="${COMPOSITION:-content-history}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR="$(cd "$HERE/../.." && pwd)"
 ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+TARGET="$(basename "$TARGET_DIR")"
+
+# WHICH composition's stage holds this cell -- RESOLVED, never defaulted. This line read
+# `COMPOSITION="${COMPOSITION:-content-history}"` in all three arms, which is the (extension
+# -> composition) mapping as a LITERAL while the Makefile made the extension axis a wildcard.
+# The two disagreed silently until COMPUTE arrived, and then this gate could not measure it
+# on any target: `content-history`'s stage holds `extension-content` and `extension-history`
+# and nothing else. See `tools/gate-composition` for the rule and for why it is one shared
+# copy rather than three.
+COMPOSITION="${COMPOSITION:-$("$ROOT/tools/gate-composition" "$TARGET" "$EXT")}"
 
 # The stage, validated: present AND not older than the cell it was built from. One copy,
 # in tools/, because "is this artifact current" is protocol rather than polish.

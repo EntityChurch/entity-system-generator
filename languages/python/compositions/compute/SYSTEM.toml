@@ -1,0 +1,406 @@
+## SYSTEM.toml — languages/python/compositions/compute
+##
+## A composition NAMES things and DECLARES NOTHING NEW. Every fact about COMPUTE lives in
+## `extension-contracts/compute/EXTENSION.toml`; every fact about the toolchain lives in
+## `languages/python/profile.toml`. If a fact is in two places, one of them is wrong.
+##
+## THE SECOND PORT OF THE LARGEST EXTENSION IN THE CORPUS, and the first composition in this
+## tree whose FACE SET IS SMALLER THAN ITS SIBLING'S ON A PEER THAT HOSTS EVERYTHING ELSE.
+## `ts-compute` installs five faces; this one installs four, because the fifth —
+## `Peer.setExpressionEvaluator`, keystone's H7 — exists on ONE of the 46 peers and this is not
+## it. See `[system.faces.COMPUTE]`.
+
+[system]
+name       = "compute"
+extensions = ["COMPUTE"]
+
+[system.peer]
+generator = "entity-core-keystone"
+# Read-only, another team's tree. The composition consumes the peer as its own wheel manifest
+# declares it ships -- `[tool.hatch.build.targets.wheel] packages` -- exactly as `ts-compute`
+# consumes typescript's `exports["."]`. Neither compiles the peer from source and neither
+# patches it.
+path      = "../entity-core-keystone/protocol-generator/python"
+
+# ── [system.consumers] — declared here and NOT in the typescript twin ────────────────
+#
+# COMPUTE registers one emit consumer, at `SYSTEM-COMPOSITION` §2.2 position 5, class
+# *unbounded reactive*, under §2.7A's stable name `compute/reevaluator`. **`ts-compute` has no
+# `[system.consumers]` block and should**; the omission is ours, it is in the other port, and it
+# is recorded here rather than routed because it is nobody else's finding. Nothing enforces this
+# block today — no oracle category tests consumer ordering, in 68 categories — so its value is
+# that the position is written down where a second consumer would have to argue with it.
+[system.consumers]
+order = ["COMPUTE"]
+positions = { COMPUTE = 5 }
+enforced_by = "the wiring program's call order — NOT by the peer"
+note = """
+With a single consumer every position produces identical behaviour, so this composition cannot
+demonstrate that position 5 is honoured. What it CAN demonstrate, and what `content-history`
+could not, is that the consumer WRITES BACK: §7.2's `on_tree_change` re-enters the evaluator and
+binds a result, which re-enters the bus. On this peer `Store.bind` snapshots its consumer list
+under the lock and fires OUTSIDE it, so re-entrancy costs stack rather than liveness — a peer
+that fired under its lock would HANG here instead of overflowing, and a hang after the
+measurement is indistinguishable from a hang before it (AP-21).
+"""
+
+# ── [system.faces] — four, and the fifth is the finding ──────────────────────────────
+#
+# **`evaluator = "not-installable"`, MEASURED, and it is `not-installable` rather than
+# `not-installed` on purpose.** D13's face amendment pins that distinction: `not-installed` is a
+# thing we have not built and `not-installable` is a thing the substrate does not host. Here:
+#
+#   $ grep -rniE "expression_evaluator|set_evaluator|unsupported_expression|entity_native_dispatch" \
+#         protocol-generator/{python,rust,typescript}/src     # entity-core-keystone
+#   24 hits across 5 files; the python and rust hits are `_entity_native_dispatch` and its
+#   `501 unsupported_expression`, with no seam of any spelling in either.
+#
+# `Peer._entity_native_dispatch` (src/entity_core/peer/peer.py) evaluates the built-in
+# `compute/literal` shape in-process and then answers `501 unsupported_expression`, with no
+# consultation step between the two at any visibility.
+#
+# **IT COSTS THIS PORT NOTHING MEASURABLE, WHICH IS THE OTHER HALF OF THE FINDING.** Exactly one
+# of the 128 `compute` checks reaches the entity-native path
+# (`v314_compute_apply_to_entity_native`), and it already FAILS on `typescript` — where the seam
+# IS installed — for a different reason: `compute/apply` handler mode needs a re-entrant LOCAL
+# dispatch the peer does not expose (keystone K-5). So an absent face and a present face score
+# the same here, which is `rust × HISTORY`'s lesson arriving from the opposite direction: there a
+# working face was UNMEASURABLE, here an absent face is UNMEASURED.
+#
+# `install_compute` keeps the detection anyway, three-valued and OBSERVED, so the day keystone
+# lands H7 on this peer this line becomes `installed` without a code edit. The detector's other
+# two verdicts are driven by stand-in peers in `test/test_install.py` — a function that has only
+# ever answered `not-installable` is indistinguishable from a broken one (AP-3).
+[system.faces.COMPUTE]
+types         = "installed"
+handler       = "installed"
+emit_consumer = "installed"
+sdk           = "installed"
+evaluator     = "not-installable"
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+categories = ["compute"]
+profiles   = ["core"]
+
+# ── [gate.expectation] — PRE-REGISTERED, written BEFORE the first composed run ───────
+#
+# **AND THIS ONE IS A DIFFERENT KIND OF PREDICTION FROM `ts-compute`'s, WHICH IS WHY THE BAND IS
+# NARROWER AND THE NAMED RISKS ARE LONGER.** That one was a first port of an unread extension
+# and its band was 40–80 for a measured 100 — a miss on the high side, kept, and worth more than
+# the prediction. This is a SECOND port of a spec already read to 125 of 128. The interesting
+# question is no longer *"how much of this category does an evaluator reach"*; it is **"which of
+# the substrate's own semantics silently disagree with §4.1's"**, and every one of those is
+# named below rather than absorbed into a wide interval.
+[gate.expectation]
+compute_checks = 128
+
+# The BARE arm. Not re-measured before writing this: it was measured on the `typescript` peer on
+# 2026-09-09 at 0 of 128, and the structural argument carries to any bare peer — 101 of the 128
+# are `blocked: depends on handler_present`, 6 on `handler_op_install`, 3 on
+# `handler_manifest_decode`, 2 on `reactive_final_result`, and a bare peer has none of those. If
+# the measured bare arm here is not 0, that is a finding about the ORACLE (a check passing
+# against a peer with the extension absent — AP-19's shape) and not about this port.
+bare_pass  = 0
+bare_fail  = 128
+bare_skip  = 0
+
+predicted_composed_pass_low  = 118
+predicted_composed_pass_high = 125
+predicted_regressions        = 0
+prediction_basis = """
+The high end is `typescript`'s 125, which is what a faithful second derivation of the same spec
+reading should reach: the same three `compute/apply` HANDLER MODE checks are unreachable here
+for the same reason (keystone K-5, no re-entrant local dispatch), and the fifth face's absence
+costs nothing measurable because the one check that touches the entity-native path already fails
+on the port that has the seam.
+
+The low end is 118 and it is SEVEN CHECKS OF NAMED SUBSTRATE RISK, not a safety margin. Each of
+these is a place where this runtime's own semantics differ from §4.1's and a port that reached
+for the host's operator would be wrong while looking right:
+
+  1. `%` IS FLOORED HERE AND TRUNCATED THERE. §4.1's `truncated_remainder` is C/Go/JS/BigInt
+     semantics; Python's `%` differs in SIGN whenever the operands' signs differ.
+     `v36_mod_neg_dividend` / `_neg_divisor` / `_both_neg` — 3 checks.
+  2. FLOAT DIVISION BY ZERO RAISES. §4.1 makes it IEEE-754 (`±Inf`/`NaN`), CPython raises
+     `ZeroDivisionError`. An escaping exception is a 5xx where the spec wants a value.
+  3. `bool` IS AN `int` SUBCLASS. Every integer test and the `eq` type-class rule has a silent
+     wrong answer that does not exist on a tagged value model: `eq(true, 1)` must be FALSE.
+  4. THE 33 TYPE ENTITIES ARE HASH-COMPARED AGAINST `entity-core-go`'s OWN TRANSCRIPTION by 63
+     core `type_compute_*_match` checks. A single extra or missing field-spec key is a named
+     failure — which is a BETTER position than HISTORY's, where the six `type_*` checks only
+     assert that a path resolves (G-3), but it means a field-map slip lands in the CORE
+     baseline rather than in the category.
+  5. NEGATIVE INDEXING. Python's `[-1]` is a legal read; §2.2 says `index_out_of_range`.
+  6. TRUTHINESS. Python calls `{}` and `b""` falsy; §4.5's list does not include either, so an
+     `if` would take the wrong branch on a map or a byte string.
+  7. CANONICAL MAP-KEY ORDER for `compute/construct`'s field evaluation is length-then-lex, not
+     `sorted()`. Observable through the budget: two peers charging in different orders disagree
+     about WHICH field's error comes back.
+
+Every one of the seven has a unit test with a control, written before the composed run. **The
+prediction is that the tests caught them and the band is what it costs if one did not.** If the
+measurement lands below 118 the miss is kept and the reason is written up, on `rs-content`'s
+rule: a pre-registration whose misses get edited away is not a pre-registration.
+
+NOT predicted, deliberately: the CORE arm's improvement count. `ts-compute` measures 63 and they
+are all `type_system.type_compute_*`, which is a function of the type layer agreeing rather than
+of anything language-specific — so a number there is not a prediction, it is the same assertion
+as risk 4 restated.
+"""
+
+# ── [compute] — what the composition configures ──────────────────────────────────────
+[compute]
+# §9.3's recommended limits, taken as-is and identical to `ts-compute`'s. §10.4 makes both
+# implementation-defined and §10.3's single MAY is the cascade limit's configurability.
+max_operations = 100000
+max_depth      = 1024
+note = """
+Not tuned. §9.3's values are the peer-wide defaults a capability constraint may lower (§5.2's
+minimum rule), and raising either would make our `budget_exhausted` step count disagree with a
+peer that did not — which §4.2 makes a cross-impl determinism surface. The two ports MUST carry
+the same numbers for the same reason.
+"""
+
+# ══ [gate.baseline.*] — D21's REFERENCE IN TIME, first bless 2026-09-11 at ROUNDS=2 ══
+#
+# NOT the pre-registration. `[gate.expectation]` above is written BEFORE the run and is kept
+# wrong on purpose; this is what was MEASURED, and it is what a later run is compared against.
+# Asserting against the prediction would go permanently red on a preserved miss, and the
+# locally-reasonable fix for that is to edit the prediction, which destroys the artifact.
+#
+# `improved` is a set of NAMES and never a count (D14): a count that shrinks by one understates
+# a capability, and nothing re-checks in that direction.
+#
+# ── THE MEASUREMENT, AND WHAT IT SETTLES ────────────────────────────────────────────
+#
+# ** 125 PASS · 0 WARN · 3 FAIL of 128, from a bare arm of 0 of 128. 0 core regressions across
+# 778 core checks. 115 unit tests. ** The pre-registered band was 118–125 and this is the TOP
+# of it; the three that remain are `compute/apply` HANDLER MODE — `v38_apply_handler_mode`,
+# `v310_apply_resource_field_accepted`, `v314_compute_apply_to_entity_native` — which need a
+# re-entrant LOCAL dispatch the peer does not expose (keystone K-5, routed) and are the same
+# three the `typescript` port cannot reach.
+#
+# ** AND THE NUMBER THAT IS WORTH MORE THAN THE TOTAL: THE IMPROVEMENT NAME SETS ARE IDENTICAL
+# ACROSS THE TWO PORTS. ** 125 of 125 in `compute` and 63 of 63 in `core`, name for name,
+# verified as SETS rather than as counts before this block was written. Two independent
+# derivations of one spec, on two runtimes with different value models, agreeing on every check
+# the oracle scores and on every check it does not.
+#
+# **That is the strongest independence this seat can currently produce, and it is still not
+# independence** (L18). Both ports were written by the same team from the same reading of the
+# same pinned snapshot; a cohort agreeing is a cohort agreeing. What the agreement DOES settle
+# is narrower and real: the 33 type entities are byte-identical to `entity-core-go`'s own
+# transcription (the 63 `type_compute_*_match` checks are a hash comparison against a third
+# codebase), and none of the seven substrate risks named in `prediction_basis` cost a check.
+#
+# ** NO `[[gate.straddle]]` HERE, AND THE ABSENCE IS MEASURED. ** `ts-compute` declares
+# `concurrency.t1_1_concurrent_demux` because that arm's baseline sits at the oracle's fixed
+# 50 ms floor, so a ~3 ms composed cost flips the verdict (`ROUTING-2026-09-07-f-core-go-*`).
+# This port's baseline for that check is ~9 ms, so the same cost leaves both arms PASSING —
+# which is why `total` reads 778 here and 777 there. The difference between the two numbers is
+# one check that is a function of machine speed and of nothing else.
+
+[gate.baseline.compute]
+measured = "2026-09-11"   # 2 round(s)
+total    = 128
+composed = { PASS = 125, FAIL = 3 }
+bare     = { FAIL = 128 }
+improved = [
+  "compute.algo_fibonacci_10",
+  "compute.algo_fibonacci_5",
+  "compute.cp1_install_dynamic_capability_deferred",
+  "compute.cp1_install_static_literal_adversary_rejected",
+  "compute.cp1_install_static_literal_self_issued_accepted",
+  "compute.d8_reeval_dep_in_apply_arg",
+  "compute.d8_reeval_dep_in_let_binding",
+  "compute.eval_arithmetic_add",
+  "compute.eval_arithmetic_div_exact",
+  "compute.eval_arithmetic_div_float",
+  "compute.eval_arithmetic_mod",
+  "compute.eval_arithmetic_mul",
+  "compute.eval_arithmetic_sub",
+  "compute.eval_closure_captures_scope",
+  "compute.eval_compare_eq_false",
+  "compute.eval_compare_eq_true",
+  "compute.eval_compare_lt",
+  "compute.eval_compare_neq",
+  "compute.eval_construct_deterministic",
+  "compute.eval_construct_field_extract",
+  "compute.eval_depth_limit",
+  "compute.eval_division_by_zero",
+  "compute.eval_error_non_expression",
+  "compute.eval_error_not_found",
+  "compute.eval_error_propagation",
+  "compute.eval_if_false_branch",
+  "compute.eval_if_short_circuit",
+  "compute.eval_if_true_branch",
+  "compute.eval_lambda_apply",
+  "compute.eval_let_sequential",
+  "compute.eval_literal_bool",
+  "compute.eval_literal_int",
+  "compute.eval_literal_string",
+  "compute.eval_logic_and",
+  "compute.eval_logic_not",
+  "compute.eval_logic_or",
+  "compute.eval_lookup_scope",
+  "compute.eval_lookup_tree_evaluates_expr",
+  "compute.eval_lookup_tree_non_expr",
+  "compute.handler_manifest_decode",
+  "compute.handler_op_eval",
+  "compute.handler_op_install",
+  "compute.handler_op_uninstall",
+  "compute.handler_present",
+  "compute.q23_install_builtin_apply_capability_resource",
+  "compute.q23_install_builtin_apply_resource_only",
+  "compute.reactive_converged_result",
+  "compute.reactive_final_result",
+  "compute.reactive_initial_result",
+  "compute.reactive_install",
+  "compute.reactive_second_update",
+  "compute.reactive_update_dependency",
+  "compute.types_expression",
+  "compute.types_inline",
+  "compute.types_result_error",
+  "compute.types_subgraph",
+  "compute.types_value",
+  "compute.v310_f5_eval_capability_without_resource",
+  "compute.v310_f5_install_capability_without_resource",
+  "compute.v314_args_types_registered",
+  "compute.v314_builtin_arithmetic_alias",
+  "compute.v314_builtin_filter",
+  "compute.v314_builtin_fold",
+  "compute.v314_builtin_fold_empty",
+  "compute.v314_builtin_map",
+  "compute.v314_builtin_store_roundtrip",
+  "compute.v314_cast_float_truncate",
+  "compute.v314_cast_inf_to_int",
+  "compute.v314_cast_int_to_uint_negative",
+  "compute.v314_cast_nan_to_int",
+  "compute.v314_cast_neg_float_to_uint",
+  "compute.v314_cast_to_invalid_type",
+  "compute.v314_index_basic",
+  "compute.v314_index_negative",
+  "compute.v314_index_past_end",
+  "compute.v314_index_type_mismatch",
+  "compute.v314_length_empty",
+  "compute.v314_length_nonempty",
+  "compute.v314_length_type_mismatch",
+  "compute.v316_eager_cast_not_through_let",
+  "compute.v316_eager_cast_unsigned_div",
+  "compute.v316_int_wraparound_add",
+  "compute.v316_sign_agnostic_add",
+  "compute.v316_signed_canonical_encoding",
+  "compute.v316_uint_round_trip",
+  "compute.v316_uint_wraparound_add",
+  "compute.v317_cast_through_closure_arg",
+  "compute.v317_cast_through_if_branch",
+  "compute.v317_cast_through_lookup_scope",
+  "compute.v319_f10_error_at_200",
+  "compute.v319_f11_filter_fn_arg",
+  "compute.v319_n5_closure_field",
+  "compute.v319_n5_compute_compose",
+  "compute.v319_n5_disambiguation",
+  "compute.v319_n5_nested_field",
+  "compute.v319b_scope_entity_round_trip",
+  "compute.v319b_scope_hash_agreement",
+  "compute.v319b_scope_unreachable",
+  "compute.v319c_construct_entity_valued_field",
+  "compute.v319c_construct_navigation_chain",
+  "compute.v319c_inline_vs_builtin_construct_hash_agreement",
+  "compute.v319c_readback_navigation_returns_hash",
+  "compute.v36_add_mixed_float",
+  "compute.v36_div_negative",
+  "compute.v36_div_repeating",
+  "compute.v36_eq_cross_type",
+  "compute.v36_eq_incompatible",
+  "compute.v36_lt_string",
+  "compute.v36_lt_type_mismatch",
+  "compute.v36_mod_both_neg",
+  "compute.v36_mod_neg_dividend",
+  "compute.v36_mod_neg_divisor",
+  "compute.v36_resolve_rejects_non_compute",
+  "compute.v37_lookup_hash_eval",
+  "compute.v37_lookup_hash_field_extract",
+  "compute.v37_lookup_hash_type_registered",
+  "compute.v38_cascade_chain",
+  "compute.v38_depth_non_tail",
+  "compute.v38_dynamic_handler",
+  "compute.v38_dynamic_handler_swap",
+  "compute.v38_newton_sqrt",
+  "compute.v38_relative_lookup_tree",
+  "compute.v38_tco_if_chain",
+  "compute.v38_tco_let_chain",
+  "compute.v38_tco_sum_2000",
+]
+
+[gate.baseline.core]
+measured = "2026-09-11"   # 2 round(s)
+total    = 778
+composed = { PASS = 398, WARN = 273, SKIP = 107 }
+bare     = { PASS = 335, WARN = 336, SKIP = 107 }
+improved = [
+  "type_system.type_compute_apply_fetch",
+  "type_system.type_compute_apply_match",
+  "type_system.type_compute_arithmetic_fetch",
+  "type_system.type_compute_arithmetic_match",
+  "type_system.type_compute_closure_fetch",
+  "type_system.type_compute_closure_match",
+  "type_system.type_compute_compare_fetch",
+  "type_system.type_compute_compare_match",
+  "type_system.type_compute_construct_fetch",
+  "type_system.type_compute_construct_match",
+  "type_system.type_compute_error_fetch",
+  "type_system.type_compute_field_fetch",
+  "type_system.type_compute_field_match",
+  "type_system.type_compute_if_fetch",
+  "type_system.type_compute_if_match",
+  "type_system.type_compute_index_fetch",
+  "type_system.type_compute_index_match",
+  "type_system.type_compute_lambda_fetch",
+  "type_system.type_compute_lambda_match",
+  "type_system.type_compute_length_fetch",
+  "type_system.type_compute_length_match",
+  "type_system.type_compute_let_fetch",
+  "type_system.type_compute_let_match",
+  "type_system.type_compute_literal_fetch",
+  "type_system.type_compute_literal_match",
+  "type_system.type_compute_logic_fetch",
+  "type_system.type_compute_logic_match",
+  "type_system.type_compute_lookup_hash_fetch",
+  "type_system.type_compute_lookup_hash_match",
+  "type_system.type_compute_lookup_scope_fetch",
+  "type_system.type_compute_lookup_scope_match",
+  "type_system.type_compute_lookup_tree_fetch",
+  "type_system.type_compute_lookup_tree_match",
+  "type_system.type_compute_numeric_cast_fetch",
+  "type_system.type_compute_numeric_cast_match",
+  "type_system.type_compute_result_fetch",
+  "type_system.type_compute_result_match",
+  "type_system.type_compute_scope_fetch",
+  "type_system.type_compute_scope_match",
+  "type_system.type_system_compute_assoc_args_fetch",
+  "type_system.type_system_compute_assoc_args_match",
+  "type_system.type_system_compute_concat_args_fetch",
+  "type_system.type_system_compute_concat_args_match",
+  "type_system.type_system_compute_filter_args_fetch",
+  "type_system.type_system_compute_filter_args_match",
+  "type_system.type_system_compute_fold_args_fetch",
+  "type_system.type_system_compute_fold_args_match",
+  "type_system.type_system_compute_group_by_args_fetch",
+  "type_system.type_system_compute_group_by_args_match",
+  "type_system.type_system_compute_install_request_fetch",
+  "type_system.type_system_compute_install_request_match",
+  "type_system.type_system_compute_install_result_fetch",
+  "type_system.type_system_compute_install_result_match",
+  "type_system.type_system_compute_map_args_fetch",
+  "type_system.type_system_compute_map_args_match",
+  "type_system.type_system_compute_range_args_fetch",
+  "type_system.type_system_compute_range_args_match",
+  "type_system.type_system_compute_scope_binding_fetch",
+  "type_system.type_system_compute_scope_binding_match",
+  "type_system.type_system_compute_store_args_fetch",
+  "type_system.type_system_compute_store_args_match",
+  "type_system.type_system_compute_subgraph_fetch",
+  "type_system.type_system_compute_subgraph_match",
+]
