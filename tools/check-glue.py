@@ -172,8 +172,27 @@ def scan(path: Path, names: list[str], kind: str) -> list[tuple[int, str, str]]:
 
 
 def tracked() -> list[str]:
+    """Every file git would consider part of the tree — COMMITTED OR NOT.
+
+    `--others --exclude-standard` is load-bearing and was added 2026-09-09 after a plain
+    `git ls-files` corpus cost a real miss: `tools/check-toolchain.py` was written, this
+    gate was run against it and reported **OK over 64 files**, and only after the commit
+    did the corpus become 65 and the gate find a genuine identity leak in it.
+
+    **A gate whose corpus is the COMMITTED tree cannot answer about the change you are
+    about to make.** That is the shape D21 names one axis over — a reference in the wrong
+    place — and here the reference was in the wrong *tense*. The pre-commit run is the
+    only one whose answer can still change what lands, and it was the one run blind.
+
+    `--exclude-standard` keeps `.gitignore` authoritative, so `output/`, `.agents/` and
+    every build artifact stay out. An untracked scratch file that is NOT ignored is
+    scanned, and that is intended rather than tolerated: this gate's failure mode is a
+    file naming a target, and a file too new to be committed is exactly when that is
+    cheapest to fix.
+    """
     return [ln for ln in subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout.splitlines() if ln.strip()]
 
 

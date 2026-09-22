@@ -32,7 +32,98 @@ outside its corpus entirely. The gate now reads both directions.
 
 ---
 
-**Latest: §6.2's two REQUIRED conformance vectors are measured, over the wire, and they are the
+**Latest: the host contract is declared and gated, which closes a contradiction that had been
+open since the repo was opened.** The charter said the host needs `make` + `podman` and nothing
+else. It has never been true here: `make check` runs eleven `tools/*.py` on the host, and the
+Makefile shells `python3 -c` to read a profile *before it can choose an image*. Nobody had ever
+declared Python as the tooling language — there was no such statement anywhere in the tree.
+
+**The ruling is not that this was fine.** Python and Bash are **de facto** dependencies across
+these projects — not adopted, but reached for anyway despite the stated standard. That is a
+discipline failure at project scale, not a design decision this repo made, and the scope of it is
+not ours to rule on. The reality is accepted for now because changing it is far more work than
+declaring it. What is ours is narrower and is what landed: the dependency is now *declared* and
+*bounded* rather than accumulating under a sentence saying it is absent.
+`tools/tooling.toml [host]` is the data, `make toolchain` is the check, and
+`docs/adr/0001-the-host-toolchain-contract.md` is the reasoning.
+
+**The invariant is the boundary, not the inventory: the host half is stdlib-only, and anything
+needing a third-party library runs in a container.** That was already true and had already been
+*tested* — the canonical ECF codec cannot load on a bare host, and when that was found the two
+entry points reaching it were containerised rather than the contract widened. The gate makes
+that the default rather than a good call somebody made once.
+
+**Two things it taught, and the first is the one worth carrying.** An `import`-statement scan
+reports this tree as **100% stdlib** and is right *by accident*: the one genuine third-party
+dependency arrives through `__import__(decl["package"])`, with its name held in a TOML file, so
+no import statement names it and no scan for one can see it. The obvious gate would have printed
+a clean verdict over a corpus that excluded the only thing it exists to find. Caught in review,
+before the first run — the second time in this repo's history, after `check-error-codes.py`.
+And the streak held anyway: **it went red on run one**, on its own declaration, where TOML bound
+two bare keys to an array-of-tables entry instead of to the parent. Eight instruments, eight
+that found something the day they were written.
+
+Catalogued as **AP-26** — *a dependency that accumulated under a charter sentence saying it was
+absent*. **Not promoted to a discipline**: one incident, and the ladder is explicit. The wrong
+declaration is the expensive part rather than the dependency — anyone asking what the host needs
+got a confident wrong answer from the most authoritative file in the repo, which is D16's third
+instance one level up. `AGENTS-STANDARD.md` is injected unchanged and is not ours to edit; it
+contradicts itself at L35 and L178 (the pin-hygiene check it prescribes is `python3 …`), and
+that is routed to the meta seat as an observation rather than a request.
+
+---
+
+**The check corpus and every arm's verdict travel as canonical ECF. There is no JSON at any
+hop.** The gate had been emitting JSON so a third arm could read a corpus of checks, and the
+operator called it: the ecosystem's data language is CBOR in Entity Canonical Form, the peers
+ship conformant codecs, and a JSON hop is a second data model with no canonical form, no byte
+strings and no map-ordering rule — the three things `content_hash` is computed from. The corpus
+is now encoded through a peer's own codec used as a library, both arms decode with their own,
+both encode their verdicts as ECF, and the comparer decodes those. **10 of 10 still admitted:
+the transport changed and the measurement did not.**
+
+**The report side is what made it non-negotiable.** A JSON verdict needs a JSON *writer* in
+every arm, and the arm queued behind this one has neither a parser nor a writer in its offline
+crate closure — so keeping JSON would have put a hand-rolled serializer in the half of the tree
+that multiplies by the target count.
+
+**And the two-codec property is now exercised on every run**: one implementation encodes, two
+others decode, a third encodes a verdict the first decodes. A canonical-form defect surfaces as
+a cross-arm disagreement rather than as agreement — the property the locked ECF corpus was
+established with.
+
+**Three findings from doing it**, in `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`:
+
+- **The codec is not separable from the crypto.** `import entity_core` runs a package `__init__`
+  that pulls Ed25519 in, so the canonical ECF codec cannot be loaded without it —
+  `ModuleNotFoundError: No module named 'cryptography'` on a host that has everything else.
+  *"Adopt as much or as little of the system as you want"* is not true of the data language
+  today.
+- **Nothing in the ecosystem can read its own human-readable form.** `ENTITY-CBOR-ENCODING` §8
+  specifies diagnostic notation and Appendix E authors the ECF conformance corpus as `.diag`
+  compiled to `.cbor`. The only diag parser is `entity-core-go`'s `cmd/internal/diagcodec`,
+  behind Go's compiler-enforced boundary; the only view is `entity-shell cat -diag`. **Both
+  files ship to all 46 peers and not one can parse the `.diag`** — so every new consumer's
+  cheapest path is JSON, which is exactly what happened here. The read-in names five operations,
+  a library half and a CLI half, what is normative (the dialect) versus idiom, and a byte-exact
+  oracle that already exists: the 71 locked vectors must reproduce from their own `.diag`.
+- **It does not need keystone.** Correcting a claim made the same day: our composed hosts
+  already bind entities in-process on all three substrates and `types` installs everywhere,
+  including `rust`. Seeding a peer is something we do today.
+
+**The `rust` ext-checks arm is built and parked, not committed.** It compiles with zero added
+dependencies, decodes the ECF corpus and completes the handshake — then hangs on its first
+EXECUTE, with the peer never answering and `Io::outbound` waiting on a condvar only a response
+or a close will wake. `Peer::dispatch` has exactly one silent-drop path (root type ≠
+`system/protocol/execute` → `None`, nothing written). Either our request is malformed in a way
+that reaches it or the peer owes a status it is not sending — possibly both, and the second is
+routable. It sits at `.agents/wip-rust-ext-checks/` rather than in
+`languages/rust/gates/ext-checks/` **because the Makefile discovers arms by wildcard**, so
+committing it would hang `make ext-checks` for everyone. Move the directory back to pick it up.
+
+---
+
+**§6.2's two REQUIRED conformance vectors are measured, over the wire, and they are the
 first authored checks whose subject is the recorder rather than a handler.** `HIST-CONFIG-
 SPECIFICITY-1` and `-2` are checks the spec wrote for an implementer and nothing upstream runs —
 no check in the oracle's executed corpus configures two overlapping patterns at all. Both are

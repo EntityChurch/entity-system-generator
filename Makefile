@@ -1,8 +1,12 @@
 # entity-system-generator — `make <verb>` over podman.
 #
-# The host needs `make` + `podman` and nothing else. No mise, no just, no bespoke
+# The host needs `make`, `podman`, `python3` >= 3.11, POSIX `sh` and `git` -- declared in
+# `tools/tooling.toml [host]` and checked by `make toolchain`. No mise, no just, no bespoke
 # toolchain manager. Every verb has a `-native` opt-in that runs on the host toolchain
 # instead of in a container, per AGENTS-STANDARD.
+#
+# THE COMPILED half runs in a container; the NEUTRAL half runs on the host and is
+# STDLIB-ONLY. That boundary is the invariant (`docs/adr/0001-*`), not the list above it.
 #
 #   make build            compose + build one composition on one target
 #   make test             the extension cells' unit tests
@@ -11,7 +15,13 @@
 #   make expectation      the composition's declared baseline vs the report beside it
 #   make check            build + test + conformance + regression + expectation + plan-check
 #                         + sdk-parity + structure + drivers + error-codes + citations
-#                         + glue + req-coverage + scale --check
+#                         + glue + req-coverage + toolchain + scale --check
+#
+# WHAT THE HOST NEEDS, declared rather than asserted: `make`, `podman`, `python3` >= 3.11,
+# POSIX `sh`, and `git`. `tools/tooling.toml [host]` is the declaration and `make toolchain`
+# is the check; `docs/adr/0001-the-host-toolchain-contract.md` is the ruling behind it.
+# The comment below this block used to read "make + podman and nothing else", which was
+# never true of this repo -- the line under it shells `python3 -c` to read a profile.
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
@@ -19,9 +29,15 @@
 #   make type-parity      every port's type entities agree, by content hash (G-3)
 #   make error-codes      every wire code a port emits is declared with an authority (D16)
 #   make citations        every path a declaration file cites resolves (D18)
+#   make toolchain        the host contract is declared, and the host half stays stdlib-only
 #   make req-coverage     every requirement the spec declares is mapped to an instrument
 #   make ext-checks       the authored extension checks, both arms (Kind C -- never a verdict)
 #   make clean            remove every target's output/
+#   make reap             remove any container this repo left behind (label-scoped, safe)
+#
+# THIS REPO CLEANS UP AFTER ITSELF. Every container it starts is labelled and time-bounded
+# (`PODMAN_TIMEOUT`), so a hanging gate cannot strand one. `make reap` is the backstop and
+# is safe to run at any time. Do not hand anyone a `ps | grep` and a list of PIDs.
 #
 # THE LAYOUT IS TARGET-MAJOR. A target is a unified bundle:
 #
@@ -72,10 +88,43 @@ REPO      := $(notdir $(ROOT))
 # `../entity-core-keystone` resolves exactly as it does on the host while staying
 # unwritable. `--security-opt label=disable` rather than `:Z`: `:Z` would RELABEL
 # another team's tree, which is a write to their tree even though it changes no bytes.
+# EVERY CONTAINER THIS REPO STARTS CARRIES OUR LABEL, and it is not cosmetic: it is what
+# makes `make reap` able to clean up exactly our own containers and provably nothing else.
+# This box runs many concurrent sessions and several other projects' containers; a cleanup
+# that matches on an image name, a mount path or a `ps | grep` would eventually catch one
+# of theirs. A label we set is the only filter that cannot.
+PODMAN_LABEL = entity-system-generator
+
 PODMAN_RUN = podman run --rm --network=none --security-opt label=disable \
+	--label "$(PODMAN_LABEL)=1" \
 	-v "$(CHURCH):/church:ro" \
 	-v "$(ROOT):/church/$(REPO)" \
 	-w "/church/$(REPO)"
+
+# ── the hang budget, and why it is a podman flag rather than a `timeout` ────────────────
+#
+# `tools/host-launch` boots a peer, runs a client against it, and HAD NO TIME BOUND AT ALL
+# -- neither did any arm. So a client that hangs holds the container open forever, and the
+# gate that hangs is `make ext-checks`, whose `rust` arm hangs on its first EXECUTE by
+# construction today. Run it N times, strand N containers and N peer processes.
+#
+# That is exactly what happened: eighteen invocations over two days left seven live
+# processes and three containers up for 39 hours, and the seat that made them could not
+# clean them up -- process killing is denied here by fleet policy AND by a deny rule, so
+# the mess landed on the operator. THE INSTRUMENT THAT CANNOT BOUND ITSELF IS THE DEFECT,
+# not the policy that stopped us papering over it.
+#
+# `--timeout` is podman's own: conmon kills the container when the clock expires, so the
+# cleanup is done by the thing that created it and needs no `kill`, no `timeout` binary,
+# and no privilege this seat does not have. `timeout podman run ...` -- the previous
+# session's approach -- signals the CLIENT and routinely leaves the container behind,
+# which is how three of them survived a SIGKILL of their launcher.
+#
+# The value is generous on purpose: a false red costs the instrument (AP-4), and the
+# measured worst case is ~2.5 min per arm on `rust`. This is a HANG bound, not a
+# performance budget.
+PODMAN_TIMEOUT ?= 900
+RUN_BOUNDED    = $(PODMAN_RUN) --timeout $(PODMAN_TIMEOUT)
 
 RUN     = $(PODMAN_RUN) $(IMAGE)
 TDIR    = languages/$(TARGET)
@@ -96,7 +145,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
         scale scale-control type-parity glue glue-control \
         req-coverage req-coverage-control ext-checks ext-checks-control \
         expectation expectation-control diff-arms-control \
-        citations citations-control \
+        citations citations-control toolchain toolchain-control \
         build-native test-native \
         conformance-native probe-native
 
@@ -273,7 +322,7 @@ ext-checks:
 		for arm in composed bare; do \
 			echo "=== ext-checks: $$t / $(EXTCHECK_COMP) / $$arm ==="; \
 			bare_env=""; [ "$$arm" = bare ] && bare_env="-e BARE=1"; \
-			$(PODMAN_RUN) $$bare_env \
+			$(RUN_BOUNDED) $$bare_env \
 				-e CLIENT=./languages/$$t/gates/ext-checks/run \
 				-e EXT_CHECKS_DEFS=/church/$(REPO)/$(EXTCHECK_OUT)/checks.cbor \
 				-e EXT_CHECKS_OUT=/church/$(REPO)/$(EXTCHECK_OUT)/$$t-$$arm.cbor \
@@ -313,7 +362,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations glue req-coverage
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations glue req-coverage toolchain
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -349,6 +398,31 @@ drivers:
 # fact this repo has measured, naming a gate that has never existed.
 citations:
 	./tools/check-citations.py
+
+# ── the host contract ───────────────────────────────────────────────────────────
+# The charter said `make` + `podman` and nothing else; `make check` runs eleven
+# `tools/*.py` on the host and the Makefile itself shells `python3 -c` before it can pick
+# an image. Nobody had ever declared Python as the tooling language -- checked, and there
+# was no such statement in the tree. Python and Bash are DE FACTO dependencies across these
+# projects -- reached for despite the stated standard, which is a discipline failure at
+# project scale and NOT a sanction. Written up as `docs/adr/0001-the-host-toolchain-contract.md`.
+#
+# THE INVARIANT IS NOT THE INVENTORY. What this gates is the boundary: the host half is
+# STDLIB-ONLY, and anything needing a third-party library runs in a container. That was
+# tested for real on 2026-09-08 -- the ECF codec cannot load on a bare host, and the two
+# entry points reaching it were containerised rather than the host contract widened.
+#
+# It reads TWO doors, because the obvious one is not enough: an AST scan of `import`
+# statements reports this tree as 100% stdlib and is right BY ACCIDENT -- the one genuine
+# third-party dependency arrives through `__import__(decl["package"])` with its name held
+# in a TOML file. Caught in review, before the first run.
+toolchain:
+	./tools/check-toolchain.py
+
+# D15: four planted defects, one per rule, all four required to be caught. Separate on
+# purpose -- an instrument observed only passing is not an instrument.
+toolchain-control:
+	./tools/check-toolchain.py --self-test
 
 # ── the cost model ──────────────────────────────────────────────────────────────
 # What grows, and by what multiplier. Every file in the tree multiplies by exactly one
@@ -492,3 +566,34 @@ probe-native:
 # Every target's output, plus the cross-target output at the root.
 clean:
 	rm -rf output/ languages/*/output/
+
+# ── reap: clean up after ourselves, in one command ──────────────────────────────
+#
+# THE RULE THIS EXISTS FOR: this repo cleans up its own containers. It does not hand the
+# operator a `ps | grep` and a list of PIDs to work through -- that is not a cleanup
+# procedure, it is a mess with instructions attached, and it happened.
+#
+# Scoped by OUR LABEL and nothing else. Not an image name, not a mount path, not a process
+# name: this box runs several other projects' containers and many concurrent sessions, and
+# every one of those filters would eventually match one of theirs. `--filter label=` can
+# only match a container this Makefile started.
+#
+# It prints what it will remove before removing it, and prints the count afterwards, so a
+# run that reaps nothing is distinguishable from a run that could not look -- keystone's
+# survey printed `absent` where it meant `could not look` and it cost five peers (D14).
+#
+# `make reap` is safe to run at any time, including while nothing is wrong. With
+# `--timeout` on the bounded runs, it should never find anything; if it does, that is a
+# gate that outran its budget and worth knowing about.
+.PHONY: reap
+reap:
+	@ids=$$(podman ps -aq --filter "label=$(PODMAN_LABEL)=1"); \
+	if [ -z "$$ids" ]; then \
+		echo "reap: 0 containers labelled $(PODMAN_LABEL) -- nothing of ours is running"; \
+	else \
+		echo "reap: removing $$(echo $$ids | wc -w) container(s) labelled $(PODMAN_LABEL):"; \
+		podman ps -a --filter "label=$(PODMAN_LABEL)=1" \
+			--format "  {{.Names}}  {{.Status}}  {{.Command}}"; \
+		podman rm -f $$ids >/dev/null; \
+		echo "reap: done, $$(podman ps -aq --filter "label=$(PODMAN_LABEL)=1" | wc -l) remaining"; \
+	fi

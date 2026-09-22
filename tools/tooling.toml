@@ -58,3 +58,146 @@ reason this choice is cheap to make and cheap to change."""
 [oracle]
 name = "entity-core-go validate-peer"
 note = "another team's binary, and it is the oracle BECAUSE it is not the thing under test (AGENTS.md)"
+
+# ══ THE HOST CONTRACT ═════════════════════════════════════════════════════════════════════
+#
+# What a person needs on the box to run `make check`. Settled by the operator 2026-09-09 and
+# written up as `docs/adr/0001-the-host-toolchain-contract.md`; this block is the executable
+# half, read by `tools/check-toolchain.py`.
+#
+# THE CONTRADICTION THIS CLOSES. `AGENTS-STANDARD.md` says the host needs `make` + `podman`
+# and nothing else. That has never been true here: `make check` runs eleven `tools/*.py` on
+# the host, and the Makefile itself shells `python3 -c` to read a profile before it can pick
+# an image. Python and Bash are DE FACTO dependencies across these projects -- not adopted,
+# but reached for anyway despite the stated standard, which is a discipline failure at project
+# scale rather than a decision this repo made. NOT a sanction. The reality is accepted for now
+# because changing it is far more work than declaring it, and an undeclared dependency is an
+# undeclared dependency: the local fix is to DECLARE it and gate it, not to argue it is small.
+#
+# THE BOUNDARY IS THE POINT, and it is the one thing here that is a real invariant rather than
+# an inventory: THE HOST HALF IS STDLIB-ONLY. Anything needing a third-party library runs in a
+# container. That is not an aspiration -- it is what the tree already does, and the ECF codec
+# is what proved it has teeth (see `[ecf_codec]` above: the one non-stdlib dependency in the
+# neutral half cannot load on a bare host, and its two entry points were containerised rather
+# than the host contract being widened).
+[host]
+
+# Every program the neutral half executes on the host. `git` is here because it is the
+# TRACKED-FILE CORPUS for two gates (`scale-report.py`, `check-glue.py` both shell
+# `git ls-files`), which makes it load-bearing rather than incidental: without it those two
+# gates do not degrade, they refuse.
+programs = ["make", "podman", "python3", "sh", "git"]
+
+# THE FLOOR IS DERIVED, NEVER ASSERTED. `check-toolchain.py` computes it from the stdlib
+# modules the tree actually imports, against `[host.stdlib_since]` below, and fails if the
+# derivation comes out above this number. A constant nothing recomputes is AP-9's shape, and
+# this exact field is the kind that goes stale silently -- nobody notices a floor that is too
+# LOW until it is someone else's box.
+#
+# Today the binding module is `tomllib`, and it binds at every single tool: `compose.py`,
+# every check gate and the Makefile's own `python3 -c` all read TOML.
+python_min = "3.11"
+
+# The shells the neutral half is allowed to declare in a `#!`. POSIX `sh` only -- a `bash`
+# shebang in `tools/` would be a host dependency nobody declared, and the two files here
+# (`host-launch`, `gate-stage`) are `#!/bin/sh` today.
+shells = ["/bin/sh"]
+
+# The neutral entry points that MUST run in a container, because they reach a `where =
+# "container"` dynamic load (declared below). The Makefile runs both under
+# `$(PODMAN_RUN) $(ECF_IMAGE)`; this is the declaration that says so, so the two cannot
+# drift apart in silence.
+#
+# NOTE, measured and true today: both of these also expose a `--self-test` that runs fine on
+# a bare host, because the codec is loaded LAZILY inside `_ecf_codec()` rather than at module
+# scope. That laziness is load-bearing and is exactly what this gate protects -- moving that
+# `__import__` to module scope would break `make ext-checks-control` on every host, and
+# nothing else in the tree would notice.
+container_only = ["gates/ext-checks/schema.py", "gates/ext-checks/compare.py"]
+
+# ── the boundary condition, recorded because it is not a defect today and will be ─────────
+#
+# `make sdk-parity` runs on the HOST and shells out to `languages/<t>/gates/sdk-surface/run`,
+# and all three of those are `#!/bin/sh` + `python3` today. That arm's own header says it:
+# "Today all three happen to be Python and that is a coincidence of convenience, not a
+# contract" -- the shape exists precisely so a target can read its surface with `rustdoc` or
+# the `tsc` API instead. THE DAY ONE DOES, `make sdk-parity` stops working on a bare host.
+#
+# Not fixed here, because fixing it means containerising a gate that has no reason to be
+# containerised yet, and a rule earned on speculation is removed unearned (the promotion
+# ladder). Written down so the next person meets it as a known boundary rather than as a
+# surprise on someone else's box.
+host_run_arms = ["languages/*/gates/sdk-surface/run"]
+
+# ── the stdlib table, and why every module is listed rather than only the interesting one ──
+#
+# It would be shorter to list `tomllib` alone -- it is the only import above a 3.8 floor. That
+# is D16's fifth failure in advance: a gate that only asks about the modules already known to
+# be interesting cannot answer for the one added next week. An import absent from this table
+# REFUSES, so a new dependency forces a decision at the moment it arrives rather than the
+# first time somebody runs on an older interpreter.
+#
+# Produced by, and re-derivable with:
+#   python3 tools/check-toolchain.py --print-imports
+[host.stdlib_since]
+__future__ = "2.1"
+argparse   = "3.2"
+ast        = "2.6"
+collections = "3.0"
+glob       = "3.0"
+hashlib    = "3.0"
+importlib  = "3.1"
+json       = "3.0"
+math       = "3.0"
+pathlib    = "3.4"
+re         = "3.0"
+statistics = "3.4"
+subprocess = "3.0"
+sys        = "3.0"
+tempfile   = "3.0"
+tomllib    = "3.11"   # <- the binding one. Raising `python_min` below 3.11 breaks every gate.
+
+# ── the doors an `import` statement does not come through ─────────────────────────────────
+#
+# THIS IS THE HALF THE OBVIOUS GATE WOULD HAVE MISSED, and it was caught in review rather
+# than by running (the second time in this repo's history -- `check-error-codes.py` was the
+# first). An AST scan of `import` statements across `tools/` and `gates/` reports the neutral
+# half as 100% stdlib, and it is RIGHT BY ACCIDENT: the one genuine third-party dependency in
+# the tree is loaded with `__import__(decl["package"])` from a name held in this very file, so
+# no import statement names it and no scan for one can see it.
+#
+# So every dynamic load is declared, with what it loads and where it runs. An undeclared
+# `importlib` / `__import__` / `exec` site in the neutral half is a failure.
+#
+# `where` is the distinction that carries the invariant: `in-tree` loads a sibling tool out of
+# this repo and adds nothing to the host; `container` loads a third-party module and is
+# therefore only ever executed inside a toolchain image.
+[[host.dynamic_load]]
+site    = "tools/check-glue.py"
+loads   = "tools/scale-report.py"
+where   = "in-tree"
+why     = "D20's gate borrows `classify()` rather than re-deriving it -- its own first draft re-derived the classification and produced fourteen false reds."
+
+[[host.dynamic_load]]
+site    = "tools/check-expectation.py"
+loads   = "tools/diff-arms.py"
+where   = "in-tree"
+why     = "the baseline gate and the differ must agree on `[[gate.straddle]]` through the SAME function (D21), not through two readings of it."
+
+[[host.dynamic_load]]
+site    = "gates/ext-checks/schema.py"
+loads   = "entity_core"
+where   = "container"
+why     = "the declared ECF codec, by `[ecf_codec].package`. THE ONLY THIRD-PARTY PYTHON DEPENDENCY IN THIS TREE, and it cannot load on a bare host -- `ModuleNotFoundError: No module named 'cryptography'`, measured 2026-09-08."
+
+# ── A NOTE ON THE ORDER OF THIS FILE, because it cost a red run ──────────────────────────
+#
+# Every bare `[host]` key is ABOVE the `[[host.dynamic_load]]` blocks, and it has to be:
+# in TOML, a key written after an array-of-tables header belongs to that TABLE, not to the
+# parent. `container_only` and `host_run_arms` were originally written below and were
+# silently swallowed into the last `[[host.dynamic_load]]` entry -- so `[host].container_only`
+# read as absent and `check-toolchain.py` failed `schema.py` for not being declared.
+#
+# It is a nice instance of the thing this repo keeps re-learning: the gate found it on its
+# FIRST RUN, and no amount of re-reading the block would have. The defect was in the
+# declaration rather than in the instrument, which is the outcome D15 is aiming at.
