@@ -53,41 +53,42 @@ generated, no conformance number exists, and there is nothing here to claim.
 
 ## What is blocking
 
-**One normative delta upstream, and one contract that does not exist yet.**
+**Nothing blocks the first cycle. That was wrong when it was written and is corrected.**
 
-0. **The keystone peer host contract — the real gap.** A keystone peer is more than a core protocol
-   peer: it is the foundation extensions install into, so it must *expose the hook points*. Core
-   protocol does not require them and is right not to. **Measured, and it already bites:** `go` has a
-   real dispatch index (`peer.go:414`) and `typescript` a public `registerHandler`; **`haskell`
-   dispatches through a hardcoded `case` on the pattern string** (`EntityCore/Peer.hs:840–847`) with
-   no index at all. **All three are fully conformant** — `system/handler:register` writes tree
-   entities, and writing tree entities is not the same as having somewhere to bind a body. No gate
-   distinguishes them. Generating an extension for Haskell would fail at the last step for a reason
-   that is nobody's bug. See `DESIGN-WHERE-THE-LINE-IS.md`.
+`ENTITY-CORE-PROTOCOL` §6.2 L3140 carves bootstrap out — *"Bootstrap handlers bypass this — they exist
+before the capability system (§6.9)"* — and in the peers the reserved-pattern guard has exactly one
+call site, inside the **wire** `register` operation (`go/src/peer/handlers.go:495,505`). A composition
+program that constructs the peer and installs before listening is the bootstrap class. **H1 + H3 alone
+unblock it.** D1 still lands for the wire/remote install story; it gates nothing here.
 
-1. **Handler install (surface 1) — DRAFTED.** The corpus has three words for the party that installs
-   a handler — §6.2's *"user-installed"*, §9.1's *"user"*, §11.6.7's *"application-owned"* — all
-   meaning application code, so the **extension installer** is named nowhere. Every standard
-   extension lives under `system/*`, so the wire path refuses all of them and the in-process path is
-   authorized nowhere. `PROPOSAL-EXTENSION-HOST-INSTALL-SEAM` (`entity-system-architecture`, DRAFT).
-2. **Nothing else.** A second delta was drafted for consumer registration and **withdrawn** after
-   reading the trees: `emit` is the primitive and the registration mechanism is the implementer's,
-   exactly as §1.2 says. Specifying it would have been arch inventing an API three implementations
-   already ship.
+**Keystone has accepted H1–H5** (`HANDOFF-TO-GENERATOR-2026-09-02`, their tree) and is doing the H4
+survey, the `[host]` profile blocks, the roster column, and the `go`/`rust` exposure work.
 
-**One finding routed rather than blocking.** `entity-core-go`'s `cmd/entity-peer/main.go:423–429`
-wires `compute/reactive` *after* structural summaries and auto-version, where §2.2 puts it before
-both — and **no conformance category tests consumer ordering**. Their tree, their call; the missing
-check is D12 here. It is also the clearest argument for generating the wiring: the composition is a
-hand-maintained options list and the spine is a nine-row table in an 859-line spec.
+**The decision that was gating the first build is made, by measurement rather than by choice.** The
+bar is `SDK-OPERATIONS` §11.6, not a raw map write: dispatch resolves a pattern by walking the tree
+for a `system/handler` entity, so a handler with no §11.6.1 entities returns `404` whatever the index
+holds. The registration surface owns the writes; **the generated composition does not perform them.**
+
+**And the peer that decision was framed around does not host anything.** `julia`'s exported
+`register_handler!` writes a container **nothing reads** — S3 residue orphaned by S4's rewrite to
+store-based dispatch. It was arch's own nominated control and it is retracted. **`typescript` and
+`csharp` are the controls**: both public, both read at dispatch, both already writing three of
+§11.6.1's four artifacts. What the cohort is missing is now narrow and identical in both — `types`,
+the `409`, and the handle lifecycle.
 
 ## What is next here, and it depends on neither
 
-- **The dispatch-surface census** — per peer, by source read: is there a dispatch index reachable
-  after construction, or a hardcoded switch? Is there a consumer registration point? This sizes
-  everything else. See `DESIGN-WHERE-THE-LINE-IS.md` §2 for why a grep will not settle it.
-- **The keystone peer host contract**, drafted off that census and routed to keystone as a base
-  requirement.
+- ✅ **The dispatch-surface census** — `CENSUS-DISPATCH-SURFACE.md`, 12 peers; keystone has since
+  measured all 26 M1/M2/M3 and is carrying the rest as `[host]` profile values rather than a table.
+  **Roster reads `unknown` for all 46 until a harness executes** — their rule and the right one.
+- ✅ **The host contract** — `DRAFT-KEYSTONE-PEER-HOST-CONTRACT.md`, H1–H5, routed and **accepted**,
+  with three corrections from keystone and two back to them (`cpp`'s `register_handler` is private;
+  `julia`'s writes a dead map). **It is keystone's document** — a requirement on keystone peers,
+  settled between keystone and here, with arch not a party. What stays arch's is `SDK-OPERATIONS`
+  §11.6 and `GUIDE-CONFORMANCE` §7d, which bind every SDK rather than only keystone's peers.
+- **`typescript` × `CONTENT` — the first build.** Zero peer changes, a live seam verified at the
+  resolution site, and the runtime where "use it as a library" is the normal case. `csharp` is the
+  second zero-change peer, so a generator bug and a peer bug stay separable on the first cycle.
 - **The S0′ resolver** — dependency closure, consumer-position assignment, ordering-constraint
   validation. The graph is already machine-readable in the corpus.
 
