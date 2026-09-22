@@ -1,0 +1,20 @@
+# languages/typescript/host-entry — sourced by tools/host-launch.
+#
+# The ONLY thing this target's harness needs to say: which file to hand to node, for
+# each arm. Everything else -- port, keypair, readiness, teardown, the oracle -- is the
+# shared protocol and lives in tools/host-launch, once.
+#
+# The bare arm reads the peer's own host out of the STAGED copy of its dist/, not out of
+# the peer's tree, so the two arms differ by the composition and by nothing else --
+# including the peer build.
+
+resolve_entry() {
+  if [ "$ARM" = "bare" ]; then
+    ENTRY="$STAGE/node_modules/entity-core-protocol-typescript/dist/test/host.js"
+  else
+    ENTRY="$STAGE/dist/host.js"
+  fi
+  [ -f "$ENTRY" ] || { echo "host-entry: nothing built at $ENTRY" >&2
+    echo "  run: make build TARGET=typescript COMPOSITION=$COMP" >&2; exit 2; }
+  ENTRY_ARGV="node $ENTRY"
+}

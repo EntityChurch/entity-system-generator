@@ -1,0 +1,47 @@
+# languages/rust/gates/host-seam — the host-seam probe for the `rust` keystone peer.
+#
+# Three binaries, and the split is the point. On `typescript` and `python` every D13
+# layer could be probed at RUNTIME, because in both languages "is the symbol there"
+# is a question you ask an object. In `rust` it is a question you ask the COMPILER,
+# and a probe that answered it with a grep would be reading source to decide what is
+# true -- which is the thing D13 exists to forbid.
+#
+#   probe            executed: the Reach layer, the emit face, the frame budget.
+#   access_control   MUST COMPILE. The positive control for the compile-fail method:
+#                    it names every public symbol the probe claims IS reachable.
+#   access_absent    MUST FAIL TO COMPILE. It names the symbols an install would
+#                    need. `required-features` keeps it out of a plain `cargo build`
+#                    so only the driver, which expects the failure, ever builds it.
+#
+# Without `access_control`, "it did not compile" is indistinguishable from "the crate
+# does not build here at all" -- and a compile-fail check with no positive control is
+# the D15 false-green in its purest form: it passes when nothing works.
+
+[package]
+name    = "probe-seam-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# The peer under test, consumed AS A LIBRARY across the crate boundary -- which in
+# this language IS the packaging boundary (D13 Access). A `pub(crate)` item is
+# invisible from here, and that invisibility is the measurement.
+entity-core-protocol-rust = { path = "../../../../../entity-core-keystone/protocol-generator/rust" }
+
+[features]
+# Not enabled by default and never enabled by anything but the driver.
+compile-fail-fixture = []
+
+[[bin]]
+name = "probe"
+path = "src/bin/probe.rs"
+
+[[bin]]
+name = "access_control"
+path = "src/bin/access_control.rs"
+
+[[bin]]
+name = "access_absent"
+path = "src/bin/access_absent.rs"
+required-features = ["compile-fail-fixture"]

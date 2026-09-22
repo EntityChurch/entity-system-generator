@@ -53,9 +53,15 @@ host_entry = "host.py"   # speaks keystone's host CLI verbatim: --port / --name 
                          # --debug-open-grants / --validate, and a single `LISTENING ...`
                          # readiness line on stdout. Same contract, different runtime.
 
+# The readiness budget, in 0.1 s ticks, for the host to print `LISTENING` on stdout.
+# DECLARED HERE because it varies per target and a driver literal cannot: it WAS a literal,
+# and it had already drifted 100/150/150 with no comment on any of the three (D17 / AP-10).
+# Set at port 2, when 100 proved tight for interpreter startup.
+startup_ticks = 150
+
 [extension_host]
 # Facts about THIS peer that an extension module has to be built around. Every row was
-# measured by `gates/host-seam/probe-seam.py`, not read -- and keystone now carries the
+# measured by `languages/python/gates/host-seam/probe-seam.py`, not read -- and keystone now carries the
 # same block on their own profile, seeded from the same probe.
 registration_surface = "none"        # no registerHandler, no register_handler. The
                                      # module performs all four §11.6.1 writes itself.

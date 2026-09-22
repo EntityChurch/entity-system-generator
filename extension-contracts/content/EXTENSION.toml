@@ -1,0 +1,351 @@
+## EXTENSION.toml — CONTENT
+##
+## The machine-readable contract. EVERY field in [contract] is TRANSCRIBED from the
+## spec header in `shared/spec-data/content-v3.6/EXTENSION-CONTENT.md`
+## (sha256 4bf4a43bd7b99adf20cb989581743348bbf8edf9c2a64f52a03764ddca03c5af), not
+## authored here. GUIDE-EXTENSION-DEVELOPMENT §3.3 requires each spec to declare its
+## depends / owned namespaces / owned kinds / owned ops / extension points; this file is a
+## projection of that declaration, and the projection is checkable against its source.
+##
+## Everything below [contract] IS authored here, and each block says why it exists.
+
+[extension]
+name    = "CONTENT"
+spec    = "EXTENSION-CONTENT.md"
+version = "3.6"                      # + Amendments 1-3; see the snapshot's §12 history table
+snapshot = "content-v3.6"            # shared/spec-data/<snapshot>/ — the pinned input
+grade   = "draft"                    # spec header "Conformance grade: Draft" (GUIDE §9)
+                                     # draft means: expect defects, and four have already been routed
+
+# ── [contract] — transcribed. Do not edit without re-reading the snapshot. ──────────────
+[contract]
+depends          = []                # no EXTENSION prerequisite. The spec's "Depends" names
+                                     # ENTITY-CORE-PROTOCOL v7.51+ and ENTITY-CBOR-ENCODING v1.4+,
+                                     # which are the CORE, not extensions — see [core_depends].
+owned_namespaces = ["system/content/"]
+owned_ops        = ["system/content:get", "system/content:ingest"]
+owned_types      = [
+  "system/content/blob",              # §2.1  — §11.1 MUST
+  "system/content/chunk",             # §2.2  — §11.1 MUST
+  "system/content/descriptor",        # §2.4  — v3.5 A1
+  "system/content/get-request",        # §6.2
+  "system/content/content-response",   # §6.2
+  "system/content/ingest-request",     # §6.3
+  "system/content/ingest-result",      # §6.3
+]
+owned_kinds      = []                # spec declares none
+points_exposed   = []                # spec header: "Extension points exposed: None."
+points_consumed  = []                # spec header: "Extension points consumed: None."
+
+[core_depends]                       # kept OUT of `depends` on purpose: the closure resolver in
+                                     # `compositions/` resolves extension prerequisites, and a core
+                                     # version floor is a different check with a different failure.
+protocol = ">=7.51"                  # request-side envelope-`included` preservation (v3.4 ingest
+                                     # result pass-through + the §4 handler-mediated included map)
+cbor     = ">=1.4"                   # canonical ECF for blob/chunk entity-hash stability
+
+# ── [surfaces] — which of the extension's faces an installed module actually uses ───────
+# CONTENT has THREE faces, not four. It registers no emit consumer: "consumer" in this spec
+# means a client of content, not a §6.13(c) emit subscriber. Face 3 (emit) arrives with
+# HISTORY. Do not add an empty `emit_consumers` module "for symmetry" — an unused face is a
+# surface nothing tests.
+[surfaces]
+handler        = "system/content"    # §6.1 manifest at the pattern path; index at
+                                     # system/handler/system/content
+types          = true                # the module publishes its own system/type/* entities:
+                                     # keystone's registerHandler does NOT write them (measured,
+                                     # languages/typescript/gates/host-seam/probe-seam.mjs: type_blob/chunk/descriptor = NO)
+sdk            = true                # §3.4 + §4.3 + §5.3 — see [sdk]
+emit_consumers = []                  # none. See the paragraph above.
+service_owning = false               # §11.6.9 start/stop not required; the handler is stateless
+                                     # over the peer's content store
+
+[install]
+model = "sdk-native"                 # installed in-process against a live peer object, NOT over the
+                                     # wire. Forced, not chosen: the peer's `system/handler:register`
+                                     # op refuses `system/*` patterns (§6.2 "user-installed handlers
+                                     # MUST NOT register at system/* paths"), and CONTENT's pattern
+                                     # IS system/content. Every system-namespace extension inherits
+                                     # this. Measured on both tier-A peers.
+
+# ── [sdk] — the operation inventory, and the one entry that is a security surface ───────
+# There is no conformance gate anywhere on the SDK face and per the operator that is correct:
+# the SDK is a convention. So THE EXTENSION IS THE INSTRUMENT — the handler's own conformance
+# path runs THROUGH these, not beside them. `reached_by` names which conformance check
+# exercises each one. An entry whose `reached_by` is empty is genuinely unmeasured, and that
+# set should stay near-empty.
+[sdk.EnsureClosure]
+cite       = "§3.3 verify_content"
+public     = true
+reached_by = ["content/handler_op_get (indirectly, via get)"]
+note       = "completeness + size consistency. §3.7 classifies it Conformance: the verdict is cross-peer-uniform."
+
+[sdk.AtPeer]
+cite       = "§6.4.2 Hash Tree Presence"
+public     = true
+reached_by = []                      # honestly unmeasured: the oracle's content category never
+                                     # exercises namespace scoping. Named so it stays visible.
+note       = "namespace binding probe: tree:get({namespace}/{hex(H)}). hex(H) INCLUDES the format byte (66 chars under SHA-256), per §6.4.2 + ENTITY-CORE-PROTOCOL §3.5."
+
+[sdk.Reassemble]
+cite       = "§3.4"
+public     = false                   # ← THE MUST. NOT NEGOTIABLE, NOT A STYLE QUESTION.
+capability_wrapper_required = true
+reached_by = []
+note = """
+§3.4: "Implementations MUST NOT expose `reassemble_content` as a public substrate primitive
+callable from third-party / SDK / external consumer code without an explicit capability-checking
+wrapper -- direct substrate access bypasses the dispatcher cap discipline and creates a
+capability-escalation surface for consumers holding non-root caps."
+
+So the module ships the algorithm as MODULE-PRIVATE, reachable only from inside the handler body,
+which is already past the dispatcher's cap check. It is not exported from the module's public
+entry point in ANY language. The generation-time check is a grep on the language's export surface,
+not a code review: see extensions/content/<lang>/test/.
+"""
+
+# ── [assumptions] — open questions resolved to a value, greppable ───────────────────────
+# Every entry is a place the spec did not decide for us. Each carries the value we used, the
+# citation, and what would change if the resolution is wrong. NOT a place to record things the
+# spec DOES decide.
+[assumptions]
+chunk_size   = { value = 1048576, cite = "§3.5 + §10.1 DEFAULT_CHUNK_SIZE (v3.6 reconciled both to 1 MiB)", note = "the v3.5 4 MiB reading is dead; §10.1 was the site that had drifted, and v3.6 fixed it" }
+chunking_id  = { value = 1, cite = "§2.1 standardized values + §11.2 SHOULD FastCDC", note = "0 = fixed-size is conformant but loses edit-stability" }
+path_required = { value = 400, cite = "§6.2/§6.3 MUST, code pinned by GUIDE-EXTENSION-DEVELOPMENT §171", note = "was OURS to route: PROPOSAL-PIN-THE-PATH-REQUIRED-STATUS, landed. The oracle checks the CODE only, not the status, so a peer answering 404 passes the gate and fails the spec." }
+topology     = { value = "single-trust-domain", cite = "§6.4.1", note = "OPT-IN AND RESTRICTED. §6.4.1: MUST be documented as opt-in and MUST NOT be the default configuration; multi-party deployments under it are 'out-of-spec and security-defective'. Cycle 1 composes a single-peer conformance target, which is the one place §6.4.1 permits it. Namespace-scoped (§6.4.2) is the production default and is NOT implemented in cycle 1 -- named here so its absence is a declared gap, not a silent one." }
+pending_field = { value = "omitted", cite = "§6.2 Amendment 2 sidecar", note = "OPTIONAL and SHOULD-populate only for impls with sync-state visibility. We have none: no subscription, no inbox. §6.2 says a receiver without sync-state awareness MAY omit, and callers then treat all `missing` as terminal 404. Emitting an empty array would ADVERTISE a capability we do not have." }
+
+# ── [substrate] — MUSTs whose satisfiability differs per peer, measured per peer ──────
+# Not a TODO list. Each row is a measured fact about a peer, with the probe that measured
+# it. D13: a capability claim reads `unknown` unless it cites four sites or an executed
+# probe. The block was called `[unimplementable]` for one day — renamed when the answer
+# changed, because a block whose name asserts a verdict cannot record the verdict changing.
+[substrate.frame_budget]
+must = "§6.2 + §4.2 Amendment 1 -- consult the connection's configured budget at response-construction time, NOT a hardcoded 16 MiB literal"
+typescript = "satisfiable"           # ctx.frameBudget() -> connection.maxFrameBytes ?? peer.maxFrameBytes
+python     = "satisfiable"           # ctx.frame_budget() -> conn.max_frame_bytes ?? peer_max_frame.
+                                     # WAS "UNSATISFIABLE" until 2026-09-06: nothing on
+                                     # conn/ctx/peer/store carried a budget and wire.MAX_FRAME
+                                     # was a module constant equal to the forbidden literal.
+                                     # Routed as K-1, closed by keystone, re-measured here.
+rust       = "satisfied-degenerately"
+                                     # AND THIS IS A THIRD VERDICT, not a repeat of K-1.
+                                     # `wire::MAX_FRAME` is a pub const == 16,777,216, the
+                                     # exact literal the amendment names as wrong, and
+                                     # `CreateOptions` has no frame field and `Conn` carries
+                                     # none (probe scenario 3). BUT it is also the only bound
+                                     # `read_frame` enforces, and it is PUBLIC -- so a body
+                                     # reading it reads the number in force. The MUST's
+                                     # purpose (do not report a bound you are not enforcing)
+                                     # is met; its mechanism (consult the CONNECTION'S
+                                     # configured value) has nothing to configure.
+                                     # Routed as "make it configurable", NOT as K-1's
+                                     # "unimplementable". A different packet on purpose:
+                                     # python's body could not see the number at all.
+probe      = "languages/python/gates/host-seam/probe-seam.py + probe-seam.mjs + rust/probe-seam-rust.sh"
+measured   = "BY VALUE, not by attribute name. The probe configures the peer to enforce 3,145,749 and asserts the body reads back 3,145,749; its negative-control arm builds the peer unconfigured and asserts the body reads 16,777,216, which the scoring REJECTS. The name-matching version of this check went green the day the fix landed and could not have gone red for a peer that stamped MAX_FRAME onto every connection -- that is D15, applied to our own instrument the session after ratifying it. ON `rust` THE BY-VALUE CHECK HAS NO SECOND ARM: there is no configuration to vary, so the probe reports UNSATISFIABLE-AND-VACUOUS rather than scoring an arm it could not construct."
+
+# §3.4 IS TWO CLAUSES, AND THEY DO NOT MOVE TOGETHER. Split at the third port, 2026-09-06,
+# because `rust` is the strongest of the three on one clause and the weakest on the other
+# -- and a single verdict column would have had to pick one and be wrong about the other.
+# Two dynamic substrates could not have shown this: on both, the dispatcher's context type
+# was reachable, so clause 2 was free and only clause 1 varied.
+[substrate.export_boundary]
+must = "§3.4 clause 1 -- reassemble_content MUST NOT be exposed as a public substrate primitive"
+typescript = "ENFORCED"              # node's `exports` map: a deep import into internal/
+                                     # raises ERR_PACKAGE_PATH_NOT_EXPORTED, and the test
+                                     # asserts on the resolver's refusal
+python     = "CONVENTION ONLY"       # underscore + __all__ + a test. Python enforces
+                                     # nothing; a determined consumer can import
+                                     # entity_content._internal.reassemble and it works.
+                                     # test_export_surface.py asserts BOTH that the
+                                     # convention holds AND that it can be walked around,
+                                     # so the two ports' §3.4 claims are not read as equal.
+rust       = "ENFORCED BY THE COMPILER"
+                                     # `mod internal;` with no `pub`. error[E0603], and
+                                     # there is no dynamic route around it at all -- no
+                                     # reflection, no runtime import, nothing. STRONGEST of
+                                     # the three. Measured by a compile that must FAIL
+                                     # (src/bin/deep_import.rs), with tests/sdk.rs as the
+                                     # positive control, because a compile-fail check with
+                                     # no control reports its strongest result when the
+                                     # toolchain is broken (D15).
+note = "The same clause, three boundaries, three strengths: a manifest, a promise, and a compiler."
+
+[substrate.capability_wrapper]
+must = "§3.4 clause 2 -- reassembly is reachable only behind an EXPLICIT CAPABILITY-CHECKING wrapper, because direct substrate access bypasses the dispatcher cap discipline"
+typescript = "DISPATCHER-ANCHORED"   # the wrapper demands `ctx`, which the dispatcher
+                                     # constructs only after check_permission returned ALLOW
+python     = "DISPATCHER-ANCHORED"   # same shape; also checks ctx.has_cap at runtime
+rust       = "CRATE-ANCHORED ONLY"   # ← WEAKEST OF THE THREE, and the inverse of the row
+                                     # above. There is no dispatcher-built value to demand:
+                                     # `Conn` is freely constructible, `Outcome` and
+                                     # `dispatch_outcome` are private (E0603), and no
+                                     # handler body is reachable from dispatch at all. So
+                                     # `DispatchAuthority` -- a tuple struct with a private
+                                     # field and a pub(crate) constructor -- is unforgeable
+                                     # and proves only "you came through this crate's
+                                     # handler", NOT "the dispatcher authorized you".
+                                     # Stated narrowly in sdk.rs rather than claimed as parity.
+note = "Reporting one verdict for two clauses that invert between substrates is the D13 error one level up: not two boundaries read as one, but two REQUIREMENTS read as one. The row above and this row disagree about which port is strongest, and both are right."
+
+# ── [substrate.faces] — the row the third port added, and the one that reframes the tier ──
+# An extension has four faces (docs/DESIGN-THE-SDK-LAYER.md §1). On the first two peers all
+# four were available, so "CONTENT installs" was unambiguous and nothing needed this block.
+# **On `rust` the four faces get different answers on ONE peer**, which means a per-peer host
+# state was always the wrong granularity -- it is per (peer x face).
+[substrate.faces]
+typescript = { types = "installed", handler = "installed", emit_consumer = "available", sdk = "usable" }
+python     = { types = "installed", handler = "installed", emit_consumer = "available", sdk = "usable" }
+rust       = { types = "installed", handler = "NOT-INSTALLABLE", emit_consumer = "available", sdk = "library-only" }
+probe      = "languages/rust/gates/host-seam/probe-seam-rust.sh"
+measured   = """
+handler, by execution over real loopback TCP, both arms: nothing bound -> 404 handler_not_found;
+all four §11.6.1 tree writes bound -> 501 no_handler_body; the same body called DIRECTLY -> 200
+with a witness derived from a request field AND a registration-time nonce, invocation counter
+0 -> 1. So the dispatch attempt never reached a body, and the counter proves it was never asked.
+
+Access/Read/Export, by rustc, 4 of 4 claims each producing its own error, with a positive
+control that MUST compile in the same invocation:
+  error[E0624]: method `register_handler` is private
+  error[E0609]: no field `handlers` on type `Peer`
+  error[E0603]: struct `Outcome` is private
+  error[E0624]: method `resolve_handler` is private
+
+emit, by execution with TWO negatives: no consumer registered -> 0 events; an identical
+re-bind of the same entity at the same path -> no additional event. The second arm is the one
+that separates "the counter tracks events" from "the counter tracks calls", and only the first
+is the property §6.10 states.
+"""
+consequence = "The composition REFUSES to perform the four handler writes. Performing them would move the peer from `404 handler_not_found` -- which is true -- to `501 no_handler_body`, which says a handler exists and is broken. Making a peer worse to make a report look more installed is the failure mode `make regression` exists to catch, and doing it deliberately would be worse than tripping it by accident. `tools/compose.py` enforces the refusal by dropping the pattern from the plan when `[system.faces].handler = \"not-installable\"`."
+
+# ── [sdk_surface] — OUR standard, because nobody upstream owns this ──────────────────
+#
+# `entity-system-architecture` does not mandate the SDK surface and that is CORRECT: arch
+# enforces what has to be enforced, conformance lives on the wire, and a cross-impl surface
+# oracle would enforce the thing `GUIDE-EXTENSION-DEVELOPMENT` explicitly disclaims. But
+# "not required by the spec" and "not required by us" are different sentences. We generate
+# N ports of one extension and we want them to be THE SAME EXTENSION, so the standard is
+# ours to set -- exactly as the peer host contract was ours to write and keystone's to own.
+# If it earns promotion it goes upstream as a proposal with `tools/sdk-parity.py`'s output
+# as the evidence.
+#
+# THE RULE: every public name in every port is declared in exactly one class below. An
+# UNDECLARED name is a gate failure, because the failure mode this exists to catch is a
+# name arriving without anyone having decided.
+#
+# Measured 2026-09-06 across three ports: 24 in all three, 27 drifting, union 51.
+# Command: `./tools/sdk-parity.py extension-contracts/content`
+# Names are compared as `kind:snake_case`. The KIND is load-bearing -- `Blob` is a type and
+# `BLOB` is a constant, and the first version of the extractor lowercased both to one key,
+# reporting agreement where `typescript` exports no `BLOB` at all.
+
+[sdk_surface]
+# Class 1 — THE CONTRACT. Every port exports every one of these; missing from any port is
+# a gate failure. This is the operation inventory, and the good news of the first run is
+# that it HELD: all 15 functions are in all three ports, across two peers that host a
+# handler and one that cannot.
+required = [
+  # the SDK face (§3.3, §5.3, §6.4.2, §3.4)
+  "fn:ensure_closure", "fn:at_peer", "fn:bind_at_peer", "fn:create_descriptor",
+  "fn:descriptor_path", "fn:descriptor_matches_anchor", "fn:hash_hex_with_format",
+  "fn:reassemble_under_capability",
+  # chunking (§3.2, §3.6)
+  "fn:gear_table", "fn:cdc_params", "fn:cdc_boundaries",
+  "fn:create_blob_fixed", "fn:create_blob_cdc", "fn:store_blob",
+  # types (§2, §11.1)
+  "fn:publish_content_types",
+  # the shapes a consumer names
+  "type:blob", "type:cdc_params", "type:closure_verdict", "type:content_handler",
+  # the constants a consumer must agree with us on
+  "const:content_pattern", "const:default_chunk_size",
+  "const:min_chunk_size", "const:max_chunk_size", "const:get_batch_size",
+]
+
+# Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate allows. Exporting one
+# of these from a port NOT listed is a failure: if the substrate does not force it, it is
+# not substrate-conditional, it is drift with an excuse.
+
+[sdk_surface.substrate."fn:install_content"]
+ports  = ["typescript", "python"]
+reason = "installs the handler face. `rust` cannot: 501 no_handler_body with all four §11.6.1 tree writes bound, and register_handler/handlers/Outcome are all private. languages/rust/gates/host-seam."
+
+[sdk_surface.substrate."type:content_installation"]
+ports  = ["typescript", "python"]
+reason = "the return of install_content; same cause."
+
+[sdk_surface.substrate."fn:install_content_types"]
+ports  = ["rust"]
+reason = "the ONLY install face that works on that peer. Store::bind is public; the handler container is not. Deliberately a different name from install_content rather than a narrower version of it -- a caller must not be able to write one call that means 'installed' on two peers and 'partly installed' on a third."
+
+[sdk_surface.substrate."type:content_type_installation"]
+ports  = ["rust"]
+reason = "the return of install_content_types; same cause."
+
+[sdk_surface.substrate."type:content_outcome"]
+ports  = ["rust"]
+reason = "the peer's own `Outcome` is a bare struct with no `pub` -- error[E0603]. The cell cannot name it, so it defines its own. D13 Export layer, as a compile error rather than a review finding."
+
+[sdk_surface.substrate."type:handler_request"]
+ports  = ["rust"]
+reason = "there is no dispatch context type to receive. The peer passes (&mut Conn, &Envelope) to private code, so the shape a body would need is ours to declare."
+
+[sdk_surface.substrate."type:frame_budget"]
+ports  = ["rust"]
+reason = "wire::MAX_FRAME is a public const with nothing to configure, so the budget's PROVENANCE has to be carried in a type. On the other two ports ctx.frameBudget()/ctx.frame_budget() carries it."
+
+[sdk_surface.substrate."const:frame_reserve_bytes"]
+ports  = ["rust"]
+reason = "public only because FrameBudget's unit test needs it. Candidate for demotion to private; recorded rather than left as an accident."
+
+[sdk_surface.substrate."type:dispatch_authority"]
+ports  = ["rust"]
+reason = "§3.4 clause 2. The other two ports demand the peer's dispatch context, which the dispatcher builds after check_permission ALLOWs. There is no such value here, so the wrapper is anchored to an unforgeable crate-local token instead -- materially weaker, and recorded as such in [substrate.capability_wrapper]."
+
+# Class 3 — DRIFT. Measured, unresolved, and NOT blessed. `--strict-drift` turns every one
+# of these into an error; the flag is off today so the gate is honest on the day it was
+# written rather than green because it was scoped around what already passes.
+#
+# ALMOST ALL OF IT IS ONE DECISION MADE ONCE AND NEVER MADE AGAIN. `typescript` bundles the
+# type-name and chunking constants into `ContentTypes` and `Chunking` objects; `python` and
+# `rust` export them flat. Same information, two shapes, and until this gate existed nothing
+# recorded that a choice had been made at all. That is the class of difference no test
+# catches: every port passes its own suite, the oracle never looks at an in-process surface,
+# and a consumer writing against two ports finds the third has renamed half its vocabulary.
+
+[sdk_surface.drift."const:blob"]
+note = "ts bundles into ContentTypes.BLOB; py/rust export flat"
+[sdk_surface.drift."const:chunk"]
+note = "same"
+[sdk_surface.drift."const:descriptor"]
+note = "same"
+[sdk_surface.drift."const:get_request"]
+note = "same"
+[sdk_surface.drift."const:content_response"]
+note = "same"
+[sdk_surface.drift."const:ingest_request"]
+note = "same"
+[sdk_surface.drift."const:ingest_result"]
+note = "same"
+[sdk_surface.drift."const:all_types"]
+note = "same; ts has no flat equivalent at all"
+[sdk_surface.drift."const:chunking_fixed"]
+note = "ts bundles into the Chunking enum; py/rust export flat"
+[sdk_surface.drift."const:chunking_fastcdc_nc2"]
+note = "same"
+[sdk_surface.drift."type:content_types"]
+note = "the ts bundle object itself -- the other half of the ten rows above"
+[sdk_surface.drift."type:chunking"]
+note = "the ts enum -- the other half of the two rows above"
+[sdk_surface.drift."fn:content_type_defs"]
+note = "ts+rust. Returns declarations; python exports only the entities form."
+[sdk_surface.drift."fn:content_type_entities"]
+note = "py+rust. Returns materialised entities; typescript exports only the defs form. TWO names for one pair of operations and each port ships a different subset -- the sharpest single instance of the drift, because a consumer cannot write one call that works on all three."
+[sdk_surface.drift."const:operations"]
+note = "rust exports the §6.1 op list as a const; ts/py carry it as a class member"
+[sdk_surface.drift."fn:create_blob"]
+note = "rust convenience for the default target size, which the other two get from a default argument. Harmless and undecided."
+[sdk_surface.drift."type:descriptor_fields"]
+note = "ts named-argument interface; the other two use keyword/Option parameters"
+[sdk_surface.drift."type:content_handler_options"]
+note = "ts constructor options object; the other two take positional/keyword args"

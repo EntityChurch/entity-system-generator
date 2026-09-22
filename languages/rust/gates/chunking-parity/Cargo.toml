@@ -1,0 +1,24 @@
+# languages/rust/gates/chunking-parity — the `rust` arm of the chunking-parity gate.
+#
+# Its own crate, depending on the cell BY PATH so the probe consumes `entity_content`
+# across the crate boundary -- the same discipline the other two arms follow by
+# importing the staged package by name rather than reaching into the source tree.
+[package]
+name    = "chunking-parity-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# WAS a `[workspace]` stanza — an empty one, whose only job was to stop cargo walking up
+# and adopting some unrelated ancestor. Under target-major there IS a correct ancestor
+# (`languages/rust/Cargo.toml`) and this crate is a member of it, so the opt-out is
+# removed rather than kept: it would now exclude the crate from the one workspace it
+# belongs to, and it would get its own lockfile again.
+
+[[bin]]
+name = "probe"
+path = "src/main.rs"
+
+[dependencies]
+entity-content = { path = "../../extensions/content" }
+sha2           = { version = "=0.10.9", default-features = false }

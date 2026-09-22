@@ -18,9 +18,11 @@ assertion we wrote ourselves has nothing watching it.
 |---|---|---|---|---|
 | **`extension-conformance`** | **`entity-core-go`'s `validate-peer`** — the oracle, because it is not the thing under test. The 52 extension categories | `validate-peer -category <ext>` against a running composed peer | owed | not yet run |
 | **`core-regression`** | same oracle, `--profile core` — keystone's 16 | `validate-peer --profile core`, re-run after installing | owed | not yet run |
-| **`host-seam`** | `GUIDE-CONFORMANCE` §7d (arch, proposed) + the keystone peer host contract **H1–H7** | `host-seam/probe-seam.mjs` (H1/H2/H6, model 2) · `host-seam/probe-entity-native.mjs` (**H7**, model 3) | owed — keystone's, `go`/`rust`/`python` first | **1 peer measured, both probes; H1/H2/H6/H7 green there, 45 `unknown`** |
+| **`host-seam`** | `GUIDE-CONFORMANCE` §7d (arch, proposed) + the keystone peer host contract **H1–H7** | `languages/<t>/gates/host-seam/run` — one uniform entry point per arm | `make probe`, a `wildcard` over every target that has an arm | **1 peer measured, both probes; H1/H2/H6/H7 green there, 45 `unknown`** |
 | **`sdk-surface`** | **OURS, and deliberately so.** arch does not mandate the SDK surface and that is correct — conformance lives on the wire. But we generate N ports of one extension and want them to be the same extension | `tools/sdk-parity.py` against `EXTENSION.toml [sdk_surface]` | n/a — per extension, language-neutral | **built 2026-09-06, in `make check`.** First run: 24 required · 9 substrate · **18 drift** · 0 undeclared |
-| **`chunking-parity`** | `EXTENSION-CONTENT` §3.7 — §3.2/§3.6 are **Conformance** algorithms. **Nothing upstream measures it**: no oracle check chunks anything (`ed9b547`), and §3.6.5's vectors do not exist yet | one corpus → `gates/chunking-parity/probe.{mjs,py,rs}` → `compare.py` | `make parity`, all staged ports | **built 2026-09-06.** 3 ports agree on all 6 fields |
+| **`chunking-parity`** | `EXTENSION-CONTENT` §3.7 — §3.2/§3.6 are **Conformance** algorithms. **Nothing upstream measures it**: no oracle check chunks anything (`ed9b547`), and §3.6.5's vectors do not exist yet | one corpus → `languages/<t>/gates/chunking-parity/run` → the neutral `gates/chunking-parity/compare.py` | `make parity`, a `wildcard` over every arm; the count is echoed before the run | **built 2026-09-06.** 3 ports agree on all 6 fields |
+| **`drivers`** | **OURS, and it is a LINT rather than a proof** — see below. D17: a driver literal that differs across targets is an undeclared profile field | `tools/check-drivers.py` | `make drivers`, in `make check` | **built 2026-09-06.** Both controls + refusal executed; its own first draft was AP-8 and could not go red |
+| **`structure`** | **OURS.** The mirror rule (`DESIGN-THE-SYSTEM-STRUCTURE` §1.2): a per-target subtree may only hold units the neutral half declares. No upstream authority and none possible — nothing outside this repo has this layout | `tools/check-structure.py` | `make structure`, in `make check` | **built 2026-09-06.** 3 targets, 12 units. Both controls + the vacuity refusal executed |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
 
@@ -52,6 +54,17 @@ the spec as a Stage-4 byproduct that does not exist. So this is not a second sco
 with the oracle (which `composition-ordering` correctly refuses to be) — it is an instrument
 for a surface the oracle does not cover at all, and its output is the shape §3.6.5 would need.
 **Offered to arch as a head start, not proposed as a spec change.**
+
+**`drivers` is a lint, and the structural fix is the real answer.** It compares shell
+scripts with a regex, which is the same instrument keystone's stale axis was built from and
+is not, on its own, a reason for confidence. It earns its place on two narrow grounds: it
+found a real divergence on its first run, and it costs nothing. But **a gate that polices
+drift between N copies of a protocol is treating the symptom.** The cure is that there is
+almost nothing per-target left to drift — `tools/host-launch` is the shared protocol in one
+copy and `languages/<t>/host-entry` is 10-23 lines of *which binary, which environment*. The
+honest reading of this row: it is a tripwire on the residue, and if it ever starts finding
+things regularly that means per-target code has grown back, not that the lint got better.
+Measured mass and the rule it enforces: `DESIGN-THE-SYSTEM-STRUCTURE` §1.2b.
 
 ## The other two entries that need explaining
 
@@ -85,6 +98,17 @@ Inherited from keystone's ratchet, each earned on one of their measured incident
   `run-origination-core.sh` and 15 do not, for no reason anyone declared — and the whole axis turned
   out to be one oracle flag nobody had passed. *A separate harness that exists because a flag was
   never passed is not an axis, it is a workaround with a directory.*
+- **And the matrix is read off the tree, never maintained as a list** (2026-09-06). We broke the rule
+  above while stating it: `make probe` was three hand-written invocations with **three different
+  calling conventions** — node ran a script, python needed a `cd` plus a `--peer-root`, rust needed
+  `sh` and a wrapper — and `make parity` was three more, plus a hardcoded `COMPOSITIONS ?= ts-content
+  py-content rs-content`. At three targets that reads as configuration. At forty it is keystone's
+  31-and-15 exactly. **Every gate now has one uniform entry point per arm** —
+  `languages/<target>/gates/<gate>/run` — the target-specific incantation lives inside the arm where
+  it is one target's business, and every list in the Makefile is a `wildcard` over the tree. A new
+  target is a directory, never a Makefile edit. `tools/check-structure.py` fails an arm with no
+  `run`, because an arm the cohort runner cannot call is an arm nobody measures **and its absence is
+  silent**.
 - **Delete derived state before measuring.** A gate that assumes a `node_modules/`, a `dist/`, or a
   `target/` is a gate on somebody's machine. Keystone found a peer whose gate died `rc=127` from
   clean while reporting green for weeks.

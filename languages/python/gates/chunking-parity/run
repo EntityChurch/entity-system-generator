@@ -1,0 +1,22 @@
+#!/bin/sh
+# The chunking-parity arm for this target. ONE UNIFORM ENTRY POINT PER (gate x target)
+# -- see the host-seam sibling for why the Makefile no longer spells three conventions.
+#
+#   gates/chunking-parity/run <corpus> <target-size>   -> the arm's JSON on stdout
+#
+# COMPOSITION names the staged build this arm consumes; each arm reaches its port THROUGH
+# THE PACKAGING BOUNDARY rather than out of the source tree, which is the whole point of
+# the gate and the reason it needs a stage at all.
+set -eu
+CORPUS="${1:?usage: run <corpus> <target-size>}"
+TSIZE="${2:?usage: run <corpus> <target-size>}"
+COMPOSITION="${COMPOSITION:-content}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+STAGE="$TARGET_DIR/output/$COMPOSITION/build"
+[ -d "$STAGE" ] || { echo "REFUSING: no staged build at $STAGE -- run: make build TARGET=$(basename "$TARGET_DIR") COMPOSITION=$COMPOSITION" >&2; exit 2; }
+
+cd "$ROOT"
+PYTHONPATH="$STAGE" PYTHONDONTWRITEBYTECODE=1 \
+  exec python3 "$HERE/probe.py" "$CORPUS" "$TSIZE"

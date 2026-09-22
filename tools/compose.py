@@ -10,17 +10,32 @@ Those failures cannot occur inside keystone and cannot be found by testing an
 extension alone -- which is the whole argument for `compositions/` being a
 first-class artifact with a gate rather than a build flag.
 
-It lives in `tools/` rather than in a per-language driver for the reason
-`languages/<lang>/` exists at all: a build driver in the (extension x language) cell
+It lives in `tools/` rather than in a per-target driver for the reason
+`languages/<target>/` exists at all: a build driver in the (extension x target) cell
 would be 26 x 46 = 1,196 copies of one script. Keystone reached 46 copies of
 `run-s4.sh` and one defect reproduced in 36 of them. Nothing that can be shared is
 copied into a cell.
 
+**The layout is TARGET-MAJOR** (2026-09-06). A target is a unified bundle -- its
+driver, its profile, its extension cells, its compositions, its gate arms and its
+output all live under `languages/<target>/`, because the people who consume this
+arrive by language and should be able to read one directory. What stays at the root
+is the language-NEUTRAL half of each axis: `extension-contracts/<ext>/EXTENSION.toml`
+(the contract and the cross-port comparison tables, which cannot be sharded per port
+without ceasing to be comparisons), `gates/` (the axis table and the neutral
+instruments), `tools/`, `shared/spec-data/`.
+
+  extension-contracts/content/EXTENSION.toml      the contract   (neutral)
+  languages/rust/extensions/content/              the cell       (per target)
+  languages/rust/compositions/content/            the composition
+  languages/rust/gates/host-seam/                 the gate arm
+  languages/rust/output/content/PLAN.json         the plan       (gitignored)
+
 The plan is an OUTPUT. Never edited by hand; regenerating it must be byte-identical
 or the generator is non-deterministic (which `--check` asserts).
 
-  ./tools/compose.py compositions/ts-content --out output/ts-content/PLAN.json
-  ./tools/compose.py compositions/ts-content --check     # regenerate and diff
+  ./tools/compose.py languages/rust/compositions/content
+  ./tools/compose.py languages/rust/compositions/content --check   # regenerate and diff
 """
 
 from __future__ import annotations
@@ -47,10 +62,82 @@ def load_toml(path: Path) -> dict:
         raise Refusal(f"{path} is not valid TOML: {e}") from e
 
 
-def extension_dir(name: str) -> Path:
-    """`CONTENT` -> `extensions/content/`. The directory name is the lowercased
-    extension name, always -- one rule, no table to drift."""
-    return ROOT / "extensions" / name.lower()
+def contract_dir(name: str) -> Path:
+    """`CONTENT` -> `extension-contracts/content/`. The directory name is the lowercased
+    extension name, always -- one rule, no table to drift.
+
+    The CONTRACT is language-neutral and stays at the root. Its per-target code lives at
+    `languages/<target>/extensions/<name>/` -- see `cell_dir`. The two halves are named
+    differently on purpose: `extension-contracts/` holds what we transcribed from a spec
+    we do not own, and calling it `extension-specs/` would claim the authority AGENTS.md
+    L0 says is arch's.
+    """
+    return ROOT / "extension-contracts" / name.lower()
+
+
+def cell_dir(target: str, name: str) -> Path:
+    """`(rust, CONTENT)` -> `languages/rust/extensions/content/`. The (extension x target)
+    intersection, under the target because a target is a unified bundle."""
+    return ROOT / "languages" / target / "extensions" / name.lower()
+
+
+#: Fields a profile MUST carry, because something executes each one. Enforced rather than
+#: documented: until 2026-09-06 `profile.toml` was parsed by NOTHING -- twenty greps for
+#: the filename across the tree returned twenty docs, comments and the profiles themselves
+#: -- so every fact in it was restated where it ran (the image in the Makefile, `host_entry`
+#: inside each host-launch) and the executing copy silently won. That is AP-2's mechanism:
+#: computed correctly, then copied into a document that outlived it. It is also D16's shape
+#: -- an axis with no upstream authority and no gate -- applied to the file that now names
+#: the repo's top-level organizing unit.
+REQUIRED_PROFILE_FIELDS = [
+    ("language", "name"),
+    ("language", "packaging"),
+    ("language", "compilation"),
+    # D13's Access layer in one field. `typescript` carried this only as a comment while
+    # the other two declared it, which is exactly the drift an unparsed schema permits.
+    ("language", "boundary"),
+    ("toolchain", "image"),
+    ("gate", "host_entry"),
+    ("gate", "oracle_bin"),
+    # Added 2026-09-06 on AP-10. It was a literal in each `host-launch` and had already
+    # drifted -- 100 on the port written first, 150 on the two written after, no comment
+    # on any of the three. A per-target fact that lives in a driver cannot be compared
+    # across targets, which is the whole failure.
+    ("gate", "startup_ticks"),
+]
+
+
+def load_profile(target: str) -> dict:
+    """Read and CHECK `languages/<target>/profile.toml`.
+
+    Refuses rather than defaulting. A missing profile field used to mean "the Makefile's
+    copy wins"; now it means the composition does not resolve, which is the only way a
+    declaration stays true.
+    """
+    path = ROOT / "languages" / target / "profile.toml"
+    if not path.exists():
+        raise Refusal(
+            f"target {target!r} has no {path.relative_to(ROOT)} -- a target is the "
+            "(language, runtime, packaging, toolchain) tuple its profile declares, and "
+            "an undeclared target cannot be built"
+        )
+    profile = load_toml(path)
+
+    declared = profile.get("language", {}).get("name")
+    if declared != target:
+        raise Refusal(
+            f"{path.relative_to(ROOT)} declares [language].name = {declared!r} but lives "
+            f"at the directory for {target!r}"
+        )
+
+    missing = [f"[{s}].{k}" for s, k in REQUIRED_PROFILE_FIELDS
+               if profile.get(s, {}).get(k) is None]
+    if missing:
+        raise Refusal(
+            f"{path.relative_to(ROOT)} is missing {', '.join(missing)} -- every one of "
+            "these is read by something, and a profile field nobody reads is prose"
+        )
+    return profile
 
 
 def resolve_closure(names: list[str]) -> list[dict]:
@@ -68,7 +155,7 @@ def resolve_closure(names: list[str]) -> list[dict]:
         name = stack.pop(0)
         if name in seen:
             continue
-        manifest_path = extension_dir(name) / "EXTENSION.toml"
+        manifest_path = contract_dir(name) / "EXTENSION.toml"
         if not manifest_path.exists():
             origin = "requested by SYSTEM.toml" if name in requested else "pulled in as a dependency"
             raise Refusal(
@@ -200,21 +287,40 @@ def build_plan(comp_dir: Path) -> dict:
     check_disjoint(resolved)
     snapshots = check_snapshots(resolved)
 
-    peer = sys_block.get("peer", {})
-    language = peer.get("language")
-    if not language:
-        raise Refusal(f"{comp_dir.name}: [system.peer].language is required")
+    # THE TARGET IS THE DIRECTORY THE COMPOSITION LIVES IN, not a field.
+    #
+    # It used to be `[system.peer].language`, and the Makefile derived LANGUAGE back out of
+    # the resolved plan so the two could not be passed separately -- a real hazard then,
+    # because `make check COMPOSITION=py-content LANGUAGE=typescript` was a spellable
+    # mismatch. Under target-major the pair is a PATH: `languages/rust/compositions/content`
+    # either exists or it does not, and a mismatched (target, composition) has no filesystem
+    # location. The derivation hack is deleted rather than moved.
+    try:
+        target = comp_dir.relative_to(ROOT / "languages").parts[0]
+    except ValueError:
+        raise Refusal(
+            f"{comp_dir} is not under languages/<target>/compositions/ -- a composition "
+            "lives inside the target it composes for"
+        ) from None
 
+    peer = sys_block.get("peer", {})
+    if peer.get("language") not in (None, target):
+        raise Refusal(
+            f"{comp_dir.name}: [system.peer].language = {peer['language']!r} contradicts "
+            f"its location under languages/{target}/. The path is the authority; drop the field."
+        )
+
+    profile = load_profile(target)
     faces = check_faces(sys_block, comp_dir.name)
 
     installs = []
     for item in resolved:
         manifest = item["manifest"]
-        cell = extension_dir(item["name"]) / language
+        cell = cell_dir(target, item["name"])
         if not cell.is_dir():
             raise Refusal(
-                f"{item['name']} has no {language} port at {cell.relative_to(ROOT)} -- "
-                "a composition names an (extension x language) cell that must exist"
+                f"{item['name']} has no {target} port at {cell.relative_to(ROOT)} -- "
+                "a composition names an (extension x target) cell that must exist"
             )
         surfaces = manifest.get("surfaces", {})
 
@@ -251,7 +357,33 @@ def build_plan(comp_dir: Path) -> dict:
 
     return {
         "composition": sys_block.get("name", comp_dir.name),
-        "language": language,
+        # `language` is kept as an alias of `target` for the drivers that read it. The two
+        # are the same string by construction; `target` is the name that survives, because
+        # the unit is a (language, runtime, packaging, toolchain) tuple and only one of
+        # those four is a language -- see DESIGN-THE-SYSTEM-STRUCTURE §1.
+        "target": target,
+        "language": target,
+        "composition_dir": str(comp_dir.relative_to(ROOT)),
+        # THE PROFILE, RESOLVED. Every field here used to be restated wherever it executed.
+        # A driver reads it out of the plan now, so there is one copy and the gate above
+        # proves it exists.
+        "profile": {
+            "packaging": profile["language"]["packaging"],
+            "compilation": profile["language"]["compilation"],
+            "boundary": profile["language"]["boundary"],
+            "image": profile["toolchain"]["image"],
+            "host_entry": profile["gate"]["host_entry"],
+            "oracle_bin": profile["gate"]["oracle_bin"],
+            "startup_ticks": profile["gate"]["startup_ticks"],
+            # The rust driver generated `edition = "2021"` into the composition host's
+            # Cargo.toml while the profile declared the same value four lines from a
+            # comment explaining that an edition skew "changes name resolution and closure
+            # capture, and neither should differ between a peer and a module compiled into
+            # the same binary". The fact whose purpose is *do not skew* was in two places
+            # with nothing comparing them. Optional: only compiled targets have one.
+            "edition": profile.get("toolchain", {}).get("edition"),
+            "extension_host": profile.get("extension_host", {}),
+        },
         "faces": faces,
         "peer": {"generator": peer.get("generator"), "path": peer.get("path")},
         # Install order IS the closure order: a dependency is installed before the
@@ -267,7 +399,8 @@ def build_plan(comp_dir: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("composition", help="path to a compositions/<name>/ directory")
+    ap.add_argument("composition",
+                    help="path to a languages/<target>/compositions/<name>/ directory")
     ap.add_argument("--out", help="write PLAN.json here (default: output/<name>/PLAN.json)")
     ap.add_argument("--check", action="store_true",
                     help="regenerate and fail if the result differs from --out")
@@ -280,7 +413,10 @@ def main() -> int:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 2
 
-    out = Path(args.out) if args.out else ROOT / "output" / plan["composition"] / "PLAN.json"
+    # Output lives under the target too, so `languages/rust/` is readable as one bundle
+    # and `make clean` on a target touches nothing another target owns.
+    out = (Path(args.out) if args.out
+           else ROOT / "languages" / plan["target"] / "output" / plan["composition"] / "PLAN.json")
     rendered = json.dumps(plan, indent=2, sort_keys=True) + "\n"
 
     if args.check:

@@ -22,7 +22,7 @@ sha256sum -c <<'EOF'
 EOF
 ```
 
-**`extensions/content/EXTENSION.toml`'s `[contract]` block is a transcription of
+**`extension-contracts/content/EXTENSION.toml`'s `[contract]` block is a transcription of
 `EXTENSION-CONTENT.md`'s header in this snapshot** — that digest is what makes the transcription
 checkable. A transcription that drifts from its source is worse than no transcription, because it
 reads as authority.

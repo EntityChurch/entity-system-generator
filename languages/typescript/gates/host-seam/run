@@ -1,0 +1,20 @@
+#!/bin/sh
+# ONE UNIFORM ENTRY POINT PER (gate x target). `gates/README.md`: one runner with the
+# matrix as data, never a per-target invocation someone maintains. Before this file the
+# Makefile carried three hand-written calls to the host-seam probe with three different
+# calling conventions -- node ran a script, python needed a `cd` plus a `--peer-root`,
+# rust needed `sh` and a wrapper -- which is the shape keystone paid for as
+# "31 peers carry a script and 15 do not, for no reason anyone declared".
+#
+# The contract is the same for every target, so a new one is a directory and not a
+# Makefile edit:
+#
+#   gates/<gate>/run            exit 0 = the gate passed for this target
+#
+set -eu
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+cd "$ROOT"
+
+exec node languages/typescript/gates/host-seam/probe-seam.mjs "$@"

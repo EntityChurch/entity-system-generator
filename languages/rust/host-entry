@@ -1,0 +1,37 @@
+# languages/rust/host-entry — sourced by tools/host-launch.
+#
+# The largest per-target block of the three, and every line of it is AOT-specific:
+# a compiled target has no "run the module" arm, so the BASELINE has to be BUILT.
+#
+# CARGO_HOME is set UNCONDITIONALLY, never `${CARGO_HOME:-...}` -- the toolchain image
+# declares its own `ENV CARGO_HOME=/cargo`, so a `:-` default never fires and the driver
+# silently used the image's path. It failed as "no matching package named ed25519-dalek",
+# which reads as a missing crate rather than a misdirected CARGO_HOME (AP-6).
+
+resolve_entry() {
+  PEER="${PEER_ROOT:-$ROOT/../entity-core-keystone/protocol-generator/rust}"
+  CARGO_HOME="$TARGET_DIR/output/.cargo-home"
+  export CARGO_HOME
+  export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$TARGET_DIR/output/$COMP/target}"
+  [ -f "$CARGO_HOME/config.toml" ] || { echo "host-entry: no vendor config at $CARGO_HOME/config.toml" >&2
+    echo "  run: make build TARGET=rust COMPOSITION=$COMP" >&2; exit 2; }
+  [ -d "$STAGE" ] || { echo "host-entry: nothing staged at $STAGE" >&2
+    echo "  run: make build TARGET=rust COMPOSITION=$COMP" >&2; exit 2; }
+
+  if [ "$ARM" = "bare" ]; then
+    # `--locked`: their tree stays clean. REFUSING rather than continuing is the point --
+    # a baseline that cannot be built is a one-armed diff, and a one-armed diff is not a
+    # regression guard.
+    echo "host-entry: building the peer's own host (--locked; their tree stays clean)" >&2
+    ( cd "$PEER" && cargo build --offline --locked --quiet --bin entity-peer-host ) || {
+      echo "host-entry: the peer's own host did not build. The baseline arm cannot be" >&2
+      echo "  synthesised from ours -- refusing rather than reporting a one-armed diff." >&2
+      exit 1; }
+    ENTRY="$CARGO_TARGET_DIR/debug/entity-peer-host"
+  else
+    ENTRY="$CARGO_TARGET_DIR/debug/composed-host"
+  fi
+  [ -x "$ENTRY" ] || { echo "host-entry: no host binary at $ENTRY" >&2
+    echo "  run: make build TARGET=rust COMPOSITION=$COMP" >&2; exit 2; }
+  ENTRY_ARGV="$ENTRY"
+}

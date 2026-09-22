@@ -123,8 +123,8 @@ Both probes share `peer-under-test.mjs`, which does two things neither should do
 ## Run it
 
 ```
-node gates/host-seam/probe-seam.mjs          [--peer-root <path>/typescript] [--dist <entry>]
-node gates/host-seam/probe-entity-native.mjs [--peer-root <path>/typescript] [--dist <entry>]
+node languages/typescript/gates/host-seam/probe-seam.mjs          [--peer-root <path>/typescript] [--dist <entry>]
+node languages/typescript/gates/host-seam/probe-entity-native.mjs [--peer-root <path>/typescript] [--dist <entry>]
 ```
 
 Defaults to the sibling keystone checkout. Needs the peer's `dist/` built (it ships built). Ran on

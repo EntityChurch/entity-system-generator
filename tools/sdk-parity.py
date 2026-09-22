@@ -61,8 +61,8 @@ re-running with the kind preserved, and it is the reason `key()` looks the way i
 D15: an instrument is not trusted until it has been seen producing the other answer, and
 this one produced the *wrong* answer first.
 
-  ./tools/sdk-parity.py extensions/content
-  ./tools/sdk-parity.py extensions/content --strict-drift
+  ./tools/sdk-parity.py extension-contracts/content
+  ./tools/sdk-parity.py extension-contracts/content --strict-drift
 """
 
 from __future__ import annotations
@@ -141,10 +141,18 @@ EXTRACTORS = {
 
 
 def surfaces(ext_dir: Path) -> dict[str, dict[tuple[str, str], str]]:
-    """`port -> {key: original name}` for every port that has a cell."""
+    """`port -> {key: original name}` for every port that has a cell.
+
+    Under target-major the cells are NOT under `ext_dir` -- the contract is neutral and
+    lives at `extension-contracts/<name>/`, while each port lives under its own target at
+    `languages/<target>/extensions/<name>/`. This gate is the reason the contract stayed
+    whole and at the root: `[sdk_surface]` is the cross-port contract, and a comparison
+    table sharded per port stops being a comparison.
+    """
+    name = ext_dir.name
     out: dict[str, dict[tuple[str, str], str]] = {}
     for lang, entry in ENTRY_POINTS.items():
-        cell = ext_dir / lang
+        cell = ROOT / "languages" / lang / "extensions" / name
         if not cell.is_dir():
             continue
         path = cell / entry
@@ -175,7 +183,7 @@ def declared(manifest: dict) -> tuple[dict, dict, dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("extension", help="path to an extensions/<name>/ directory")
+    ap.add_argument("extension", help="path to an extension-contracts/<name>/ directory")
     ap.add_argument("--strict-drift", action="store_true",
                     help="treat every `drift` entry as a failure (flip this once they are resolved)")
     args = ap.parse_args()

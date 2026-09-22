@@ -74,9 +74,16 @@ host_entry = "host/target/debug/composed-host"
 # Speaks keystone's host CLI verbatim: --port / --name / --debug-open-grants /
 # --validate, and a single `LISTENING ...` readiness line on stdout.
 
+# The readiness budget, in 0.1 s ticks, for the host to print `LISTENING` on stdout.
+# DECLARED HERE because it varies per target and a driver literal cannot: it WAS a literal,
+# and it had already drifted 100/150/150 with no comment on any of the three (D17 / AP-10).
+# Inherited from port 2. A debug-profile binary starts fast; the
+# budget is generous rather than measured, and it is declared so that saying so is possible.
+startup_ticks = 150
+
 [extension_host]
 # Facts about THIS peer that an extension module has to be built around. Every row was
-# MEASURED by `gates/host-seam/rust/` -- half of it by a running program, half by rustc,
+# MEASURED by `languages/rust/gates/host-seam/` -- half of it by a running program, half by rustc,
 # because on an AOT substrate "is the symbol there" is not a runtime question.
 #
 # keystone carries an [extension_host] block on `typescript` and `python` only; the

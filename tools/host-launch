@@ -1,0 +1,183 @@
+#!/bin/sh
+# tools/host-launch — boot a composed peer and point the oracle at it. TARGET-NEUTRAL.
+#
+#   ./tools/host-launch <target> <composition> [validate-peer args...]
+#
+# ## Why this is in tools/ and not copied per target
+#
+# It was copied per target -- three files, ~70 code lines each, and a diff of the three
+# showed that the ONLY genuine differences were: which binary to exec, which environment
+# it needs, and where the two arms' entry points live. Everything else -- the port, the
+# keypair, the spawn-and-redirect, the reap trap, the readiness wait, the COMPOSED check,
+# the oracle invocation, the stderr surfacing -- was the same protocol transcribed three
+# times. It had already drifted twice: a readiness budget of 100 on the port written first
+# and 150 on the two written after (AP-10), and two spellings of the same error message.
+#
+# **N copies of one protocol is the shape keystone paid for**: 46 copies of `run-s4.sh`,
+# one defect reproduced in 36 of them. `languages/<target>/` exists so the (extension x
+# target) cell never holds a driver; it does not follow that the target should hold the
+# whole harness. The rule the tree now runs on:
+#
+#   the SHARED PROTOCOL lives in tools/ -- one copy, and a fix reaches every target
+#   the ECOSYSTEM POLISH lives in languages/<target>/host-entry -- and stays small
+#
+# A per-target file that grows past "which binary, which environment" is a signal that
+# something protocol-shaped has been written in the wrong place.
+#
+# ## The contract with a target
+#
+# `languages/<target>/host-entry` is SOURCED by this script and must define one function:
+#
+#   resolve_entry()   sets ENTRY_ARGV to the argv that starts the host, for the current
+#                     $ARM ("bare" or "composed"). May export environment. May refuse.
+#
+# with $ROOT $TARGET $TARGET_DIR $COMP $STAGE $ARM $PLAN in scope, and `plan_field`
+# available. It runs INSIDE the target's toolchain image.
+#
+# Runs with --network=none: the oracle is a fedora ELF binary that runs in each image too,
+# so it and the peer share one loopback.
+#
+# Defaults to `-category content`. Pass args to override -- e.g. `-profile core` for the
+# regression guard, which is not optional: our second failure mode is one keystone never
+# has, the peer was right and we broke it.
+
+set -eu
+
+TARGET="${1:?usage: host-launch <target> <composition> [validate-peer args...]}"
+COMP="${2:?usage: host-launch <target> <composition> [validate-peer args...]}"
+shift 2
+
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+TARGET_DIR="$ROOT/languages/$TARGET"
+STAGE="$TARGET_DIR/output/$COMP/build"
+PLAN="$TARGET_DIR/output/$COMP/PLAN.json"
+PORT="${PORT:-7777}"
+ORACLE="${ORACLE:-$ROOT/../entity-core-keystone/output/s4-oracles/validate-peer}"
+
+[ -d "$TARGET_DIR" ] || { echo "host-launch: no target at languages/$TARGET" >&2; exit 2; }
+[ -f "$PLAN" ] || { echo "host-launch: no resolved plan at $PLAN" >&2
+  echo "  run: ./tools/compose.py languages/$TARGET/compositions/$COMP" >&2; exit 2; }
+
+# ONE plan reader, not one per target. It was three -- node for `typescript`, python3 for
+# the other two -- which is a JSON parser transcribed three times to read four scalars.
+# python3 is present in every toolchain image (checked, all three); a target whose image
+# lacks it is a real finding and should surface here rather than be worked around.
+command -v python3 >/dev/null || {
+  echo "host-launch: this target's image has no python3, which the shared harness needs" >&2
+  echo "  to read the resolved plan. That is a toolchain-image finding, not a reason to" >&2
+  echo "  re-transcribe the parser into languages/$TARGET/." >&2; exit 2; }
+
+plan_field() { python3 -c '
+import json, sys
+plan = json.load(open(sys.argv[1]))
+value = plan
+for key in sys.argv[2].split("."):
+    value = value.get(key) if isinstance(value, dict) else None
+sys.stdout.write("\n".join(value) if isinstance(value, list) else str(value or ""))
+' "$PLAN" "$1"; }
+
+PLAN_TARGET="$(plan_field target)"
+[ "$PLAN_TARGET" = "$TARGET" ] || {
+  echo "host-launch: plan target is '$PLAN_TARGET', not '$TARGET'" >&2; exit 2; }
+
+# BARE=1 launches the PEER'S OWN host instead of the composed one. That is the baseline
+# arm, and it is not optional: "pre-existing failure" is a claim, and a claim about a
+# failure needs the run that establishes it. [ADR-0012] forbids labelling a failure
+# pre-existing without bisecting; this is the cheapest honest bisect there is -- same
+# oracle, same flags, same container, one variable.
+if [ "${BARE:-0}" = "1" ]; then ARM="bare"; else ARM="composed"; fi
+
+# ---- the target's own polish -------------------------------------------------
+ENTRY_SPEC="$TARGET_DIR/host-entry"
+[ -f "$ENTRY_SPEC" ] || { echo "host-launch: $ENTRY_SPEC does not exist" >&2
+  echo "  Every target declares how its host is started; there is no default." >&2; exit 2; }
+ENTRY_ARGV=""
+. "$ENTRY_SPEC"
+command -v resolve_entry >/dev/null 2>&1 || {
+  echo "host-launch: $ENTRY_SPEC defines no resolve_entry()" >&2; exit 2; }
+resolve_entry
+[ -n "$ENTRY_ARGV" ] || {
+  echo "host-launch: $ENTRY_SPEC's resolve_entry() set no ENTRY_ARGV for arm=$ARM" >&2
+  echo "  A silent empty argv would exec the shell and hang at the readiness wait." >&2
+  exit 2; }
+
+# The oracle is a gitignored local build from the sibling entity-core-go tree. Missing it
+# must be LOUD: keystone's harness ended in `|| true` and swallowed a missing binary for
+# weeks, exiting 0 having validated nothing.
+[ -x "$ORACLE" ] || { echo "host-launch: ERROR oracle not found or not executable at $ORACLE" >&2
+  echo "  It is built from the sibling entity-core-go repo. It is the oracle BECAUSE" >&2
+  echo "  it is not the thing under test; we do not ship a copy." >&2; exit 3; }
+
+# The peer's persistent identity at the standard on-disk location, so the validator's
+# probes that co-sign AS the peer can find its keypair. Seed 0x11 x 32 matches the host
+# default, so peer_id is unchanged.
+NAME="${PEERNAME:-conformance}"
+KPDIR="${HOME:-/root}/.entity/peers/$NAME"
+mkdir -p "$KPDIR"
+printf '%s\n%s\n%s\n' \
+  '-----BEGIN ENTITY PRIVATE KEY-----' \
+  'ERERERERERERERERERERERERERERERERERERERERERE=' \
+  '-----END ENTITY PRIVATE KEY-----' > "$KPDIR/keypair"
+
+HOST_OUT="$(mktemp)"; HOST_ERR="$(mktemp)"
+# shellcheck disable=SC2086
+$ENTRY_ARGV --port "$PORT" --name "$NAME" --debug-open-grants --validate \
+  >"$HOST_OUT" 2>"$HOST_ERR" &
+HOST_PID=$!
+
+# Deterministic teardown. `kill` only DELIVERS the signal; a fire-and-forget trap returns
+# while the peer still owns the listening socket, and a second run in the same container
+# fails to bind. keystone measured windows over 400 ms on some runtimes.
+reap_host() {
+  [ -n "${HOST_PID:-}" ] || return 0
+  kill -0 "$HOST_PID" 2>/dev/null || return 0
+  kill -TERM "$HOST_PID" 2>/dev/null || true
+  j=0
+  while [ "$j" -lt 50 ]; do
+    kill -0 "$HOST_PID" 2>/dev/null || return 0
+    j=$((j + 1)); sleep 0.1
+  done
+  kill -KILL "$HOST_PID" 2>/dev/null || true
+  wait "$HOST_PID" 2>/dev/null || true
+}
+trap reap_host EXIT INT TERM
+
+# The readiness budget is a PROFILE FIELD, not a literal (D17 / AP-10). It was a literal
+# in each copy and had drifted 100/150/150 with no comment on any of the three.
+STARTUP_TICKS="$(plan_field profile.startup_ticks)"
+: "${STARTUP_TICKS:?host-launch: profile declares no [gate].startup_ticks}"
+
+i=0
+while [ "$i" -lt "$STARTUP_TICKS" ]; do
+  grep -q '^LISTENING' "$HOST_OUT" 2>/dev/null && break
+  if ! kill -0 "$HOST_PID" 2>/dev/null; then
+    echo "host-launch: host exited before LISTENING:" >&2; cat "$HOST_ERR" >&2; exit 1
+  fi
+  i=$((i + 1)); sleep 0.1
+done
+head -1 "$HOST_OUT"
+
+# The COMPOSED line proves the extension installed. A composed peer that silently
+# installed nothing is byte-identical to a bare peer from the outside, and every content
+# check would fail with a message about the PEER.
+if [ "$ARM" = "composed" ]; then
+  grep '^COMPOSED' "$HOST_ERR" || {
+    echo "host-launch: the host printed no COMPOSED line -- nothing installed" >&2; exit 1; }
+else
+  echo "BASELINE arm=bare (no extensions installed)"
+fi
+
+[ "$#" -eq 0 ] && set -- -category content
+
+mkdir -p "$TARGET_DIR/output/$COMP/reports"
+"$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
+
+# Surface the peer's own stderr. /tmp inside a --rm container is discarded with it, so
+# without this a mid-run abort leaves a log reading only "connection refused". Not
+# hypothetical: keystone's zig intermittent survived four investigations reported as
+# "no crash, empty stderr" until this line existed, then produced a stack trace on the
+# first reproduction.
+if [ -s "$HOST_ERR" ]; then
+  echo "--- peer stderr ---" >&2
+  cat "$HOST_ERR" >&2
+fi

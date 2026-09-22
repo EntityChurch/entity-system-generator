@@ -1,0 +1,55 @@
+# languages/rust/Cargo.toml — THE WORKSPACE ROOT for this target.
+#
+# ## Why this file exists, and why it could not exist before 2026-09-06
+#
+# A cargo workspace root must be a filesystem ANCESTOR of its members. Under the previous
+# extension-major layout the rust crates were at `extensions/*/rust/`, `gates/*/rust/` —
+# no common ancestor short of the repo root, and a repo-root `Cargo.toml` in a tree that is
+# mostly not rust would have been a lie about the repo. So there was no workspace, and the
+# consequence was measured rather than predicted: at ONE extension there were already
+#
+#   3 Cargo.toml · 3 Cargo.lock · and `sha2 = "=0.10.9"` pinned INDEPENDENTLY in two of them
+#
+# with nothing checking that the two agreed. The extension's own manifest says a second
+# version "would compile silently". At twenty extensions that is ~60 manifests failing in
+# the quiet direction.
+#
+# **Target-major dissolves it.** `languages/rust/` IS the ancestor, so the workspace is
+# free, and the finding stops needing a gate because the structure no longer produces it.
+#
+# ## Members are a GLOB, not a list
+#
+# `gates/README.md`: one runner with the matrix as data, never a per-target list someone
+# maintains. Keystone's 31-peers-have-a-script-and-15-do-not was a maintained list nobody
+# declared. A new cell or gate arm is a member the moment it exists.
+
+[workspace]
+resolver = "2"
+members  = ["extensions/*", "gates/*"]
+
+# The staged build lives at `languages/rust/output/<composition>/build/`, which is inside
+# this directory and is NOT a member: the composition host is generated per build, depends
+# on the cells by an absolute rewritten path, and must resolve as its own standalone crate.
+# Without this line cargo would try to adopt it and fail on a manifest it does not own.
+exclude  = ["output"]
+
+# ── WHY THERE IS NO [workspace.dependencies] ────────────────────────────────────────
+#
+# It is the obvious thing to add here and it is the wrong thing, for two reasons.
+#
+# 1. **The cells are STAGED.** `languages/rust/build` copies each cell to
+#    `output/<comp>/build/cells/<ext>` and compiles it there as a standalone crate, so that
+#    the host consumes it across a real crate boundary (D13 Access — compiling cell and host
+#    as one crate proves only that a symbol is reachable in the source tree). A member that
+#    inherited `sha2.workspace = true` would arrive at the stage with no workspace above it
+#    and fail to resolve. Self-contained member manifests are what keep staging honest.
+#
+# 2. **A workspace pin would gate the wrong thing.** The failure `sha2` must not have is
+#    OUR version disagreeing with THE PEER'S — cargo would then build two copies and the
+#    §3.6.1 gear table would hash against a different SHA-256 with no error anywhere. A
+#    `[workspace.dependencies]` entry makes our crates agree *with each other* while saying
+#    nothing about the peer, which is agreement in the direction that does not matter.
+#
+# So the pin's canonical home is the PEER'S OWN Cargo.toml, and `languages/rust/build`
+# asserts equality against it at stage time — D14: a number cites the artifact that
+# produced it, never a copy of it.

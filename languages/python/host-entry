@@ -1,0 +1,24 @@
+# languages/python/host-entry — sourced by tools/host-launch.
+#
+# Two things this target needs that the others do not, and both are here rather than in
+# the shared harness because they are facts about CPython, not about the protocol:
+#
+#   PYTHONPATH            the stage IS the package root; there is no build artifact
+#   PYTHONUNBUFFERED      without it the `LISTENING` line sits in a buffer and the
+#                         readiness wait times out against a host that is already up
+#
+# The bare arm runs the peer's own host MODULE out of the staged package, so the two arms
+# differ by the composition and nothing else.
+
+resolve_entry() {
+  export PYTHONPATH="$STAGE"
+  export PYTHONDONTWRITEBYTECODE=1
+  export PYTHONUNBUFFERED=1
+  if [ "$ARM" = "bare" ]; then
+    ENTRY_ARGV="python3 -m entity_core.host"
+  else
+    [ -f "$STAGE/host.py" ] || { echo "host-entry: nothing staged at $STAGE/host.py" >&2
+      echo "  run: make build TARGET=python COMPOSITION=$COMP" >&2; exit 2; }
+    ENTRY_ARGV="python3 $STAGE/host.py"
+  fi
+}

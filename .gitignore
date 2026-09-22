@@ -9,9 +9,13 @@ AGENTS.local.md
 *-pat*
 
 # Scratch / build output.
+#
+# NOT root-anchored, on purpose. Under target-major each target owns its own output
+# (`languages/<target>/output/`), so a `/output/` pattern would have ignored the root's
+# cross-target results and tracked every per-target one -- exactly backwards.
 /scratch/
-/output/
-/target/
-/build/
+output/
+target/
+build/
 __pycache__/
 *.pyc

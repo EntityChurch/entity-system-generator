@@ -26,16 +26,22 @@ set -eu
 
 COMP="${1:?usage: test <composition-name>}"
 ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
-STAGE="$ROOT/output/$COMP/build"
+# THE TARGET IS THIS DRIVER'S OWN DIRECTORY. Under target-major a target is a unified
+# bundle -- profile, cells, compositions, gate arms and output all under languages/<target>/
+# -- so the driver never has to be told which target it is, and a (target, composition)
+# mismatch has no filesystem location to be spelled in.
+TARGET="$(basename "$(cd "$(dirname "$0")" && pwd)")"
+TARGET_DIR="$ROOT/languages/$TARGET"
+STAGE="$TARGET_DIR/output/$COMP/build"
 
 [ -d "$STAGE/cells" ] || { echo "test: nothing staged at $STAGE/cells" >&2
   echo "  run: ./languages/rust/build $COMP" >&2; exit 2; }
 
 # Set unconditionally. The image declares `ENV CARGO_HOME=/cargo`, so a `:-` default
 # never fires -- see the longer note in `build`.
-CARGO_HOME="$ROOT/output/.cargo-home"
+CARGO_HOME="$TARGET_DIR/output/.cargo-home"
 export CARGO_HOME
-export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$ROOT/output/$COMP/target}"
+export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$TARGET_DIR/output/$COMP/target}"
 [ -f "$CARGO_HOME/config.toml" ] || { echo "test: no vendor config at $CARGO_HOME/config.toml" >&2
   echo "  run: ./languages/rust/build $COMP -- it writes the offline source replacement" >&2
   exit 2; }

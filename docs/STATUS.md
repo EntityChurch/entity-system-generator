@@ -40,7 +40,7 @@ build an in-memory store, two call `ValidateDescriptor` in-process), and the ski
 of the three. Reports: `compositions/{ts,py,rs}-content/status/`.
 
 **The retarget was a profile change, not a rewrite — measured rather than asserted.**
-`compositions/py-content/SYSTEM.toml` differs from `ts-content`'s in two fields.
+`languages/python/compositions/content/SYSTEM.toml` differs from `ts-content`'s in two fields.
 `languages/python/` is the same four files as `languages/typescript/` with different contents and
 the same interface. `tools/compose.py` and `tools/diff-arms.py` needed no change at all.
 
@@ -50,7 +50,7 @@ six steps against the other's two; its `DispatchCtx` carries **no peer**, which 
 *signatures* and not bodies; it has **no compile step**, so the build driver's only build-time
 signal is an import check; and **the §3.4 security MUST is satisfied at two materially different
 strengths** — enforced by node's `exports` map in one language, convention in the other. The
-substrate model is `extensions/content/arch/AUTHORING-NOTES.md` §2, **and the third port revised
+substrate model is `extension-contracts/content/arch/AUTHORING-NOTES.md` §2, **and the third port revised
 three of those four rows**: §3.4 turned out to be two clauses that invert (`rust` strongest on one,
 weakest on the other), "no registration surface" turned out to be two different facts wearing one
 word, and "no peer in the context" went from *the* invasive difference to the common case at 2 of 3.
@@ -294,7 +294,7 @@ the delta. **We are not nominating a second control from a source read** — the
   handler. The resolver's refusals did not change; what it refuses grew by one.
 
   **What retargeting actually costs is now measured, not guessed** —
-  `extensions/content/arch/AUTHORING-NOTES.md` §2, now **five axes across three peers**, with §2.5
+  `extension-contracts/content/arch/AUTHORING-NOTES.md` §2, now **five axes across three peers**, with §2.5
   recording which two-column rows survived the third column and which did not. The two rows that
   would have broken a naive template at two peers: the dispatch context carrying no peer (it
   changes signatures — and the third port demoted this to the common case, 2 of 3),

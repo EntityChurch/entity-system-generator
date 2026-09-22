@@ -8,12 +8,17 @@
 
 [language]
 name      = "typescript"
-packaging = "npm"                    # boundary: the `exports` map in package.json.
-                                     # D13 Access layer -- the boundary is the MANIFEST,
-                                     # not the module. Our own module is staged as a real
-                                     # package and consumed by name, so the extension's
-                                     # public surface is enforced by node, not by review.
+packaging = "npm"
 compilation = "jit"
+
+# D13's Access layer, as a FIELD rather than as a comment -- which is what it was until
+# 2026-09-06, while `python` and `rust` both declared it. Nothing parsed the profile, so
+# nothing noticed that the schema had drifted on the port whose boundary is the strongest
+# mechanism of the three. `tools/compose.py` now requires it.
+#
+# The boundary is the MANIFEST, not the module. Our own module is staged as a real package
+# and consumed by name, so the extension's public surface is enforced by node, not by review.
+boundary  = "the `exports` map in package.json; node refuses a deep import at resolve time (ERR_PACKAGE_PATH_NOT_EXPORTED)."
 
 [toolchain]
 image = "localhost/entity-core-keystone/node24:latest"
@@ -28,9 +33,17 @@ typescript = "5.8.3"                 # resolved from the peer's devDependencies,
                                      # that built the peer's .d.ts we type against.
 
 [deps]
-# We add NOTHING. The extension's only import is the peer package. An extension that
-# needed a runtime dependency would declare it in its own EXTENSION.toml, not here --
-# a language profile that accumulates per-extension deps has stopped being language-major.
+# We add NOTHING. The extension's only import is the peer package. A profile that
+# accumulates per-extension deps has stopped being a profile.
+#
+# THIS COMMENT USED TO ROUTE THE DECISION TO A PLACE THAT DOES NOT EXIST. It read "an
+# extension that needed a runtime dependency would declare it in its own EXTENSION.toml"
+# -- and `EXTENSION.toml` has no such block, and nothing would read one. Corrected
+# 2026-09-06 rather than left as a plan: a routing rule pointing at a phantom is AP-9's
+# family (a declaration nothing executes), one layer up, and it reads as a decision that
+# has been made. **The mechanism is UNBUILT.** The first extension that needs a runtime
+# dependency is the one that designs it, and it will be a new block in `EXTENSION.toml`
+# read by `tools/compose.py` into the plan -- not a field added here.
 runtime = []
 dev     = []
 
@@ -59,3 +72,11 @@ oracle_bin = "../entity-core-keystone/output/s4-oracles/validate-peer"
 host_entry = "dist/host.js"           # speaks keystone's host CLI verbatim: --port /
                                       # --name / --debug-open-grants / --validate, and a
                                       # single `LISTENING ...` readiness line on stdout.
+# The readiness budget, in 0.1 s ticks, for the host to print `LISTENING` on stdout.
+# DECLARED HERE because it varies per target and a driver literal cannot: it WAS a literal,
+# and it had already drifted 100/150/150 with no comment on any of the three (D17 / AP-10).
+# Raised from 100. The 100 was port 1's original and was never a
+# measurement -- ports 2 and 3 were written at 150 and nobody went back. Loosening a
+# timeout can only make a failure slower, never falser, so this is the safe direction.
+startup_ticks = 150
+

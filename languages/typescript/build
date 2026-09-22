@@ -17,11 +17,17 @@ set -eu
 
 COMP="${1:?usage: build <composition-name>}"
 ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
-PLAN="$ROOT/output/$COMP/PLAN.json"
-STAGE="$ROOT/output/$COMP/build"
+# THE TARGET IS THIS DRIVER'S OWN DIRECTORY. Under target-major a target is a unified
+# bundle -- profile, cells, compositions, gate arms and output all under languages/<target>/
+# -- so the driver never has to be told which target it is, and a (target, composition)
+# mismatch has no filesystem location to be spelled in.
+TARGET="$(basename "$(cd "$(dirname "$0")" && pwd)")"
+TARGET_DIR="$ROOT/languages/$TARGET"
+PLAN="$TARGET_DIR/output/$COMP/PLAN.json"
+STAGE="$TARGET_DIR/output/$COMP/build"
 
 [ -f "$PLAN" ] || { echo "build: no resolved plan at $PLAN" >&2
-  echo "  run: ./tools/compose.py compositions/$COMP" >&2; exit 2; }
+  echo "  run: ./tools/compose.py languages/$TARGET/compositions/$COMP" >&2; exit 2; }
 
 # ---- read the plan (node is the one interpreter guaranteed present here) ----
 plan_field() { node -e '
@@ -169,7 +175,12 @@ done < "$CELLS"
 rm -f "$CELLS"
 
 # ---- pass 2: the composition host, importing extensions BY PACKAGE NAME ----
-cp "$ROOT/compositions/$COMP/host.ts" "$STAGE/host.ts"
+# The composition directory comes from the PLAN, not from a second computation of
+# the same path. It is `languages/<target>/compositions/<name>` by construction, and
+# deriving it here as well would be the two-copies-of-one-fact the resolver exists
+# to prevent.
+COMP_DIR="$(plan_field composition_dir)"
+cp "$ROOT/$COMP_DIR/host.ts" "$STAGE/host.ts"
 
 # The staging root needs its own manifest, and `"type": "module"` is load-bearing:
 # without it node (and tsc under `nodenext`) reads every .ts/.js here as CommonJS and
