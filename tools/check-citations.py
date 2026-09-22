@@ -81,10 +81,41 @@ make this gate go RED on a clean checkout for a reason that has nothing to do wi
 stale citation. **A false red costs the instrument** — the next person's locally
 reasonable fix is to suppress it, and then it gates nothing forever (D15).
 
-**Not covered, and stated rather than implied:** `docs/**`. The prose there names paths
-in running sentences and in illustrative examples of paths that SHOULD NOT exist, so a
-path-shaped token is not reliably a citation. Extending the corpus needs a way to tell
-those apart and this gate does not have one. It is the obvious next increment.
+## `docs/**` IS covered now, and it took two incidents to earn the design
+
+**It was excluded when this gate was written**, with a note saying prose names paths in
+running sentences and in illustrative examples of paths that SHOULD NOT exist, so a
+path-shaped token is not reliably a citation — *"the obvious next increment."* **That
+exposure then cashed twice in two days, both times in a design document, and the second one
+cost another team a week.**
+
+| # | the citation | what it was |
+|---|---|---|
+| 1 | `shared/test-vectors/ecf-conformance/` in `DESIGN-THE-CBOR-INTERCHANGE-LAYER` | the corpus is in **keystone's** tree; in *ours* `shared/` is `shared/spec-data/`, so a path resolving to nothing read as though it resolved. Two counts beside it were wrong too |
+| 2 | `docs/spec/SPEC-KEYSTONE-PEER.md` in `DRAFT-KEYSTONE-PEER-HOST-CONTRACT` | a **forward-dated citation** — the header declared itself superseded, pointed at a path that did not exist yet, and told readers not to maintain the file. Nobody did, on either side |
+
+Two incidents in two shapes, and #2 is the sharp one: a citation is what a reader checks
+*instead of* re-deriving, so a citation to something that does not exist **yet** is worse
+than none — it transfers confidence nothing earned.
+
+**What made it possible is a three-way split, not a cleverer regex.** The original blocker
+was real; what was missing was that the ambiguous cases fall into classes with different
+truth conditions:
+
+| class | test | verdict |
+|---|---|---|
+| **cross-repo** | resolves inside a sibling tree under `../` | **reported, never failed.** A real citation to a tree we may not edit; it moves on their cycle, not ours |
+| **historical snapshot** | lives under `docs/status/` | **exempt, counted.** A dated handoff describes the tree *as it was*; requiring its paths to resolve forever means rewriting history |
+| **durable prose** | everything else in `docs/` | **MUST resolve**, exactly like a declaration file |
+
+`docs/status/` is the exemption that makes the rest safe, and it is principled rather than
+convenient: those files are immutable once written and their value is that they say what was
+true on a date. Sixteen of them name paths the 2026-09-06 restructure moved and **not one is
+a defect** — rewriting them would destroy the record and break *never lose or rewrite
+history*.
+
+The escape hatch in durable prose is the one that already existed: a path followed by
+`(dead)` is a quotation — counted, printed, never silent.
 
 ## D15: a control, and a refusal on vacuity
 
@@ -110,14 +141,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: The declaration corpus. NOT `docs/**` — see the module doc.
+#: The declaration corpus, plus `docs/**` — see the module doc for the three-way split.
 CORPUS = [
     "extension-contracts/*/EXTENSION.toml",
     "extension-contracts/*/README.md",
     "extension-contracts/*/arch/*.md",
     "languages/*/compositions/*/SYSTEM.toml",
     "languages/*/profile.toml",
+    "docs/**/*.md",
 ]
+
+#: Dated snapshots. Immutable once written, and their value is that they say what was true
+#: on a date — so a path the tree has since moved is a RECORD, not a defect. Counted and
+#: reported, never failed. Rewriting them to keep a gate green would be the thing the
+#: golden rules forbid outright.
+SNAPSHOT_DIRS = ("docs/status",)
+
+#: Where a sibling repo lives, for the cross-repo class. Read-only to us by charter, so a
+#: citation into one is reported and never failed: it resolves on their cycle.
+CHURCH = ROOT.parent
 
 #: The top-level directories a repo-relative citation can start with. Anchoring on these
 #: is what keeps `system/history/config` (a TREE path, not a file) out of the corpus:
@@ -125,15 +167,29 @@ CORPUS = [
 #: them apart.
 ROOTS = ("languages", "gates", "tools", "extension-contracts", "shared", "docs")
 
+#: The lookbehind is load-bearing and was added 2026-09-09 when `docs/**` joined the corpus.
+#: `\b` alone matches a ROOT sitting in the MIDDLE of a longer path: in
+#: `protocol-generator/shared/evaluations/x.md` — keystone's real, correct path — `\b`
+#: matches between `/` and `shared`, so the extractor pulled out `shared/evaluations/x.md`,
+#: found it unresolvable here, and reported a correct citation as a defect. A false red on a
+#: path that IS right is the worst kind: the obvious fix is to delete the citation.
 CITATION = re.compile(
-    r"\b(?:" + "|".join(ROOTS) + r")/[A-Za-z0-9_.<>{},*/-]*[A-Za-z0-9_>}*/]"
+    r"(?<![\w/.-])(?:" + "|".join(ROOTS) + r")/[A-Za-z0-9_.<>{},*/-]*[A-Za-z0-9_>}*/]"
 )
 
 #: A corpus assertion (D15 clause 2) rather than a count of files: below this, the
-#: extractor has stopped matching something it used to match. Calibrated at 30 against a
-#: measured 40, printed by:
-#:   ./tools/check-citations.py | grep -c '^  '
-MIN_CITATIONS = 30
+#: extractor has stopped matching something it used to match.
+#:
+#: RECALIBRATED 2026-09-09 from 30 to 300 when `docs/**` joined the corpus. The old value
+#: was set against a measured 40; the corpus is now 415, and a floor of 30 would have let
+#: the extractor lose NINETY-THREE PERCENT of its matches and still report a clean tree.
+#: A vacuity refusal that cannot fire is not a refusal — it is a comment. The margin is
+#: the same fraction it was before (~75% of measured), so it tolerates a real deletion of
+#: documents without tolerating a broken regex.
+#:
+#: Re-derive after any corpus change:
+#:   ./tools/check-citations.py | head -1
+MIN_CITATIONS = 300
 
 #: Placeholder segments and what they stand for. `<t>`/`<target>`/`<lang>` expand over the
 #: targets that actually exist, so a citation to a per-target file is checked in EVERY
@@ -189,6 +245,29 @@ def is_artifact(candidate: str) -> bool:
     return "/output/" in f"/{candidate}" or candidate.startswith("output/")
 
 
+def is_snapshot(rel: str) -> bool:
+    """A dated, immutable status doc. Its paths are a record of a past tree."""
+    return any(rel.startswith(f"{d}/") for d in SNAPSHOT_DIRS)
+
+
+def cross_repo(candidate: str) -> str | None:
+    """The sibling tree this path resolves in, if any.
+
+    A citation into another team's tree is a REAL citation and we cannot fix it here —
+    their layout moves on their cycle and their tree is read-only to us. Reported so it is
+    never silent, never failed so this gate does not go red on someone else's commit.
+
+    Checked BEFORE the local verdict, because the two collide: `docs/spec/SPEC-KEYSTONE-
+    PEER.md` is keystone's real path and would read as a broken local one.
+    """
+    if not CHURCH.is_dir():
+        return None
+    for sibling in sorted(CHURCH.iterdir()):
+        if sibling.is_dir() and sibling.name != ROOT.name and (sibling / candidate).exists():
+            return sibling.name
+    return None
+
+
 def corpus_files() -> list[Path]:
     files: list[Path] = []
     for pattern in CORPUS:
@@ -212,8 +291,14 @@ def extract(path: Path) -> tuple[set[str], set[str]]:
         # backtick pair does not. Strip what punctuation can trail and nothing else --
         # over-stripping would turn a real miss into a pass.
         cited = m.group(0).rstrip(".,;:)")
-        tail = text[m.end() : m.end() + DEAD_WINDOW]
-        if "\n" not in tail and "(dead)" in tail:
+        # TRUNCATE at the newline rather than rejecting a window that contains one.
+        # Rejecting was a real defect, found 2026-09-09 when `docs/**` joined the corpus:
+        # a marker at END OF LINE sits inside the window together with the `\n`, so
+        # ``…`gates/emit-context` (dead).**\n`` was read as LIVE and reported as a defect.
+        # The rule is "on the same line"; that is what truncating expresses and what the
+        # rejection got wrong for every marker within DEAD_WINDOW of a line end.
+        tail = text[m.end() : m.end() + DEAD_WINDOW].split("\n", 1)[0]
+        if "(dead)" in tail:
             dead.add(cited)
         else:
             live.add(cited)
@@ -224,8 +309,8 @@ def extract(path: Path) -> tuple[set[str], set[str]]:
 
 def run(
     extra_files: list[Path] | None = None,
-) -> tuple[list[str], list[str], list[str], int]:
-    """Returns `(missing, artifacts, dead, total)`."""
+) -> tuple[list[str], list[str], list[str], int, list[str], list[str]]:
+    """Returns `(missing, artifacts, dead, total, snapshots, foreign)`."""
     files = corpus_files() + list(extra_files or [])
     if not files:
         raise Refusal(
@@ -236,9 +321,11 @@ def run(
     missing: list[str] = []
     artifacts: list[str] = []
     dead_out: list[str] = []
+    snapshots: list[str] = []
+    foreign: list[str] = []
     total = 0
     for f in files:
-        rel = f.relative_to(ROOT)
+        rel = f.relative_to(ROOT).as_posix()
         live, dead = extract(f)
         for quoted in sorted(dead):
             total += 1
@@ -252,39 +339,86 @@ def run(
                 c for base in expand_placeholders(cited) for c in expand_braces(base)
             ]
             # A brace/placeholder citation resolves if EVERY expansion does. `{build,
-            # test,host-launch}` names three files and a citation to three files that
+            # test,host-entry}` names three files and a citation to three files that
             # names two is as stale as one that names none.
             unresolved = [c for c in candidates if not resolves(c)]
-            if unresolved:
-                missing.append(f"{rel}: {cited}   ->   unresolved: {', '.join(unresolved)}")
-    return missing, artifacts, dead_out, total
+            if not unresolved:
+                continue
+            # ── the three-way split, and the ORDER matters ──────────────────────
+            # Cross-repo FIRST: `docs/spec/SPEC-KEYSTONE-PEER.md` is keystone's real
+            # path and would otherwise read as a broken local one. Their tree is
+            # read-only to us and moves on their cycle, so this is reported, never
+            # failed -- a gate that goes red on someone else's commit gets suppressed.
+            if (sibling := cross_repo(cited)) is not None:
+                foreign.append(f"{rel}: {cited}   ->   {sibling}")
+                continue
+            # Then the snapshot exemption: a dated handoff records a past tree.
+            if is_snapshot(rel):
+                snapshots.append(f"{rel}: {cited}")
+                continue
+            missing.append(f"{rel}: {cited}   ->   unresolved: {', '.join(unresolved)}")
+    return missing, artifacts, dead_out, total, snapshots, foreign
 
 
 def self_test() -> int:
-    """D15's control: plant a citation that cannot resolve and require the failure."""
+    """D15's control: plant one defect per class and require the right verdict on each.
+
+    Extended 2026-09-09 with the `docs/**` classes. The two that matter are the ones that
+    must NOT fail — a class wrongly routed to `missing` is a false red, and a false red
+    costs the instrument. So this asserts the classification, not just the failure.
+    """
     planted = ROOT / "extension-contracts" / ".citation-self-test.md"
     planted.write_text(
         "A planted citation: `tools/this-file-does-not-exist.py`\n"
-        "and a planted per-target one: `languages/<t>/gates/nope/run`\n",
+        "and a planted per-target one: `languages/<t>/gates/nope/run`\n"
+        # must be classified DEAD, and the marker sits at END OF LINE on purpose --
+        # that exact placement was broken until 2026-09-09.
+        "a planted quotation: `tools/also-gone.py` (dead)\n"
+        # must be classified CROSS-REPO: a real path in a sibling tree, never our failure.
+        "a planted cross-repo one: `docs/spec/SPEC-KEYSTONE-PEER.md`\n",
         encoding="utf-8",
     )
+    snap = ROOT / "docs" / "status" / ".citation-self-test-snapshot.md"
+    # must be classified SNAPSHOT: the same unresolvable path, exempt by location alone.
+    snap.write_text("a planted snapshot path: `tools/this-file-does-not-exist.py`\n",
+                    encoding="utf-8")
     try:
-        missing, _artifacts, _dead, total = run(extra_files=[planted])
+        missing, _artifacts, dead, total, snapshots, foreign = run(
+            extra_files=[planted, snap]
+        )
     finally:
         planted.unlink()
+        snap.unlink()
 
-    planted_hits = [m for m in missing if ".citation-self-test.md" in m]
-    print(f"self-test: {total} citations extracted, {len(planted_hits)} planted hit(s)")
-    for m in planted_hits:
-        print(f"  {m}")
-    if len(planted_hits) != 2:
+    tag = ".citation-self-test"
+    checks = {
+        "an unresolvable citation FAILS": len(
+            [m for m in missing if f"{tag}.md" in m]
+        ) == 2,
+        "a `(dead)` quotation at END OF LINE is exempt, not failed": any(
+            f"{tag}.md" in d and "also-gone" in d for d in dead
+        ),
+        "a path in a SIBLING tree is cross-repo, never our failure": any(
+            f"{tag}.md" in x for x in foreign
+        ),
+        "the same bad path under docs/status/ is an exempt SNAPSHOT": any(
+            f"{tag}-snapshot.md" in s for s in snapshots
+        ),
+        "...and that snapshot is NOT reported as missing": not any(
+            f"{tag}-snapshot.md" in m for m in missing
+        ),
+    }
+    print(f"self-test: {total} citations extracted")
+    for label, ok in checks.items():
+        print(f"  {'PASS' if ok else 'MISS'}  {label}")
+    if not all(checks.values()):
         print(
-            "SELF-TEST FAILED: the extractor did not find both planted citations. "
-            "This instrument cannot be trusted to find a real one.",
+            "SELF-TEST FAILED: this instrument cannot be trusted -- it either misses a "
+            "real defect or manufactures a false red on an exempt class.",
             file=sys.stderr,
         )
         return 1
-    print("self-test OK -- the extractor finds a planted miss and the checker fails on it")
+    print("\nself-test OK -- one planted case per class, each classified correctly")
     return 0
 
 
@@ -306,7 +440,7 @@ def main() -> int:
         return self_test()
 
     try:
-        missing, artifacts, dead, total = run()
+        missing, artifacts, dead, total, snapshots, foreign = run()
     except Refusal as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -320,14 +454,31 @@ def main() -> int:
         )
         return 2
 
-    print(f"citations: {total} in {len(corpus_files())} declaration files")
-    print(f"  source citations checked : {total - len(artifacts) - len(dead)}")
+    files = corpus_files()
+    n_docs = sum(1 for f in files if f.relative_to(ROOT).as_posix().startswith("docs/"))
+    print(
+        f"citations: {total} in {len(files)} files "
+        f"({len(files) - n_docs} declaration, {n_docs} docs)"
+    )
+    checked = total - len(artifacts) - len(dead) - len(snapshots) - len(foreign)
+    print(f"  source citations checked : {checked}")
     print(f"  build artifacts (not required to exist): {len(artifacts)}")
     print(f"  quoted as (dead) -- a path named because it is GONE: {len(dead)}")
     # Printed, never silent. An escape hatch that leaves no trace is a way to make a red
     # gate green; the same stance `[sdk_surface].drift` takes.
     for d in dead:
         print(f"    dead  {d}")
+    # Reported, never failed -- and never SILENT, which is the same rule as `(dead)`.
+    # A count with no listing is how `absent` comes to mean `could not look` (D14).
+    print(f"  cross-repo -- resolves in a sibling tree, theirs to move: {len(foreign)}")
+    for x in foreign:
+        print(f"    xrepo {x}")
+    print(
+        f"  historical snapshots under {'/'.join(SNAPSHOT_DIRS)}/ -- a record of a past "
+        f"tree, never rewritten: {len(snapshots)}"
+    )
+    for s in snapshots:
+        print(f"    snap  {s}")
     if args.strict_artifacts:
         for a in artifacts:
             path = a.split(": ", 1)[1]

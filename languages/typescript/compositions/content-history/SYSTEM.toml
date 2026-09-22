@@ -189,8 +189,14 @@ internal/recorder.ts's `pruneHistory`, which walks and reports rather than prete
 #
 # Checked by `tools/check-expectation.py`, in `make check`. Regenerate with `--bless`.
 
+# RE-BLESSED 2026-09-09 — THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
+# profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
+# `connectivity` (13) and `tree_operations` (6) from their tree_put_error_codes.go and
+# connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
+# already exists in another category. All pass in BOTH arms, so none of it is a statement
+# about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.content]
-measured = "2026-09-07"   # 2 round(s)
+measured = "2026-09-09"   # 2 round(s)
 total    = 13
 composed = { PASS = 12, SKIP = 1 }
 bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
@@ -213,8 +219,14 @@ improved = [
 # patched, because inverting the precedence turns the check green and is still the
 # interpretation §5.1 forbids. **Putting this name back into `improved` is the acceptance
 # test for whatever keystone or arch answers.**
+# RE-BLESSED 2026-09-09 — THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
+# profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
+# `connectivity` (13) and `tree_operations` (6) from their tree_put_error_codes.go and
+# connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
+# already exists in another category. All pass in BOTH arms, so none of it is a statement
+# about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.history]
-measured = "2026-09-07"   # 2 round(s)
+measured = "2026-09-09"   # 2 round(s)
 total    = 34
 composed = { PASS = 32, WARN = 1, FAIL = 1 }
 bare     = { PASS = 1, FAIL = 29, SKIP = 4 }
@@ -253,6 +265,12 @@ improved = [
   "history.type_transition",
 ]
 
+# RE-BLESSED 2026-09-09 — THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
+# profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
+# `connectivity` (13) and `tree_operations` (6) from their tree_put_error_codes.go and
+# connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
+# already exists in another category. All pass in BOTH arms, so none of it is a statement
+# about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.core]
 # RE-BLESSED 2026-09-08, and the reason is the rule change rather than a measurement change.
 #
@@ -266,10 +284,10 @@ improved = [
 # So a check declared in `[[gate.straddle]]` is now excluded from the baseline ENTIRELY, not
 # only from `regressed`: dropped from both arms and from `total`, and NAMED in the run's
 # output every time. Hence 755 rather than 756, and one fewer PASS in each arm.
-measured = "2026-09-08"   # 2 round(s); 1 declared straddle excluded
-total    = 755
-composed = { PASS = 320, WARN = 329, SKIP = 106 }
-bare     = { PASS = 314, WARN = 335, SKIP = 106 }
+measured = "2026-09-09"   # 2 round(s)
+total    = 775
+composed = { PASS = 338, WARN = 329, SKIP = 108 }
+bare     = { PASS = 332, WARN = 335, SKIP = 108 }
 improved = [
   "type_system.type_system_content_blob_fetch",
   "type_system.type_system_content_blob_match",

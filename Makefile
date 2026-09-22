@@ -16,12 +16,6 @@
 #   make check            build + test + conformance + regression + expectation + plan-check
 #                         + sdk-parity + structure + drivers + error-codes + citations
 #                         + glue + req-coverage + toolchain + scale --check
-#
-# WHAT THE HOST NEEDS, declared rather than asserted: `make`, `podman`, `python3` >= 3.11,
-# POSIX `sh`, and `git`. `tools/tooling.toml [host]` is the declaration and `make toolchain`
-# is the check; `docs/adr/0001-the-host-toolchain-contract.md` is the ruling behind it.
-# The comment below this block used to read "make + podman and nothing else", which was
-# never true of this repo -- the line under it shells `python3 -c` to read a profile.
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
@@ -126,7 +120,10 @@ PODMAN_RUN = podman run --rm --network=none --security-opt label=disable \
 PODMAN_TIMEOUT ?= 900
 RUN_BOUNDED    = $(PODMAN_RUN) --timeout $(PODMAN_TIMEOUT)
 
-RUN     = $(PODMAN_RUN) $(IMAGE)
+# `RUN` is BOUNDED, because every use of it launches a peer through `tools/host-launch`,
+# which has no time bound of its own. `PODMAN_RUN` stays unbounded for `build`, where a
+# cold `cargo` compile legitimately runs long and a bound would be a false red.
+RUN     = $(RUN_BOUNDED) $(IMAGE)
 TDIR    = languages/$(TARGET)
 REPORTS = $(TDIR)/output/$(COMPOSITION)/reports
 PLAN    = $(TDIR)/output/$(COMPOSITION)/PLAN.json
@@ -196,7 +193,7 @@ conformance:
 				-category $$c -json-out /church/$(REPO)/$(REPORTS)/composed-$$c-$$r.json \
 				>/dev/null 2>&1 || exit 1; \
 			echo "conformance: $$c round $$r/$(ROUNDS) bare"; \
-			$(PODMAN_RUN) -e BARE=1 $(IMAGE) ./tools/host-launch $(TARGET) $(COMPOSITION) \
+			$(RUN_BOUNDED) -e BARE=1 $(IMAGE) ./tools/host-launch $(TARGET) $(COMPOSITION) \
 				-category $$c -json-out /church/$(REPO)/$(REPORTS)/bare-$$c-$$r.json \
 				>/dev/null 2>&1 || exit 1; \
 		done; \
@@ -226,7 +223,7 @@ regression:
 	@rm -f $(REPORTS)/bare-core-*.json $(REPORTS)/composed-core-*.json
 	@for r in $$(seq 1 $(ROUNDS)); do \
 		echo "regression: round $$r/$(ROUNDS) bare"; \
-		$(PODMAN_RUN) -e BARE=1 $(IMAGE) ./tools/host-launch $(TARGET) $(COMPOSITION) \
+		$(RUN_BOUNDED) -e BARE=1 $(IMAGE) ./tools/host-launch $(TARGET) $(COMPOSITION) \
 			-profile core -json-out /church/$(REPO)/$(REPORTS)/bare-core-$$r.json >/dev/null 2>&1; \
 		echo "regression: round $$r/$(ROUNDS) composed"; \
 		$(RUN) ./tools/host-launch $(TARGET) $(COMPOSITION) \
@@ -478,7 +475,7 @@ probe:
 	@echo "host-seam arms: $(PROBE_TARGETS)"
 	@for t in $(PROBE_TARGETS); do \
 		echo "=== host-seam: $$t ==="; \
-		$(PODMAN_RUN) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+		$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
 			./languages/$$t/gates/host-seam/run || exit 1; \
 	done
 
@@ -508,7 +505,7 @@ parity:
 	@mkdir -p $(PARITY_OUT)
 	@for t in $(PARITY_TARGETS); do \
 		echo "=== chunking-parity: $$t ==="; \
-		$(PODMAN_RUN) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+		$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
 			./languages/$$t/gates/chunking-parity/run \
 			/church/$(REPO)/$(PARITY_OUT)/corpus.bin $(PARITY_TARGET) \
 			> $(PARITY_OUT)/$$t.json || exit 1; \
@@ -539,7 +536,7 @@ type-parity:
 		rm -f $(TYPES_OUT)/$$e-*.json; \
 		for t in $(TYPES_TARGETS); do \
 			echo "=== type-parity: $$e x $$t ==="; \
-			$(PODMAN_RUN) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+			$(RUN_BOUNDED) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
 				./languages/$$t/gates/type-parity/run $$e \
 				> $(TYPES_OUT)/$$e-$$t.json || exit 1; \
 		done; \

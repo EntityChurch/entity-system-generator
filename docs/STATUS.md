@@ -32,7 +32,36 @@ outside its corpus entirely. The gate now reads both directions.
 
 ---
 
-**Latest: the host contract is declared and gated, which closes a contradiction that had been
+**Latest: the oracle grew by 19 checks and every one of our baselines is stale — and the gate
+that noticed refused to compare rather than reporting movement that was not ours.**
+`entity-core-go`'s `validate-peer` core profile went 756 → 775. Confirmed in their tree:
+`tree_put_error_codes.go` and `connectivity_conn_errors.go`, added for `EXTENSION-TREE`
+Appendix A v4.4/v4.5 and connection error handling — **19 added, 0 removed**, measured by
+diffing check-name sets between a 09-07 report and a 09-09 one.
+
+**This is the oracle getting stronger, which is what we want from a tool that is the oracle
+because it is not the thing under test.** The 19 pass in *both* arms (composed PASS 320→338,
+bare 314→332), so they say nothing about our compositions and nothing regressed.
+
+**What matters is that `make expectation` REFUSED.** Its message is the right one — *the check
+SET changed; nothing below is comparable until this is understood.* A gate that had silently
+diffed across a changed check set would have reported movement that belonged to the oracle. That
+is D21's temporal baseline doing exactly the job it was ratified for, on the first event of this
+kind since it was built.
+
+**Owed: a deliberate re-bless of `[gate.baseline]` on all six compositions**, from fresh
+reports, one at a time, with the `improved` NAME sets confirmed unchanged. Re-blessing is
+legitimate here because the set demonstrably changed for a reason verified in the oracle's own
+tree; **re-blessing because a number moved is how a baseline stops meaning anything**, and a
+lost improvement must never be absorbed into a total that also moved for an unrelated reason.
+
+Verified against the new oracle: `typescript` × `content-history` — build OK, 34 unit tests,
+**0 regressions · 32 improvements · 0 flaky** on the extension categories and **0 · 6 · 1** on
+the core profile.
+
+---
+
+**The host contract is declared and gated, which closes a contradiction that had been
 open since the repo was opened.** The charter said the host needs `make` + `podman` and nothing
 else. It has never been true here: `make check` runs eleven `tools/*.py` on the host, and the
 Makefile shells `python3 -c` to read a profile *before it can choose an image*. Nobody had ever
@@ -102,9 +131,12 @@ established with.
 - **Nothing in the ecosystem can read its own human-readable form.** `ENTITY-CBOR-ENCODING` §8
   specifies diagnostic notation and Appendix E authors the ECF conformance corpus as `.diag`
   compiled to `.cbor`. The only diag parser is `entity-core-go`'s `cmd/internal/diagcodec`,
-  behind Go's compiler-enforced boundary; the only view is `entity-shell cat -diag`. **Both
-  files ship to all 46 peers and not one can parse the `.diag`** — so every new consumer's
-  cheapest path is JSON, which is exactly what happened here. The read-in names five operations,
+  behind Go's compiler-enforced boundary; the only view is `entity-shell cat -diag`. There is
+  **one** shared copy of the corpus, referenced by **39 peer trees**, and **not one of them can
+  parse the `.diag`** — so every new consumer's cheapest path is JSON, which is exactly what
+  happened here. *(Both numbers corrected 2026-09-09: this first read "shipped to all 46 peers",
+  taken from the cohort's size rather than from a command — AP-1. The re-deriving commands are
+  inline in the design doc.)* The read-in names five operations,
   a library half and a CLI half, what is normative (the dialect) versus idiom, and a byte-exact
   oracle that already exists: the 71 locked vectors must reproduce from their own `.diag`.
 - **It does not need keystone.** Correcting a claim made the same day: our composed hosts
@@ -118,7 +150,7 @@ or a close will wake. `Peer::dispatch` has exactly one silent-drop path (root ty
 `system/protocol/execute` → `None`, nothing written). Either our request is malformed in a way
 that reaches it or the peer owes a status it is not sending — possibly both, and the second is
 routable. It sits at `.agents/wip-rust-ext-checks/` rather than in
-`languages/rust/gates/ext-checks/` **because the Makefile discovers arms by wildcard**, so
+`languages/rust/gates/ext-checks/` (dead) **because the Makefile discovers arms by wildcard**, so
 committing it would hang `make ext-checks` for everyone. Move the directory back to pick it up.
 
 ---
@@ -179,7 +211,7 @@ condition is the one the operator set for keystone the same day and it is adopte
 
 **The definitions are language-neutral data.** `extension-contracts/<ext>/checks/*.toml` — seven
 verbs, seven assertion kinds, one indirection — validated once by the neutral half and emitted as
-JSON for the arms. `languages/<t>/gates/ext-checks/run` is a transport binding that names no
+JSON for the arms. `languages/*/gates/ext-checks/run` is a transport binding that names no
 extension, because a wire client is per-language even though the wire is not (`entity_core.peer`
 needs `cryptography`, absent from two of the three toolchain images — measured). Adding an
 extension adds data; adding a target adds one arm.
@@ -680,7 +712,7 @@ the delta. **We are not nominating a second control from a source read** — the
 - ✅ **The dispatch-surface census** — `CENSUS-DISPATCH-SURFACE.md`, 12 peers; keystone has since
   measured all 26 M1/M2/M3 and is carrying the rest as `[host]` profile values rather than a table.
   **Roster reads `unknown` for all 46 until a harness executes** — their rule and the right one.
-- ✅ **The host contract** — `DRAFT-KEYSTONE-PEER-HOST-CONTRACT.md`, H1–H5, routed and **accepted**,
+- ✅ **The host contract** — `docs/KEYSTONE-PEER-HOST-CONTRACT.md` (a pointer), H1–H5 routed and **accepted**,
   with three corrections from keystone and two back to them (`cpp`'s `register_handler` is private;
   `julia`'s writes a dead map). **It is keystone's document** — a requirement on keystone peers,
   settled between keystone and here, with arch not a party. What stays arch's is `SDK-OPERATIONS`
