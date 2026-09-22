@@ -43,6 +43,7 @@ refusal. So: zero targets inspected, or a target with nothing under it, REFUSES.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -100,7 +101,47 @@ def _stage_writes(arm: Path, label: str) -> list[str]:
     return problems
 
 
+def _tracked_dirs() -> set[str] | None:
+    """Every directory that holds at least one git-tracked file, repo-relative.
+
+    **A neutral half exists when git tracks something in it, not when `is_dir()` says so.**
+    `gates/sdk-surface/` satisfied this gate from 2026-09-07 to 2026-09-12 as a directory git
+    never tracked, on one machine; a clean checkout had no such directory and the gate went red
+    on three targets the day the environment was wiped. A directory holding only ignored files
+    (`__pycache__/`, `output/`) is the same false green.
+
+    `None` when git cannot answer, and the caller REFUSES rather than falling back to
+    `is_dir()`, which is the check this replaces. git is in the host contract
+    (`tools/tooling.toml [host]`).
+    """
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True,
+                             text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    dirs: set[str] = set()
+    for line in out.splitlines():
+        parts = line.split("/")[:-1]
+        for i in range(1, len(parts) + 1):
+            dirs.add("/".join(parts[:i]))
+    return dirs
+
+
 def main() -> int:
+    tracked = _tracked_dirs()
+    if tracked is None:
+        print("REFUSING: `git ls-files` failed, so a tracked neutral half cannot be told from a "
+              "leftover directory. Falling back to is_dir() is the false green this replaced.",
+              file=sys.stderr)
+        return 2
+    # The control, run on every invocation rather than in a separate self-test: a file this
+    # repo certainly tracks must be visible, or the parse is broken and every neutral half would
+    # read as missing (a false red on every unit, which costs the instrument).
+    if "tools" not in tracked:
+        print("REFUSING: `git ls-files` parsed, but `tools/` is not among the tracked "
+              "directories. The parse is broken, not the tree.", file=sys.stderr)
+        return 2
+
     if not LANGUAGES.is_dir():
         print(f"REFUSING: no {LANGUAGES.relative_to(ROOT)}/ -- nothing to check",
               file=sys.stderr)
@@ -140,11 +181,18 @@ def main() -> int:
                 continue
             for unit in sorted(p for p in d.iterdir() if p.is_dir()):
                 checked += 1
+                neutral_rel = f"{neutral.relative_to(ROOT)}/{unit.name}"
                 if not (neutral / unit.name).is_dir():
                     problems.append(
                         f"{name}/{subtree}/{unit.name}: no neutral half at "
-                        f"{neutral.relative_to(ROOT)}/{unit.name}/ -- a per-target subtree "
+                        f"{neutral_rel}/ -- a per-target subtree "
                         "may only hold units the root declares"
+                    )
+                elif neutral_rel not in tracked:
+                    problems.append(
+                        f"{name}/{subtree}/{unit.name}: {neutral_rel}/ exists but git tracks "
+                        "nothing in it -- an untracked directory is not a declaration, and a "
+                        "clean checkout does not have it"
                     )
                 if subtree == "extensions" and not (neutral / unit.name / "EXTENSION.toml").exists():
                     problems.append(

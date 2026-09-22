@@ -142,7 +142,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
 .PHONY: all build test conformance regression check check-all plan plan-check probe \
         parity clean sdk-parity structure drivers error-codes error-codes-control \
         scale scale-control type-parity glue glue-control \
-        req-coverage req-coverage-control ext-checks ext-checks-control \
+        req-coverage req-coverage-composition req-coverage-control ext-checks ext-checks-control \
         seed-policy seed-policy-control \
         expectation expectation-control diff-arms-control \
         citations citations-control toolchain toolchain-control \
@@ -289,6 +289,18 @@ error-codes-control:
 req-coverage:
 	./tools/req-coverage.py
 
+# SCOPED TO THE COMPOSITION inside `make check`, and UNSCOPED in `check-all` after every
+# composition has produced its reports. The unscoped form inside `check` REFUSED on a clean
+# checkout (2026-09-12): `check-all` builds `python/compute` first, whose corpus has no
+# `content` or `history` report yet, so the gate could only pass on a machine where an earlier
+# run had left reports in `output/`. A gate whose verdict depends on leftovers is the same
+# false green as a neutral half git never tracked.
+PLAN_EXTS = $(shell python3 -c "import json;print(' '.join(i['extension'].lower() for i in json.load(open('$(PLAN)'))['installs']))" 2>/dev/null)
+
+req-coverage-composition: plan
+	@[ -n "$(PLAN_EXTS)" ] || { echo "req-coverage: REFUSING -- no extensions read from $(PLAN)" >&2; exit 3; }
+	@for e in $(PLAN_EXTS); do ./tools/req-coverage.py --ext $$e || exit $$?; done
+
 req-coverage-control:
 	./tools/req-coverage.py --self-test
 
@@ -370,7 +382,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage spec-lists toolchain seed-policy
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage-composition spec-lists toolchain
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -385,6 +397,11 @@ check-all:
 	@echo "=== cross-target ==="
 	$(MAKE) --no-print-directory parity
 	$(MAKE) --no-print-directory type-parity
+	$(MAKE) --no-print-directory req-coverage
+	# seed-policy runs EVERY target's arm whatever TARGET says, so it is cross-target and belongs
+	# here. Inside `check` it needed `typescript/output/compute/build` while `check-all` was still
+	# on `python/compute`, and passed only where an earlier run had left that stage behind.
+	$(MAKE) --no-print-directory seed-policy
 
 # ── the structure gates ─────────────────────────────────────────────────────────
 # Both are OURS and both are the axis-with-no-upstream-authority kind (D16), so both
