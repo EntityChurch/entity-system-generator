@@ -51,7 +51,7 @@ publishes = true
 
 [[area]]
 path      = "docs/adr"
-kind      = "docs"        # our own ADRs. Durable, and deliberately undeclared -- see the
+kind      = "adr"         # our own ADRs. Durable, and deliberately undeclared -- see the
 publishes = false         # NOT-declared note at the foot of this file.
 
 # ── Living docs: durable, edited in place, inside an otherwise-dated area ──────

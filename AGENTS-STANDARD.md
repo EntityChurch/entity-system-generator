@@ -10,9 +10,9 @@ We review it.** You do not need permission first and you do not need to send a p
 
 1. **You make the edit**, in your own repo. Keep it general enough to belong in every repo — if
    it is only true of your seat, it belongs in your own `AGENTS.md` instead.
-2. **The next publish reconciles it.** Meta diffs every repo's copy against the master, and each
-   edit is adopted for everyone or dropped with a reason. The released copy is identical
-   everywhere, so reconciliation happens **before** a cut, never instead of one.
+2. **Meta reconciles it, then re-syncs every copy.** Every repo's copy is diffed against the
+   master and each edit is adopted for everyone or dropped with a reason you receive.
+   Reconciliation happens **before** the overwrite, never instead of it.
 3. **If it is critical enough that it cannot wait for the next publish, say so** — a midstream
    update is available. That is the exception, not the route.
 
@@ -30,7 +30,8 @@ For any agent, not just Claude ([ADR-0016]).
 
 **Two files are always loaded: your repo's `AGENTS.md` and this one. Read both in full, first,
 every session.** Keep both small — **`AGENTS.md` ≤ 30 KiB, this file ≤ 24 KiB, measured in
-bytes, not lines.**
+bytes, not lines.** **Each cap governs its own file on disk, not the sum an agent loads** —
+the binding constraint is a loader that reads `AGENTS.md` alone and truncates above 32 KiB.
 
 **Everything else is opened by trigger, never speculatively.** A tier-0 file **names** the
 trigger; it does not carry the content. Any section of one that could be replaced by *"when X,
@@ -70,9 +71,9 @@ with an independent lifecycle. You are working inside one of them; see its `AGEN
 - **System toolchains, minimal dependencies.** Prefer stock tools (raw `podman run`, not
   podman-compose). Avoid `mise`, `just`, and bespoke toolchain managers.
 - **`make <verb>` is the build interface.** Most repos are thin `make` orchestration over
-  **podman**; the host needs only `make` + `podman`. Standard verbs: `build` `test` `lint`
-  `fmt` `check` `clean`, container-default with a `-native` opt-in. See your repo's
-  `AGENTS.md` for its exact targets.
+  **podman**. Standard verbs: `build` `test` `lint` `fmt` `check` `clean`, container-default
+  with a `-native` opt-in. **Your repo declares its own host contract** — name what the host
+  actually needs, in your `AGENTS.md`, rather than inheriting a sentence from here.
 - **Default branch is `master`.**
 
 ## Contributing
@@ -110,22 +111,30 @@ with an independent lifecycle. You are working inside one of them; see its `AGEN
 reads it.** There is no notification and no queue, so **a packet nobody enumerates is a
 packet nobody receives.**
 
-A routing packet lives at `docs/status/ROUTING-<date>-<letter>-<recipient>-<slug>.md` and
-**MUST** open with an addressee block, each field on its own line:
+A routing packet lives in **`docs/outbox/`** — packets you have **sent**, and nothing else —
+named `ROUTING-<date>-<letter>-<recipient>-<slug>.md`. Once its recipients have acknowledged
+it, it moves to **`docs/archive/outbox/`**. **Never declare either in `CANONICAL-DOCS.toml`**:
+routing is internal. Not `inbox/` — that name is protocol surface in three repos.
+
+It **MUST** open with an addressee block, each field on its own line:
 
 ```
 **To:** `entity-core-go`
 **From:** `entity-system-generator`
 **cc:** `entity-core-rust`, `entity-core-py`
+**Re:** <full stem of what this answers — never an abbreviated form>
+**Tip:** `dev` @ <sha>
 ```
+
+`To:`, `From:` and `Tip:` are required. **A packet whose claim cannot be re-derived is an
+opinion**, so the tip is not optional. **Your addressable name is your repo's directory
+name**, and you state it in one line of your `AGENTS.md`.
 
 - **`To:` names repositories, one per line-item, never a person or a nickname.** Write the
   full repo name. A brace list (`entity-core-{go,rust,py}`) is fine and is expanded.
 - **Check a `To:` by OPENING the named tree and finding the subject in it.** A
   wrong-but-parseable `To:` is indistinguishable from a right one to every instrument there
-  is: it parses, so it is never reported unaddressed, and it counts as delivered to someone.
-  **Grep the tree you are about to address** — address the repo that holds the subject, not
-  the repo whose name matches the topic.
+  is. Address the repo that holds the subject, not the one whose name matches the topic.
 - **`cc:` is a real distinction, not decoration** — it says *this is not addressed to you and
   you are not on the hook for it.* A packet you need acted on goes in `To:`.
 - **The three fields go on their own lines.**
@@ -134,17 +143,15 @@ A routing packet lives at `docs/status/ROUTING-<date>-<letter>-<recipient>-<slug
 
 `<date>-<letter>` is unique to one repository on one day, which is not unique.
 
-- **Cite a packet by its FULL stem**, never by date and letter alone. A packet is cited far
-  more often than it is opened, and a citation the reader cannot resolve is the failure that
-  matters.
+- **Cite a packet by its FULL stem**, never by date and letter alone — a citation the reader
+  cannot resolve is the failure that matters.
 - **Letters are per-day and per-repo** — never reuse one within a day in your own tree.
 
 ### Record what you deliberately did NOT send
 
 **Your tracker gets a section for what you analysed and chose not to route**, with the reason,
 including anything you drafted and withdrew. **Deliberately-not-sent is invisible from the
-other side and reads identically to forgotten**, so without it the next person to notice the
-gap re-derives the analysis and files the packet you already decided against.
+other side and reads identically to forgotten.**
 
 ### Tracking what is open between two seats
 
@@ -162,12 +169,43 @@ closed.**
 - **Archived is not delivered.** Close an ask on the counterpart's receipt or reply, never
   because your own side of the work finished.
 
-### Receiving
+### Receiving — the watermark
 
 **Every packet addressed to you gets a row on your tracker**, created by the session that
 learns of it, and it is discharged only by the owner confirming in their own tree. Answering
 in a reply and never recording it silts up the channel: the reply is in your outbox, and the
-next session reads neither.
+next session reads neither. **A row is owed for packets you decline too** — from the sender's
+side a refusal and a silence are indistinguishable.
+
+**But first you have to know it exists.** One line in each
+`docs/status/TRACKER-<counterpart>.md`:
+
+```markdown
+_Last read `<counterpart>`'s outbox through 2026-09-16, at `dev` @ `9f1c3ab`._
+```
+
+Fetch their repo, list their `docs/outbox/` for a filename dated after your watermark, read
+the header, act or ignore, then move the line and record the tip you scanned at. That is the
+whole protocol — no tool, no registry, nobody writing into anyone else's tree. It finds
+packets that named you wrong and packets where you are only `cc:`, and it answers *"what have
+I not seen?"*
+
+Two things keep it honest, and skipping either turns it into a control that lies:
+
+- **Fetch first, and go by the date in the filename — never file mtime.** A checkout you have
+  not pulled lists nothing new and looks exactly like a clean scan, and your watermark then
+  advances **past** packets you never saw — a permanent miss, not a late one. The tip you
+  record is what makes *"nothing new and I checked"* a different claim from *"nothing new."*
+- **If you cannot reach a counterpart's tree, write that in the tracker.** *Could not look* is
+  not *nothing to see*, and an omitted row reads as clean.
+
+**Any scanner of yours keyed to a PATH rather than to a counterpart goes blind the day a
+counterpart moves, and prints byte-identically to a clean scan.** Glob both homes, and name a
+counterpart with neither rather than counting it as zero.
+
+**And when you move your own packets, re-run your full gate set.** An exclusion keyed to
+`docs/status/` has just stopped covering them: a gate that fires on a packet you did not
+change is the gate starting to work, not the migration breaking something.
 
 ## Respect the protocol
 
@@ -229,13 +267,10 @@ read canonical sources). **D1–D12 are reserved: your own disciplines are numbe
 and you earn them on your own bugs.** Do not copy another repo's substrate disciplines, and
 do not reuse a universal number for one.
 
-**Tiers** — your `AGENTS.md` declares yours and links its docs:
-
-| Tier | Runs | Who |
-|---|---|---|
-| **Full** | D1–D12 + native · Feature + Audit + Foundation doctrines · substrate model · catalog | Complex non-deterministic runtimes (browser, engines, GUI/FFI stacks) |
-| **Core** | D1–D12 + native · **Audit doctrine** · catalog · review questions | Reference implementations, conformance anchor, tooling |
-| **Authoring** | Lifecycle disciplines · **Audit + Foundation doctrines** · catalog | Spec and formal repos |
+**Tiers** — **Full** (complex non-deterministic runtimes: browser, engines, GUI/FFI stacks) ·
+**Core** (reference implementations, the conformance anchor, tooling) · **Authoring** (spec
+and formal repos). Your `AGENTS.md` declares yours and links its docs; `METHODOLOGY.md` §9
+says what each tier runs.
 
 **Conformance does not exempt a repo from this.** It gates the wire, not process drift,
 stale build-state claims, or unaccounted accumulation.
@@ -264,7 +299,9 @@ Clean as you go. Drift is rejected at the PR gate by a tree-hygiene linter.
 |---|---|
 | Reference / durable docs, specs | `docs/`, `docs/{architecture,reference,spec}/` — edit in place |
 | Agent guidance | `AGENTS.md` + `AGENTS-STANDARD.md` + `CLAUDE.md` (root) |
-| Dated status / handoffs | `docs/status/` (`HANDOFF-*`, `CHECKPOINT-*`, dated snapshots) — **never published** ([ADR-0031]) |
+| Dated status / handoffs | `docs/status/` (`HANDOFF-*`, `CHECKPOINT-*`, dated snapshots, `TRACKER-*`) — **never published** ([ADR-0031]) |
+| Routing packets you have sent | `docs/outbox/`, archived to `docs/archive/outbox/` — **never published, never declared** |
+| What you learned, by topic | `docs/agents/memory/` + `INDEX.md` — living, indexed, **declared**. An entry that could become a check should become one |
 | The rolling canonical status log | **`docs/STATUS.md`** — one file, not dated. **Publishes if you declare it** |
 | Ecosystem ADRs | **Not in your repo.** Cite by number, do not copy |
 | Your repo's own ADRs | `docs/adr/` (`NNNN-slug.md`) — your numbering, your call |
@@ -326,6 +363,26 @@ reader.
 A public reader gets: `README.md`, `CHANGELOG.md`, `docs/STATUS.md` if you declare it, and
 your conformance artifact if you have one.
 
+### Declaring what a directory IS
+
+`[[doc]]` and `[[keep_tree]]` say **publish this**. `[[area]]` says what a directory *is*, and
+`[[living]]` marks a durable file edited in place; **neither publishes unless it says so.**
+
+| table | keys | |
+|---|---|---|
+| `[[area]]` | `path`, `kind`, `publishes` | `kind` ∈ **`status` · `archive` · `outbox` · `memory` · `reference` · `adr` · `vendor`** |
+| `[[living]]` | `path` **or** `glob`, `internal` | `internal = true` → durable **and never published** |
+
+**`kind` is a CLOSED vocabulary. An unknown one is an error, never a default** — a
+silently-ignored declaration is a check reporting clean while switched off.
+
+- **`[[living]] internal = true` satisfies every "must be declared" check.** *Declared* and
+  *published* are different questions. Memory that is a straight move out of `AGENTS.md`
+  carries finding ids, sibling paths and gate names: declare it internal, and move a file to
+  `[[doc]]` when it has been rewritten for a stranger.
+- **Dated prose deeper than your top-level doc roots is invisible to the release filter and
+  PUBLISHES.** Declare it as an `[[area]]`. Deletion shows up in a diff; this does not.
+
 ## Multi-forge ([ADR-0014])
 
 **GitHub is canonical** for contributions. **Codeberg is a one-way, append-only mirror.**
@@ -333,11 +390,9 @@ Never push to the mirror; never `git push --mirror` or `--prune`.
 
 ## Local agent context
 
-This file is the **shared** layer. For your own local context — scratch notes, working
-memory, personal preferences, machine-specific paths — use the git-ignored
-**`AGENTS.local.md`**, or a git-ignored **`.agents/`** directory for anything larger than
-one file ([ADR-0020]). Both are injectable, never committed, never shared. Per-contributor
-and personal-style notes go there, **not** in this file.
+Scratch notes, personal preferences and machine-specific paths go in the git-ignored
+**`AGENTS.local.md`**, or a git-ignored **`.agents/`** directory for more than one file
+([ADR-0020]). Both are injectable, never committed, never shared — **not** in this file.
 
 ---
 
