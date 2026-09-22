@@ -132,7 +132,29 @@ def emit_sites(target: str, ext: str, pattern: str) -> list[tuple[str, str, int]
     cell = ROOT / "languages" / target / "extensions" / ext
     if not cell.is_dir():
         return []
-    rx = re.compile(pattern)
+
+    # ── ONE PATTERN OR SEVERAL, and the several is what COMPUTE forced ──────────────
+    #
+    # `emit_pattern` was a single regex written for ONE emission mechanism:
+    # `errorResult(Status.X, "code")`, the transport-status form CONTENT and HISTORY use
+    # for everything. **COMPUTE emits almost none of its surface that way.** §3.2's F10
+    # rule makes an evaluated `compute/error` a VALUE returned at status 200 — 4xx is
+    # reserved for authorization of the REQUEST, before evaluation — so thirteen of the
+    # sixteen §9.1 codes leave this port as a constructed entity and never touch
+    # `errorResult` at all.
+    #
+    # The single pattern therefore reported 5 distinct codes where 13 are emitted, and it
+    # reported them as a CLEAN surface: every code it could see was declared. That is
+    # D15's false-green, and it is the second time a corpus assertion in this gate has
+    # bounded a pattern that matches the boring half rather than one that stops matching
+    # (the first was `MIN_SITES`, AP-19's family). A count cannot see either.
+    #
+    # So a target declares a LIST and every pattern in it contributes. The property this
+    # replaces the count with is checked by the caller: every code the port's own
+    # `[error_surface]` declares as emitted must be FOUND by some pattern. A mechanism
+    # nobody wrote a pattern for then fails loudly instead of shrinking the corpus.
+    patterns = [pattern] if isinstance(pattern, str) else list(pattern)
+    rxs = [re.compile(p) for p in patterns]
     out: list[tuple[str, str, int]] = []
     for src in sorted(cell.rglob("*")):
         if not src.is_file() or src.suffix not in {".ts", ".py", ".rs"}:
@@ -141,9 +163,29 @@ def emit_sites(target: str, ext: str, pattern: str) -> list[tuple[str, str, int]
         if "/test" in rel or rel.endswith("_test.py") or "/tests/" in rel:
             continue
         text = src.read_text(encoding="utf-8")
-        for m in rx.finditer(text):
-            out.append((m.group("code"), rel, text.count("\n", 0, m.start()) + 1))
+        for rx in rxs:
+            for m in rx.finditer(text):
+                out.append((_normalize_code(m.group("code")), rel,
+                            text.count("\n", 0, m.start()) + 1))
     return out
+
+
+def _normalize_code(token: str) -> str:
+    """`SHOUT_CASE` -> `snake_case`, and nothing else.
+
+    A wire error code is lowercase `snake_case` everywhere in this corpus -- every row of
+    every spec code set, in all 26 extension specs and in core's own §3.3 table. So a
+    constant named `CODE_TYPE_MISMATCH` and the code `type_mismatch` are the SAME TOKEN in
+    two casings, and treating them as different is how a pattern that finds every emit site
+    still reports the surface as empty.
+
+    Deliberately in the GATE and not in the profile: the lowercase convention belongs to
+    the ecosystem's code sets, not to any language's identifier style, so a per-target
+    declaration would be one copy per target of a fact none of them owns (D17). Narrow on
+    purpose -- an all-uppercase token is lowercased and everything else passes through
+    untouched, so a language whose codes really are mixed-case is unaffected.
+    """
+    return token.lower() if token.isupper() else token
 
 
 def declared_surface(ext: str) -> dict[str, str]:
@@ -200,6 +242,144 @@ def spec_code_set(ext: str) -> dict[str, str]:
             f"`op.code` row -- the transcription shape changed and this gate would report a "
             f"clean surface over an empty code set"
         )
+    return out
+
+
+#: A backticked lowercase token in one markdown cell.
+CELL_CODE = re.compile(r"^\s*`([a-z0-9_]+)`\s*$")
+
+#: A markdown table separator row — `|---|---|`.
+TABLE_RULE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+
+def spec_table_codes(ext: str, manifest: dict) -> set[str]:
+    """** THE THIRD DIRECTION: the spec's own code TABLE, re-parsed from the pinned bytes. **
+
+    `spec_code_set` above reads `[contract.error_codes]`, which is a HAND TRANSCRIPTION. So
+    until 2026-09-10 this gate checked emitted-vs-transcribed and transcribed-vs-emitted, and
+    **nothing checked transcribed-vs-SPEC** — the pinned snapshot every declaration in this
+    tree cites was, once again, the artifact no gate opened (D16's eighth, second axis).
+
+    What it cost: COMPUTE's `[error_surface].spec` listed `ambiguous_resource` under a header
+    reading *"Defined in this extension's own §9.1 code set, above"*, and §9.1's table does
+    not have that row. The same file's `[contract.error_codes]` said so — `"NOT IN §9.1
+    TABLE"` — so **one contract carried both readings of one code and nothing compared
+    them.** Implementing §3.3 then found four more of the same shape: `hash_mismatch`,
+    `no_authorization_path`, `embedded_cap_unauthorized` and `chain_unreachable` are raised
+    by `handle_install`, `embedded_cap_unauthorized` is MUST-ed by §10.1 by name, and none of
+    the five is in §9.1.
+
+    ** IT IS SCOPED TO A DECLARED HEADING AND A DECLARED COLUMN, AND ITS FIRST DRAFT WAS
+    NEITHER. ** That draft scanned the whole document for `| `token` |` and produced five
+    FALSE REDS on run one — the expensive direction (AP-4). Two distinct defects, and both
+    are the same mistake: it assumed a shape instead of reading a declaration.
+
+      * COMPUTE reported **28 rows for a 15-row table** — it was also matching §9.2's
+        operations table and §9.3's limits table, whose first cells are backticked too.
+      * CONTENT and HISTORY reported their real codes MISSING — because their Appendix A is
+        `| operation | `code` | status | meaning |` and the code is in the SECOND column.
+        `capability_denied`, the v3.7 correction this entire axis was built to catch, came
+        back as an undeclared deviation.
+
+    So `[error_surface].spec_table` declares `heading` and `code_column`, the parse is bounded
+    by that heading's section, and the gate holds the declaration to the bytes — which is
+    `check-spec-lists.py`'s rule (compare to declaration, never shape-to-shape) applied to
+    the axis next door.
+
+    Returns the set of codes the table names. Refuses rather than returning a short set: a
+    parser that has lost the table would silently promote every real code to `unresolved`.
+    """
+    conformance = manifest.get("conformance", {})
+    spec_file = conformance.get("spec_file")
+    snapshot = manifest.get("extension", {}).get("snapshot")
+    decl = manifest.get("error_surface", {}).get("spec_table")
+    if not spec_file or not snapshot or not decl:
+        return set()  # nothing declared — reported by the caller, not refused here
+    path = ROOT / "shared" / "spec-data" / snapshot / spec_file
+    if not path.is_file():
+        raise Refusal(
+            f"{ext}: [conformance].spec_file names {path} and it does not exist. Every "
+            f"code-set claim in this contract cites that file; a missing snapshot makes "
+            f"the citation unresolvable rather than the claim wrong"
+        )
+
+    md = path.read_text()
+    heading = decl["heading"]
+    at = md.find("\n" + heading + "\n")
+    if at < 0:
+        raise Refusal(
+            f"{ext}: [error_surface].spec_table declares heading {heading!r} and the pinned "
+            f"{path.name} does not contain that line. A re-worded heading is a re-pin to "
+            f"reconcile, not a code-set finding"
+        )
+    body = md[at + len(heading) + 2:]
+    # Bound the section at the next heading of the same-or-higher level. `## Appendix A` and
+    # `### 9.1` are both legal here, so the level is read off the declaration itself.
+    level = len(heading) - len(heading.lstrip("#"))
+    for line in body.splitlines():
+        if line.startswith("#") and (len(line) - len(line.lstrip("#"))) <= level:
+            body = body[: body.find("\n" + line)]
+            break
+
+    # ── THE CORPUS ASSERTION IS A PROPERTY, NOT A COUNT [D15 clause 2, sharpened]. ──
+    #
+    # The first draft used a floor of five, and it REFUSED on HISTORY — whose Appendix A
+    # genuinely has two rows. A floor is a count, it was tuned to the one document in front
+    # of the author, and the document it was wrong about was already in the tree. The
+    # property is available and is exact: **every DATA ROW of the declared table yields
+    # exactly one code.** A column that moved, a code that lost its backticks, a table that
+    # became a list — each makes `codes < rows`, whatever the table's size, and a two-row
+    # table is as well covered as a fifteen-row one.
+    column = int(decl["code_column"])
+    codes, rows, seen_rule = set(), 0, False
+    for line in body.splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        if TABLE_RULE.match(line):
+            seen_rule = True
+            continue
+        if not seen_rule:
+            continue  # the header row, above the separator
+        rows += 1
+        cells = line.split("|")[1:-1] if line.rstrip().endswith("|") else line.split("|")[1:]
+        if len(cells) >= column:
+            m = CELL_CODE.match(cells[column - 1])
+            if m:
+                codes.add(m.group(1))
+
+    if rows == 0:
+        raise Refusal(
+            f"{ext}: {heading!r} in {path.name} contains no table data rows. The heading "
+            f"resolved and the table under it did not — an empty spec code set would report "
+            f"every declared `spec` code as a deviation"
+        )
+    if len(codes) < rows:
+        raise Refusal(
+            f"{ext}: {heading!r} in {path.name} has {rows} data rows and column "
+            f"{column} yielded {len(codes)} backticked codes. Every row of a code table "
+            f"names a code; the declared column is wrong, or a row's code lost its "
+            f"backticks in a re-pin"
+        )
+    return codes
+
+
+def misclassified(ext: str, surface: dict[str, str], table: set[str]) -> list[str]:
+    """A code declared `spec` that the spec's own table does not name, and the converse.
+
+    ONE DIRECTION FAILS AND THE OTHER PRINTS. A `spec` claim the bytes do not support is a
+    false authority citation and is a failure. A code the table names that we classify
+    elsewhere is *information* — `[contract.error_codes]` may legitimately carry a row from
+    a section other than the table — so it is reported and not failed, because a false red
+    costs the instrument (AP-4) and this half has never been the failure mode.
+    """
+    out = []
+    for code, cls in sorted(surface.items()):
+        if cls == "spec" and code not in table:
+            out.append(
+                f"{code!r} is declared class `spec` and the pinned snapshot's code table "
+                f"does not name it. Either it belongs in `unresolved` with the section that "
+                f"raises it, or the table gained a row and this declaration is stale"
+            )
     return out
 
 
@@ -353,6 +533,16 @@ def run(strict: bool) -> int:
         failures += [f"{ext}: {m}" for m in not_emitted_detail(
             ext, surface, manifest.get("error_surface", {}).get("spec_named_detail", {}))]
 
+        # ── THE THIRD DIRECTION: the declaration against the PINNED BYTES. ────────────
+        table = spec_table_codes(ext, manifest)
+        if not table:
+            print(f"  {ext}: no pinned snapshot declared -- the `spec` class cannot be "
+                  f"checked against the spec's own table")
+        else:
+            print(f"  {ext}: spec code table {len(table)} rows vs "
+                  f"{sum(1 for c in surface.values() if c == 'spec')} declared `spec`")
+            failures += [f"{ext}: {m}" for m in misclassified(ext, surface, table)]
+
     if cells == 0:
         print("REFUSING: zero (extension x target) cells parsed")
         return 2
@@ -396,12 +586,24 @@ def self_test() -> int:
         if not probe:
             print(f"  {target}: REFUSING -- no [error_surface].self_test_line to control on")
             return 2
-        m = re.compile(pattern).search(probe)
-        got = m.group("code") if m else None
-        verdict = "ok" if got == "planted_bogus_code" else "BROKEN"
-        if got != "planted_bogus_code":
-            ok = False
-        print(f"  {target}: pattern vs planted line -> {got!r} [{verdict}]")
+        # EVERY pattern gets its own planted line, and every one must extract from it.
+        # `emit_pattern` became a list when COMPUTE showed that one extension can emit its
+        # surface by two mechanisms; a control that only exercised the first would leave
+        # the second in exactly the state the first was in before this control existed.
+        patterns = [pattern] if isinstance(pattern, str) else list(pattern)
+        probes = [probe] if isinstance(probe, str) else list(probe)
+        if len(probes) != len(patterns):
+            print(f"  {target}: REFUSING -- {len(patterns)} pattern(s) and {len(probes)} "
+                  f"planted line(s). A pattern with no line of its own is uncontrolled, "
+                  f"and an uncontrolled pattern is the one that silently stops matching.")
+            return 2
+        for i, (pat, line) in enumerate(zip(patterns, probes)):
+            m = re.compile(pat).search(line)
+            got = _normalize_code(m.group("code")) if m else None
+            verdict = "ok" if got == "planted_bogus_code" else "BROKEN"
+            if got != "planted_bogus_code":
+                ok = False
+            print(f"  {target}: pattern[{i}] vs planted line -> {got!r} [{verdict}]")
     # ── THE OTHER DIRECTION (2026-09-08), both ways, over synthetic inputs so the control
     # ── drives `unemitted` / `stale_not_emitted` / `not_emitted_detail` and not a copy.
     def expect(label, cond):

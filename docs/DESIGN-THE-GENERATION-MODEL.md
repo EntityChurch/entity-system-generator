@@ -288,7 +288,7 @@ a change without a version entry"* — so it is testable over the wire, and no c
 
 | # | Item | Owner |
 |---|---|---|
-| 1 | The §11.6 handler seam: scope §6.2's reservation to the dispatch path, name the extension installer, make a decline declared | `entity-system-architecture` — **DRAFTED**, `PROPOSAL-EXTENSION-HOST-INSTALL-SEAM` |
+| 1 | The §11.6 handler seam: scope §6.2's reservation to the dispatch path, name the extension installer, make a decline declared | ✅ **CLOSED 2026-09-09, and the first clause was answered by deletion.** The proposal landed (the third installer is named); the reservation was not *scoped* but **withdrawn outright** by `ENTITY-CORE-PROTOCOL` 0.8.2.13, so there is nothing left to scope. See row S3.5′ below and `extension-contracts/content/EXTENSION.toml [substrate.wire_install_refusal]` |
 | 2 | Phase contract + a `[host]` profile block carrying **both** registration APIs (handler and consumer) + the host-seam harness, then regenerate | `entity-core-keystone` |
 | 3 | The host-seam conformance transport, with both controls | `entity-core-go` |
 | 4 | One extension category made presence-keyed and profile-scoped | `entity-core-go` |
@@ -320,7 +320,7 @@ process breaks before anyone builds it. **Three steps are blocked and all three 
 | **S1′ Profile** | Language `go`; host bindings — handler registration call, body shape, module unit | ⚠️ **the `[host]` block does not exist.** H5. Mechanical once the contract lands |
 | **S2 Codec** | — | ✅ **dropped.** CONTENT inherits the peer's canonical ECF encoder. This is where a third of keystone's per-language cost went |
 | **S3′ Modules** | Author the `system/content` handler from `EXTENSION-CONTENT` v3.6 §4.2 + §10.3 — `get` over `system/content/*`, the blob/chunk entity types, FastCDC chunking (§3.6), `reassemble_content` (§4) | ✅ **nothing blocks authoring.** This is ordinary spec-reading work, the same loop keystone runs |
-| **S3.5′ Wire** | Emit the composition entry point: construct the peer, install the handler, start | ❌ **blocked twice.** The peer's dispatch index is unexported (H1 is satisfied in `go` but not *exposed*, H3), and installing at `system/content` is refused by §6.2's unscoped reservation (D1) |
+| **S3.5′ Wire** | Emit the composition entry point: construct the peer, install the handler, start | ✅ **runs today on three targets; both blockers are gone and one of them was never what we thought.** This row read *"blocked twice: the dispatch index is unexported (H3), and installing at `system/content` is refused by §6.2's unscoped reservation (D1)."* H3 was satisfied by keystone. **D1 was answered by withdrawal, not by scoping** — 0.8.2.13 removes the reservation, so the refusal our two peers still perform is deployment policy and both answers are conformant. `sdk-native` is unchanged and is now a **measured** property of those peers rather than an inherited rule (`[substrate.wire_install_refusal]`) |
 | **S4′ Conformance** | Run `validate-peer`'s `content.go` category against the composed peer, then re-run the core 16 to prove nothing regressed | ⚠️ **the category exists** — one of 103 files under `cmd/internal/validate/` — but presence-keyed skips and per-extension profile scoping are open defects in the harness |
 | **S5′ Publish** | Package metadata, README, conformance badge | ✅ **inherited from keystone's S5 unchanged** |
 

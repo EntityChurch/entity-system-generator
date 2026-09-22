@@ -19,17 +19,35 @@ we did instead.
 
 ## 1. Readings that changed the code
 
-### 1.1 `system/content/*` cannot be installed over the wire, and that is structural
+### 1.1 `system/content/*` cannot be installed over the wire on the peers we compose against — and as of 2026-09-09 that is a deployment policy, not a rule
 
-CONTENT's pattern is `system/content`. The peer's `system/handler:register` operation refuses it:
-core §6.2, *"user-installed handlers MUST NOT register at `system/*` paths"*, enforced in both
-tier-A peers (typescript's handlers-handler and python's `_is_reserved_system_pattern`).
+**CORRECTED 2026-09-09. The measurement stands; the sentence it rested on has been withdrawn.**
 
-So `[install] model = "sdk-native"` is **forced, not chosen** — in-process, against a live peer
-object. **Every extension that owns a `system/*` pattern inherits this**, which is most of the 26.
-The consequence for the generation model: there is no "install a peer remotely" story for the
-standard corpus, and a composition is a build-time artifact rather than a runtime one. Worth
-knowing before designing anything that assumed otherwise.
+CONTENT's pattern is `system/content`. The peer's `system/handler:register` operation refuses it,
+in both tier-A peers — typescript's handlers-handler (`403 forbidden_pattern`) and python's
+`_is_reserved_system_pattern` — and **each quotes core §6.2's**
+*"user-installed handlers MUST NOT register at `system/*` paths"* **back to the caller.**
+
+**That sentence no longer exists.** `ENTITY-CORE-PROTOCOL` 0.8.2.13 withdraws the reservation
+outright, along with the dispatch-path-scoped variant that briefly replaced it, and says why: it
+entered as an unexplained row in a migration table, it named a party (*"user"*) the specification
+does not define, and it was enforced by a hardcoded prefix match **ahead of** authorization rather
+than by the capability system, so it overrode a grant a deployment had deliberately issued. What
+replaces it is the check that was always underneath: the standard dispatch capability check on
+`resource`. The Appendix line is explicit that **a peer refusing and a peer permitting are both
+conformant.**
+
+So `[install] model = "sdk-native"` is **unchanged, and is unchanged for a different reason**: it
+is what works on the two peers this repo composes against, measured. What it is not, any more, is
+inherited. This paragraph used to end *"**Every extension that owns a `system/*` pattern inherits
+this**, which is most of the 26"* — a claim about the standard, derived from a uniform behaviour
+across the sample we had. That is D12/L8's shape landing on our own authoring notes, and the
+correction costs nothing today because both peers still refuse.
+
+**What the next port and the next extension must do instead of inheriting:** ask. The record is
+`extension-contracts/content/EXTENSION.toml [substrate.wire_install_refusal]`, which carries the
+verdict per peer and reads `unknown` for the other 44, because **no gate in this tree has ever
+executed a wire register at a `system/*` pattern.** The refusal is a source read on both sides.
 
 ### 1.2 §6.1's manifest block spells the pattern two ways
 

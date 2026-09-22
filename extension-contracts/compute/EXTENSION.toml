@@ -1,0 +1,1722 @@
+## EXTENSION.toml — COMPUTE
+##
+## The machine-readable contract, against `shared/spec-data/compute-v3.29/EXTENSION-COMPUTE.md`
+## (sha256 d1de19425d5dc80a30a4ae228cd15db9681ca27e1fc437bb448a8ecbe732de53).
+##
+## THE THIRD EXTENSION, AND THE LARGEST BY EVERY MEASURE: 33 owned types against HISTORY's
+## six and CONTENT's seven, 128 oracle checks against 34 and 13, and the only one whose
+## MUST surface is an interpreter rather than a handler.
+##
+## `[contract]` IS A TRANSCRIPTION. `EXTENSION-COMPUTE` carries GUIDE-EXTENSION-DEVELOPMENT
+## §3.3's declaration header (arrived in arch's GI-5 sweep, `5e6ff77`), so every field below
+## is read off a declaration rather than derived from body text — the position HISTORY only
+## reached at v1.10. One field is transcribed WITH A NOTE rather than verbatim, and that is
+## the §1 finding: see `points_consumed`.
+##
+## FIVE DECLARED DEVIATIONS from the spec text, all routed as
+## `docs/status/ROUTING-2026-09-09-d-arch-computes-machine-readable-furniture-and-the-shape-of-8-5a.md`,
+## all implemented the way the REST of the spec requires rather than the way one local
+## block says. They are listed in `[assumptions]` and each names the sites on both sides.
+## **None is a local decision about semantics** — each is a case where the document
+## contradicts itself and the majority of its own normative sites picks the answer.
+
+[extension]
+name     = "COMPUTE"
+spec     = "EXTENSION-COMPUTE.md"
+version  = "3.29"
+snapshot = "compute-v3.29"
+grade    = "active"                  # spec header "**Status**: Active". Like HISTORY, this
+                                     # spec has no "Conformance grade:" line; `active` is
+                                     # the Status value and is a DIFFERENT axis from
+                                     # GUIDE §9's grade. `ROADMAP-EXTENSIONS` separately
+                                     # rates it Stage A / M5 / stable, which is the top
+                                     # tier and is a third axis again.
+
+# ── [contract] — TRANSCRIBED from the §3.3 declaration header ───────────────────────
+[contract]
+depends          = []                # §"Depends": ENTITY-CORE-PROTOCOL v7.33+ only. The
+                                     # header is emphatic: "Core protocol (v7.33+) — the
+                                     # only dependency... nothing else is required to
+                                     # install this." §1 lists INBOX / CONTINUATION /
+                                     # SUBSCRIPTION as INDEPENDENT, not as dependencies.
+owned_namespaces = ["system/compute/"]   # §3.3's field is scoped to `system/<ext>/…`
+                                     # subtrees. The top-level `compute/*` TYPE namespace
+                                     # is NOT in this field and its absence is correct —
+                                     # see [assumptions].compute_namespace_not_a_finding.
+owned_ops        = [
+  "system/compute:eval",
+  "system/compute:install",
+  "system/compute:uninstall",
+]
+owned_kinds      = []                # header: "Owned `properties.kind` values: none."
+points_exposed   = [
+  "alternate_engine_admission",      # §11 — AE-1..AE-6. Optional and per-implementation;
+                                     # "a performance choice and never a conformance
+                                     # surface". We ship the §4 reference evaluator, which
+                                     # is the conformance floor.
+  "builtins_table",                  # §2 / §3.5
+  "reactive_process_surface",        # §7
+]
+# ** THE ONE FIELD THAT IS NOT A CLEAN TRANSCRIPTION, AND IT IS §1 OF THE PACKET. **
+# The header's `Extension points consumed` lists the core protocol and the OPTIONAL
+# `budget_consumed` field on EXECUTE_RESPONSE. Neither is a registration hook. Installing
+# COMPUTE with reactive mode registers an emit consumer — §7.2's `on_tree_change` — which
+# SYSTEM-COMPOSITION §2.2 puts at POSITION 5, class *unbounded reactive*, under the stable
+# name `compute/reevaluator` (§2.7A). `EXTENSION-HISTORY`'s header, from the same GI-5
+# sweep against the same guide clause, declares `emit.tree_change`.
+#
+# We transcribe the header AND record the hook, in two fields, because collapsing them
+# would lose which one the spec actually says.
+points_consumed  = ["execute_response.budget_consumed"]
+points_consumed_observed = ["emit.tree_change"]
+points_consumed_note = """
+`emit.tree_change` is NOT in the declaration header and IS how §7.2 works. Routed as A-6.
+It is in `points_consumed_observed` rather than in `points_consumed` so that a reader can
+tell a transcription from a correction.
+
+** AND AS OF 2026-09-10 THE CORRECTION IS LOAD-BEARING RATHER THAN OBSERVATIONAL. ** This
+port now registers that consumer. A reader who trusts the declaration header and nothing
+else concludes that installing COMPUTE consumes one optional EXECUTE_RESPONSE field; what
+it actually does is attach a re-entrant writer to every tree bind on the peer. A-6 is
+re-sent with that sentence, because the gap between the two readings is no longer a
+documentation defect — it is the difference between an extension that observes and one
+that participates.
+"""
+
+[core_depends]
+protocol = ">=7.33"                  # §"Depends", verbatim.
+cbor     = ">=1.0"                   # §"Encoding" is ECF. No minimum stated in the header;
+                                     # recorded as the unconstrained floor rather than
+                                     # invented. The ECF dependence here is TOTAL rather
+                                     # than incidental: every expression is referenced by
+                                     # content hash from its parent, so canonical form IS
+                                     # the addressing.
+
+# ── [surfaces] — FIVE faces, and the fifth is new to this repo ──────────────────────
+[surfaces]
+handler        = "system/compute"    # §3.1's PROSE. The manifest CODE BLOCK says
+                                     # `system/compute/*`, which is the capability-scope
+                                     # spelling — see [assumptions].pattern_spelling.
+types          = true                # 33 of them (§2.1–§2.6, §3.5)
+sdk            = true
+emit_consumers = ["compute/reevaluator"]
+                                     # ** INSTALLED 2026-09-10. ** §7.2's `on_tree_change`,
+                                     # under the stable name SYSTEM-COMPOSITION §2.7A gives
+                                     # it, at §2.2 POSITION 5, class *unbounded reactive*.
+                                     # It is the only consumer in the corpus that WRITES
+                                     # BACK — HISTORY's records and stops — which is what
+                                     # makes §7.3's bound load-bearing rather than
+                                     # decorative on a sync-inline bus.
+evaluator      = true                # ** THE FIFTH FACE. ** `Peer.setExpressionEvaluator`
+                                     # — keystone's H7, routed by this repo 2026-09-03,
+                                     # landed the same day, measured with five controls on
+                                     # 2026-09-04. No other extension in the corpus has
+                                     # this, and `DESIGN-THE-SDK-LAYER` §1's four-face
+                                     # model has no word for it. `tools/compose.py`'s
+                                     # `FACES` grew by one value; whether the design doc
+                                     # should say "open-ended, enumerated per extension"
+                                     # is the real question and is owed there.
+service_owning = false               # §11.6.9 start/stop not required. Reactive mode would
+                                     # not change this: §7's dependency index is state, not
+                                     # a service.
+
+[install]
+model = "sdk-native"                 # in-process against a live peer object. Same value as
+                                     # CONTENT and HISTORY and, as of 2026-09-09, the same
+                                     # REASON — which is no longer a rule. See
+                                     # `extension-contracts/content/EXTENSION.toml`
+                                     # `[substrate.wire_install_refusal]`: core §6.2's
+                                     # `system/*` reservation was withdrawn (0.8.2.13), the
+                                     # two peers we compose against still refuse, and 44 of
+                                     # 46 read `unknown`.
+
+# ── [sdk] — the in-process surface ──────────────────────────────────────────────────
+# No conformance gate on this face, so THE EXTENSION IS THE INSTRUMENT — and here that is
+# stronger than it was for CONTENT or HISTORY, because TWO gated paths run through this
+# surface: the `system/compute:eval` handler and the H7 evaluator seam. One implementation,
+# two consumers; a defect in it cannot hide in either.
+[sdk.ComputeEvaluator]
+cite       = "§4.1 evaluate + §4.2 resolve + §4.3 scope"
+public     = true
+reached_by = ["compute/eval_literal_int", "compute/eval_arithmetic_add", "compute/eval_compare_eq_true"]
+
+[sdk.ComputeHandler]
+cite       = "§3.1 manifest + §3.2 handle_eval"
+public     = true
+reached_by = ["compute/handler_present", "compute/handler_manifest_decode", "compute/handler_op_eval"]
+
+[sdk.assertNotBuiltinOverride]
+cite       = "§4 override prohibition (v3.29)"
+public     = true
+reached_by = []                      # HONESTLY UNMEASURED, and the reason is the finding:
+                                     # no oracle check anywhere attempts a registration at
+                                     # `system/compute/builtins/*`. Through v3.28 this rule
+                                     # delegated to core's `system/*` reservation and needed
+                                     # "no separate compute-specific guard"; 0.8.2.13
+                                     # withdrew that reservation, so the guard is OURS and
+                                     # arrived with nothing upstream measuring it. Unit test
+                                     # only. This is D16's shape on a rule that changed
+                                     # owners rather than on an axis nobody owned.
+
+[sdk.publishComputeTypes]
+cite       = "§10.2 — types registered at system/type/{type_name}"
+public     = true
+reached_by = ["compute/types_expression", "compute/types_inline", "compute/types_value",
+              "compute/types_result_error", "compute/types_subgraph"]
+
+[sdk.isComputeType]
+cite       = "§4.2 Tier 1"
+public     = true
+reached_by = []                      # See [assumptions].membership_lists — the deviation
+                                     # this function embodies is measured by nothing,
+                                     # because `entity-core-go` silently carries the same
+                                     # corrected list, so no vector can fail on it.
+
+[sdk.isComputeExpression]
+cite       = "§4.7"
+public     = true
+reached_by = ["compute/handler_op_eval"]
+
+# ── [assumptions] — where the spec did not decide, or decided twice ─────────────────
+#
+# READ THIS BLOCK BEFORE READING THE CODE. Five of the seven entries are cases where the
+# specification contradicts ITSELF and we followed the majority of its own normative sites.
+# Every one is routed; none is a local ruling on semantics.
+[assumptions]
+
+membership_lists = { value = "16 expression types, 23 compute types", cite = "§2.2 + §10.1 against §4.2 + §4.7", note = """
+** DEVIATION, FUNCTIONAL, AND THE SHARPEST ITEM IN THE PACKET (A-10). ** §4.7's
+`is_compute_expression` lists 13 and §4.2's `is_compute_type` lists 20; both omit
+`compute/index`, `compute/length` and `compute/numeric-cast`. §2.2 defines all three and
+§10.1 MUSTs them by name. We implement 16 and 23.
+
+The §4.2 omission is not cosmetic: every sub-expression is referenced BY HASH and resolved
+through `validate_compute_resolvable`, whose Tier 1 IS `is_compute_type` and is the only
+tier that admits an ordinary sub-expression outside an installed subgraph. Transcribing
+§4.2 literally produces a peer where `arithmetic(add, literal, length(...))` answers
+`not_found` on a valid program.
+
+Cause: the N.1 and N.4 amendments added the three types and updated §2.2 and §10.1 without
+reaching either predicate. §10.1 even MUSTs `is_compute_type` by name for a DIFFERENT
+addition (`compute/lookup/hash`), so the list has been corrected once already.
+
+`entity-core-go`'s `isComputeType` and `IsComputeExpression` both carry all three —
+CORROBORATION, not authority (L18), and the reason it matters is that it means no
+conformance vector can be failing on this today.
+""" }
+
+subgraph_fields = { value = "7 fields including authorized_data_hashes", cite = "§3.3 + §4.2 + §1.1 + §10.1 against §2.5", note = """
+** DEVIATION (A-11). ** §2.5's field map declares six; §3.3 Phase 3 WRITES seven. The
+seventh is read at §4.2 (Tier 2), named load-bearing at §1.1, and MUSTed at §10.1. Four
+normative sites against one type block.
+
+Cost of getting it wrong is cross-implementation rather than runtime: the subgraph entity
+is content-addressed, so two peers on the two readings publish different type entities and
+write different subgraph entities for one install — and they do not fail against each
+other, they stop agreeing. CONTENT §2.1's dedup-identity problem in another namespace.
+
+** THE FIRST DRAFT OF `types.ts` RENDERED SIX. ** What changed it was reading
+`entity-core-go`'s `ComputeSubgraphData` — which carries `AuthorizedDataHashes` and
+registers its type entity by reflection over that struct — AFTER the decision was already
+made. That is the order in which this class of error survives, and it is recorded rather
+than smoothed over.
+""" }
+
+install_op_declared = { value = "all three operations declared in the manifest", cite = "§3.1 against §10.2", note = """
+** AMBIGUITY, RESOLVED BY THE ORACLE AND ROUTED (A-7). ** §10.2 lists the compute handler
+itself and the install/uninstall operations as SHOULDs, the latter "required if reactive
+mode is implemented" — while §10.1 MUSTs THREE BEHAVIOURS of the install operation.
+
+What settled it here is not a spec reading: `entity-core-go`'s `handler_op_install` and
+`handler_op_uninstall` are `FailCheck` on a manifest that omits either, and 6 of the
+category's 128 checks are blocked behind `handler_op_install`. So we declare three.
+
+** AND AS OF 2026-09-10 WE IMPLEMENT ALL THREE. ** The reason the previous session shipped
+`501 not_implemented` stands and is worth keeping: a partial install audit is worse than
+none, because the audit SEALS `authorized_data_hashes` and §4.2 Tier 2 trusts that set
+without re-checking. The audit is complete now — four phases, pre-flight before commit —
+so Tier 2 is non-empty for the first time in this corpus.
+
+The `501` path is NOT dead code. `ComputeHandler` takes the §7 engine as a constructor
+argument and answers `501` when it is absent, because an install with no engine behind it
+records a subgraph nothing can ever wake — which is the same lie the old `501` refused to
+tell, one level up. A composition that installs the handler without the emit consumer gets
+an honest answer rather than a 200.
+""" }
+
+pattern_spelling = { value = "system/compute", cite = "§3.1 prose against §3.1 code block", note = """
+The manifest code block reads `pattern: "system/compute/*"`; the prose four lines below
+reads "Manifest at pattern path `system/compute`. Index entry at
+`system/handler/system/compute`." The `/*` is the capability-scope spelling used in grant
+examples, not a binding path — binding at a literal `.../*` puts a `*` segment in the tree.
+
+SAME TRAP AS CONTENT §6.1, and measured across the corpus: 2 of 18 manifest blocks use the
+`/*` spelling and they are exactly `EXTENSION-CONTENT` and `EXTENSION-COMPUTE` — the two
+specs this repo has read for generation. Filed for information (§6), not as an ask.
+""" }
+
+compute_namespace_not_a_finding = { value = "owned_namespaces omits `compute/*` and that is CORRECT", cite = "GUIDE-EXTENSION-DEVELOPMENT §3.3", note = """
+RECORDED AS A NON-FINDING ON PURPOSE. The declaration header claims `system/compute/`
+(closed) and says nothing about the top-level `compute/*` namespace where all 20 IR types
+live — a namespace core §1 carves out BY NAME. That reads as a serious omission until you
+read the clause it answers: §3.3 defines the field as "every `system/<ext>/…` subtree the
+extension claims". `compute/*` is out of scope BY THE FIELD'S OWN DEFINITION.
+
+We nearly routed it. D12/L8 — an artifact is not a conclusion about the thing it names —
+caught one step before it became a packet, by reading the canonical source instead of the
+plausible inference.
+""" }
+
+scope_capture_full = { value = "capture ALL bindings, not referenced-only", cite = "§4.4", note = """
+§4.4 makes referenced-only a SHOULD and calls it an optimization ("requires static
+analysis"). We take the MAY-equivalent full capture, and the reason is not laziness: the
+captured `compute/scope` entity's CONTENT HASH is the one thing §2.3's N2 pins by digest
+across implementations (`ecf-sha256:3edc5138…` in all three references). Referenced-only
+capture produces a different entity for the same lambda in the same scope, so taking the
+SHOULD would put us in disagreement with any peer that did not.
+
+A SHOULD whose two answers produce different content hashes is worth flagging to arch, and
+it is NOT in the packet: one instance, and we have not confirmed the references' choice.
+Recorded here so the second port makes the same choice deliberately.
+""" }
+
+apply_handler_mode = { value = "not implemented; returns invalid_expression naming the reason", cite = "§4.1 dispatch_execute branch", note = """
+`compute/apply` CLOSURE mode is implemented; HANDLER mode is not. It needs a re-entrant
+dispatch into the peer from inside an evaluation, plus the F2 dual capability check and
+V30's `encode_arg_for_field` typed-params construction.
+
+Shipping half of it would be worse than not shipping it, and the direction is the reason:
+the F2 dual check only ever NARROWS, so a partial implementation runs WIDER than the caller
+asked. The §2.1 Q23 SHAPE checks ARE implemented — builtin path must not carry
+capability/resource, capability requires resource, handler mode requires operation —
+because their ORDERING is normative (they run before any field is resolved, so the returned
+code cannot depend on a field's value).
+
+** UPDATED 2026-09-10: THE BLOCKER IS NAMED AND MEASURED, AND IT IS NOT OURS. ** The
+paragraph above says *"it needs a re-entrant dispatch into the peer"* as a scoping
+statement. It is now a finding: **the peer exposes no such seam.** `PeerServices` carries
+`{localPeerId, localIdentity, tree, contentStore, emit, nowMs, maxFrameBytes}` and no
+dispatcher; `HandlerContext.outbound` is §6.13(b)'s OUTBOUND seam — it builds, signs and
+sends an authenticated EXECUTE over the §6.11 transport to a URI, and it is `null` unless
+the request arrived on a connection. Neither reaches a local handler.
+
+So this is the one §10.1 MUST in this extension that a correct port cannot satisfy on this
+substrate, and it is H7's shape exactly: a host-contract gap, not a conformance defect.
+Routed to keystone as
+`ROUTING-2026-09-10-b-keystone-a-handler-cannot-dispatch-to-a-local-handler`, and deliberately with
+NO H-number: H8 and H9 already exist in their sequence — our own tracker row K-1 cites *"the
+execution context H8 requires"* — and this packet's first draft called the new item H8 throughout.
+The H-series is theirs to number. Cost: 3 of 128 (`v38_apply_handler_mode`,
+`v310_apply_resource_field_accepted`, `v314_compute_apply_to_entity_native`).
+
+** AND ONE CORRECTION OF OUR OWN READING, MADE THE SAME HOUR. ** A first pass here
+recorded a SECOND blocker — that H7's `ExpressionEvaluator.evaluate` is synchronous, so
+even a future async dispatch seam could not be awaited from the entity-native path. That
+is wrong: the interface reads
+`evaluate(request): Promise<HandlerResult | null> | HandlerResult | null`. It is
+async-capable and always was. Recorded because it was a source read of a signature that
+would have gone into a packet as a second ask, and one grep of the actual declaration is
+what stopped it (D12).
+
+** The FOURTH face of this: the builtin `store` is the same question with a door. ** SA-10
+lets a `store` write go through a direct capability-checked write instead of a
+`system/tree:put` dispatch, which is why `store` ships and handler mode does not. §4.1's
+`dispatch_execute` has no such alternative — the whole point is that the target is an
+arbitrary handler.
+""" }
+
+value_type_evaluation = { value = "§4.1's evaluate_inner gains an arm for the four §2.3 VALUE types", cite = "§2.3 SA-1 against §4.1", note = """
+** DEVIATION, FUNCTIONAL, AND THE THIRD IN THIS FAMILY (A-12). ** §2.3's SA-1 is a MUST:
+*"Evaluating a value-type entity returns it unchanged … generalizing the
+`compute/lookup/hash` return-non-expressions-as-values rule."* §4.1's `evaluate_inner`
+pseudocode has **no arm for any of the four** (`compute/closure`, `compute/scope`,
+`compute/result`, `compute/error`), so a literal transcription falls through to
+`default: return error("unknown_type", …)`.
+
+MEASURED COST, not inferred: `v319b_scope_unreachable` stores a `compute/closure` at a
+tree path and applies it. Through 2026-09-09 this port answered `unknown_type` where the
+vector requires `scope_unreachable` — and the reason is worth reading twice, because the
+2026-09-09 note guessed at it and guessed wrong. `load_scope` was never reached at all;
+the CLOSURE ENTITY itself failed to evaluate. A bug in §4.3's N8 path was diagnosed for a
+day and there was never a bug in §4.3.
+
+WHERE THE ARM SITS: at the FALLTHROUGH, guarded by `isValueType`, not as four `case`
+labels beside the expression types. SA-1's own words are that it *generalizes* the
+lookup/hash rule, which is a statement about the default arm rather than about four names
+— so a fifth value type is covered by §2.3's list moving and not by someone remembering
+this switch. The negative control is in the unit tests: an unknown compute type and an
+ordinary application entity must both still answer `unknown_type`, because
+`eval_error_non_expression` is a live oracle check and widening the fallthrough to
+"anything that is not an expression" would pass every SA-1 test and turn §4.1's own error
+code into dead code.
+""" }
+
+construct_in_flight = { value = "compute/construct returns BOTH the bare materialized entity and a typed field map", cite = "§2.3 v3.19c option α against §4.1's construct arm", note = """
+** DEVIATION, FUNCTIONAL, AND THE FOURTH IN THIS FAMILY (A-13). ** §2.3's option-α clause
+requires two things at once: the materialized form is a *"normal bare entity"* with
+entity-valued fields as bare `system/hash` refs, AND navigation *"composes transparently
+only where the kind is known (in-flight typed values …); on a bare materialized entity, a
+reference is followed explicitly."* §4.1's construct arm implements the first and keeps no
+in-flight representation at all —
+`result_fields[name] = ctx.content_store.put(materialize(value, ctx))` — and §4.1's
+`compute/field` arm returns `target.data[name]` raw. So a transcription of §4.1 can
+navigate one level into a constructed entity and answers `type_mismatch` on the second,
+which is what `v319c_construct_navigation_chain` measures.
+
+`ConstructedValue` carries both: `.entity` is the bare form (the M1 hash gate's subject,
+byte-identical to `entity.NewEntity`, unchanged from the previous port) and `.fields` is
+the in-flight typed map. `materialize()` is the single boundary function, called at §2.3
+N1's three placement sites plus the SDK's own exit.
+
+** THE BARE FORM IS STILL BUILT EAGERLY AND THAT IS A DECISION. ** Option α is about where
+navigation has to go through the materialized form, not about deferring the store write —
+§4.1 writes eagerly and `v319c_inline_vs_builtin_construct_hash_agreement` exists because
+a second, lazier derivation of the bare form is the defect (`entity-core-rust` shipped
+one). Keeping one derivation costs an extra content-store put for an intermediate
+construct, which is invisible: the store is content-addressed and §5.3 charges
+`evaluate()` steps rather than writes.
+""" }
+
+in_flight_container_kind = { value = "an entity-valued ARRAY ELEMENT is materialized eagerly; the reference is not preserved in-flight", cite = "§2.3 v3.19c option α, and its silence", note = """
+** A DECLARED CROSS-IMPL DIVERGENCE, FOUND BY READING THE ORACLE'S SOURCE RATHER THAN THE
+SPEC, AND ROUTED AS A QUESTION. ** §2.3 says navigation composes *"where the kind is
+known (in-flight typed values; kind-tagged `compute/scope` bindings)"* and lists three N1
+placement boundaries: scope bindings, construct fields, apply args. **A COLLECTION
+POSITION IS IN NEITHER LIST**, and the two implementations answer it differently:
+
+  - `entity-core-go`'s `builtinGroupBy` returns `[]interface{}` of `*constructedValue` —
+    IN-FLIGHT values inside an array — so `field(index(group_by(…), 0), 'key')` composes.
+  - this port materializes an entity-valued element at the moment it is placed
+    (`containedElement`), so the same expression reads a bare `system/hash` and answers
+    `type_mismatch` unless the author follows it with `compute/lookup/hash`.
+
+**Boundary bytes AGREE** — both end as bare hashes in the array, so §8.1, §11.1 (AE-1) and
+every materialized-hash vector are satisfied by both. What differs is whether a program is
+ACCEPTED, which is the thing *"the in-flight representation is implementation-private"*
+cannot cover: a program written against one peer errors on the other. And no vector exists
+in either direction, because the six passing builtin vectors all carry integer
+collections.
+
+Not resolved locally, deliberately: picking Go's answer would be L18 (a cohort
+implementation is not evidence a cohort ruling is right) and picking ours would be worse.
+Routed to arch for a clause and to core-go for a vector.
+""" }
+
+builtin_dispatch_internal = { value = "the builtins are evaluated INSIDE the evaluator; nothing is registered at system/compute/builtins/*", cite = "§3.5's closing paragraph", note = """
+NOT A DEVIATION — §3.5 asks for this rather than merely permitting it: *"Because
+`map`/`filter`/`fold` apply a caller-provided closure per element, they need the
+evaluator's scope/budget/context — a real handler-dispatch boundary would lose these.
+Implementations SHOULD therefore evaluate the collection builtins internally within the
+evaluator … `system/compute/builtins/{map,filter,fold,range,group-by,concat,assoc}` is a
+canonical/LOGICAL operation name; on such implementations it MAY NOT resolve to a distinct
+handler entity in the tree (a `tree:get` of that path need not return a handler)."*
+
+RECORDED BECAUSE IT LOOKS LIKE A GAP AND IS NOT. A reviewer grepping for a registration at
+those paths finds none, and the peer's handler index has no entry for them. That is
+conformant. The §4 override prohibition still applies and is still ours to enforce — see
+`builtins_override_guard` — and the two facts sit oddly together on purpose: nothing is
+registered there, and a registration there must be refused.
+
+AND THE LEVELS INVERT AGAINST THE READING ORDER. The five inline-equivalent aliases
+(`arithmetic`, `compare`, `logic`, `field`, `construct`) are §10.2 **SHOULD**; `map`,
+`filter`, `fold`, the four v3.24 primitives and `store` are §10.1 **MUST**, promoted out
+of §10.3 at v3.14 on the ground that *"every compute-deterministic capability is
+MUST-given-COMPUTE … only resource bounds stay flexible."* All thirteen are implemented
+here; the aliases share the inline code path, so a fork between the two forms is
+unconstructible rather than untested.
+""" }
+
+store_write_mechanism = { value = "a direct EntityTree.put, not a system/tree:put dispatch", cite = "§3.5 SA-10", note = """
+SA-10 states a preference and its own alternative in one sentence: *"implementations
+dispatch the write via `system/tree:put`, so capability-gating, path normalization,
+history, and reactive cascade are uniform with all other tree writes (a direct
+capability-checked `emit` is equally compliant, but `tree:put` keeps attribution uniform
+across impls)."* We take the second door because the first needs the re-entrant local
+dispatch this substrate does not have (see `apply_handler_mode`).
+
+** WHAT WE DO GET, MEASURED IN THE PEER'S SOURCE RATHER THAN ASSUMED: THE EMIT PATHWAY. **
+keystone's `EntityTree.put` runs §6.10 itself — the Store step via `ContentStore.put`,
+then the Bind step, firing a tree-change event when the binding actually changes. So a
+registered emit consumer sees a `store` write exactly as it sees any other tree write, and
+a COMPUTE + HISTORY composition would record it. That was the half of SA-10's rationale
+worth checking before choosing, and it is the half that survives.
+
+** WHAT WE DO NOT GET, both named: ** no per-path capability check (`canWritePath` answers
+at the dispatch boundary — the same declared gap as `canReadPath`, and a distinct member
+rather than an alias because §6.3's table gives the two different authorities), and no
+§6.8a execution context on the emitted event, which is
+`ROUTING-2026-09-06-d-keystone-*`'s finding and has nothing to do with `store`.
+""" }
+
+store_return_value = { value = "returns the ENTITY that was written", cite = "§3.5, and its silence", note = """
+** §3.5 DOES NOT PIN THIS, AND THE REFERENCE'S ANSWER IS NOT PORTABLE. ** §3.5's sequencing
+example makes the return value observable — *"the final `in _2` returns the second store's
+result (or any expression …)"* — and then never says what it is.
+`entity-core-go`'s `builtinStore` returns `resp.Result`: the result entity of the
+`system/tree:put` EXECUTE it dispatched. A port taking SA-10's other door has no such
+response to return.
+
+We return the entity that was written, which is the one thing every implementation has in
+hand at that point. It is a guess with a reason, not a reading, and it is a boundary value
+— so two peers disagreeing here disagree about a value a program can bind and store.
+Routed to arch as a small pin request.
+""" }
+
+range_max_length = { value = "2^32 - 2, the host runtime's own maximum array length", cite = "§3.5's `an n exceeding the maximum representable array length`", note = """
+§3.5 pins the CODE (`count_out_of_range`) and the refuse-not-clamp rule, and leaves the
+BOUND unstated. Named as a constant rather than inlined because it is a place two ports
+silently disagree: a smaller arbitrary constant refuses programs another peer accepts, and
+the refusal is a boundary value (§3.5 explicitly declined clamping to `[]`, on the ground
+that a silent empty array propagates through every downstream `map`/`filter`/`fold` as a
+well-formed wrong answer).
+
+This is V8's own limit. A `python` or `rust` port will have a different one, so the number
+is `[substrate]`-shaped and the second port is where it either agrees or produces a
+routing packet. Recorded here rather than routed yet: one port cannot show a
+disagreement.
+""" }
+
+builtins_override_guard = { value = "enforced in this extension, by us, from port one", cite = "§4 / §3.5's override prohibition, v3.29", note = """
+Through v3.28 §3.5 called this rule *"a subset of"* core's `system/*` reservation and told
+implementers that enforcing that reservation needed *"no separate compute-specific
+guard."* `ENTITY-CORE-PROTOCOL` 0.8.2.13 **withdrew the reservation**, so v3.29 restates
+the prohibition on its own basis: it binds **every installation path** because it is a
+cross-peer determinism MUST rather than a namespace policy. Nothing upstream refuses a
+registration at `system/compute/builtins/*` on our behalf any more.
+
+`assertNotBuiltinOverride` is the enforcement point and it is CALLED from `installCompute`
+rather than left as documentation. Its negative control is in the unit tests, both
+directions, including the `system/compute/builtinsomething` near-miss that a `startsWith`
+without a separator would wrongly refuse — and no oracle check anywhere attempts a
+registration at a builtins path, so that test is the only thing standing between the rule
+and a `throw` nobody ran (D15).
+
+** ONE PARSER FOR TWO QUESTIONS, as of 2026-09-10. ** `builtinName()` answers both *"is
+this a builtin path"* and *"which builtin"*, because the dispatch added this session
+needed the second and a second copy of the separator rule is where the near-miss comes
+back.
+""" }
+
+capability_check_scope = { value = "PER TREE READ on both capability-bearing paths; dispatch-scoped on the H7 seam", cite = "§4.1 + §6.2", note = """
+** THIS ENTRY USED TO SAY THE OPPOSITE AND THE WAY IT WAS WRONG IS THE FINDING (AP-34). **
+It read: *"the peer exposes no path-scope predicate over [the caller's token] that an
+extension can call"*, and concluded that §6.2 was satisfied at the DISPATCH boundary only —
+so a caller reaching `system/compute:eval` could read any tree path through
+`compute/lookup/tree`. That was filed as a substrate gap, `gap` in [conformance], and named
+in `sdk.ts` as `CAPABILITY_CHECK_IS_DISPATCH_SCOPED = true`.
+
+** THE PREDICATE WAS PUBLIC THE WHOLE TIME, AND THIS REPO IS THE SEAT THAT ROUTED IT. **
+`Permissions.checkPathPermission(operation, path, token, handlerPattern, localPeerId)` is
+exported by the peer package, takes a `CapabilityToken`, and is ENTITY-CORE-PROTOCOL §6.3's
+primitive by name. We routed its absence on the `python` peer as **H9**
+(`ROUTING-2026-09-06-d-keystone-the-emit-event-carries-no-execution-context.md`), watched it
+land, and recorded it CLOSED on our own `TRACKER-entity-core-keystone.md` — and then wrote
+in this file that it did not exist. D12 / L8 in its plainest form: an artifact (a contract
+entry) outliving the thing it describes, never re-run against the tree.
+
+WHAT IT IS NOW, per entry point, because the three do not get the same answer:
+
+  `system/compute:eval`  — PER TREE READ, from `ctx.callerCapability`
+  §7.2 reactive re-eval  — PER TREE READ, from the installation grant in the content store
+  the H7 evaluator seam  — dispatch-scoped; `ExpressionRequest` carries the `Execute` and
+                           no verified token, so there is nothing to narrow with
+
+The third row is why `CAPABILITY_CHECK_IS_DISPATCH_SCOPED` still exists as a named export
+rather than being deleted; it now reads `false` and documents the split.
+
+** AND THE CHECK CARRIES ITS OWN NEGATIVE CONTROL, BECAUSE THE ORACLE STRUCTURALLY CANNOT.
+** `validate-peer` runs against a host launched with `--debug-open-grants`, so every
+capability in the corpus is the wide-open `*` admin grant and every `check_path_permission`
+answers true. A port that implemented §6.2 per read and one that answered `true`
+unconditionally produce the same 128 numbers. `test/reactive.test.ts` drives a narrow
+`app/*` grant through `ComputeHandler.handle` and requires `permission_denied` on a path
+outside it — twice, once at the evaluator and once through a real `HandlerContext`, because
+the first of those would pass with the handler's wiring removed.
+""" }
+
+# ── The five below are all 2026-09-10, all from building §3.3 and §7 ────────────────
+
+audit_walk_containers = { value = "ONE walker for §3.3 and §7.1, descending containers in both", cite = "§3.3 audit_walk against §7.1 walk [MUST, v3.27]", note = """
+** DEVIATION FROM §3.3's LISTING, AND IT IS THE AUTHORIZING WALKER THAT IS WRONG (A-17). **
+The two sections walk the same graph and their listings differ in one line:
+
+    §3.3  for field_value in entity.data.values():
+            if field_value is system/hash: ...        <- scalars only
+    §7.1  for field_value in entity.data.values():
+            walk_value(field_value, ...)              <- hash | array | map
+
+v3.27 promoted §7.1's completeness sentence to a `[MUST]` and rewrote its walker to descend
+containers, naming `compute/apply.args` and `compute/let.bindings` as the two enumerated
+exceptions. §3.3's walker was not touched.
+
+CONSEQUENCE, and it is not the same as §7.1's: §3.3's walker builds `read_paths`, which is
+what Phase 2 capability-checks. A literal transcription authorizes a `compute/lookup/tree`
+at the top level of an expression and SKIPS the same read one function-argument deep. That
+is an under-authorization, not a missed wake-up.
+
+** NO ORACLE CHECK CAN SEE IT AND THAT IS STATED RATHER THAN IMPLIED. ** The D8 rows
+(`d8_reeval_dep_in_apply_arg`) measure §7.1's walker through re-evaluation. Nothing measures
+§3.3's, because `--debug-open-grants` makes every Phase 2 check pass. The evidence for A-17
+is a diff of two listings plus our own test, not a failing check.
+
+§3.3 itself permits the fix in as many words — *"Implementations MAY factor them into one
+walker with multiple visitors"* — so we run one walker and both halves get the stronger
+behaviour. `internal/subgraph.ts`.
+""" }
+
+q23_install_enforcement = { value = "the Q23 shape check runs in the install audit", cite = "§2.1 [MUST] against §3.3's audit_walk", note = """
+** DEVIATION FROM §3.3's LISTING (A-18), and §2.1 calls the alternative internally
+inconsistent. ** §2.1: *"It is enforced at install time too … where `path` is a static
+literal under `system/compute/builtins/`, the whole condition is decidable without
+evaluating anything, so an install-time audit MUST reject it — exactly as F5 rejects
+capability-without-resource … An audit that fail-fasts F5 while installing this shape clean
+is internally inconsistent."*
+
+§3.3's `audit_walk` carries the F5 clause and not this one. `entity-core-go`'s
+`q23_install_builtin_apply_capability_resource` and `q23_install_builtin_apply_resource_only`
+require the rejection, so the corpus DOES measure this one — which is why it is a deviation
+from the listing rather than an unmeasured guess.
+""" }
+
+sa11_builtin_handler_targets = { value = "NO builtin path is ever a handler_target", cite = "§3.3's subgraph-boundary paragraph against §3.3's audit_walk", note = """
+** DEVIATION FROM §3.3's LISTING (A-19), and the two halves are in the same section. **
+The prose: *"the pure collection builtins (map/filter/fold) require no install-time
+handler-target authorization grant — they perform no tree or capability access (SA-11); only
+`store` is authorization-gated at install time, VIA ITS `write_path`."* The listing appends
+every `compute/apply` with a non-null `path` to `handler_targets`, builtins included.
+
+Phase 2 then demands the caller's grant cover handler `system/compute/builtins/map`,
+operation `eval` — a handler that does not exist, on a path §3.5 says *"MAY NOT resolve to a
+distinct handler entity in the tree"*. Under any grant narrower than `*` the listing rejects
+a legal `map`; under `--debug-open-grants` the two readings are indistinguishable, which is
+why the corpus is silent.
+
+We implement the prose: a builtin dispatches no EXECUTE (§2.1 Q23's own premise), so there
+is no handler+operation pair to authorize, and `store` is gated by its literal `write_path`
+exactly as SA-11 says.
+""" }
+
+constraints_location = { value = "compute constraints are read from each GRANT ENTRY, not from a token-level field", cite = "§5.2 + §5.5 against ENTITY-CORE-PROTOCOL §5", note = """
+** SPELLING DEVIATION (A-21), small and load-bearing. ** §5.2's `init_budget` and §5.5 both
+write `capability.data.constraints["system/compute"]`, which reads as a field on the token.
+ENTITY-CORE-PROTOCOL §5 carries `constraints` on each entry of `grants`; this peer's
+`CapabilityToken` parses no token-level `constraints` at all, and `GrantEntry.constraints` is
+where a delegation preserves it byte-equal.
+
+So a literal transcription of §5.2 reads a field that does not exist, gets `undefined`, and
+falls back to the peer defaults — silently ignoring every compute resource limit an issuer
+set. That is the §5.5 *"constraint escalation"* the section exists to prevent, arrived at by
+following the section.
+
+We scan the grant entries and take the TIGHTEST value across them, because that is the only
+reduction that cannot widen a grant. `entity-core-go`'s `reactiveBudget` comments *"its
+grant-level compute constraints (ENTITY-CORE-PROTOCOL §5)"* — corroboration, not authority
+(L18); the authority here is core §5 itself.
+""" }
+
+reentrancy_backstop = { value = "a second cascade bound that does not travel on the emission context", cite = "§7.3 [MUST] `this cascade MUST be bounded`", note = """
+NOT A SPEC MECHANISM AND DECLARED AS SUCH. §7.3's counter is `cascade_depth` on the emission
+context — it travels through handlers and across peers (SYSTEM-COMPOSITION §3.4) and is what
+we implement. Beside it, `ReactiveEngine` keeps a plain re-entrancy counter bounded at
+2 x RECOMMENDED_MAX_CASCADE_DEPTH.
+
+WHY: §7.2's ERROR write passes the emission context UNCHANGED — the pseudocode increments
+only on the converged-result path — so a subgraph whose error result feeds its own
+dependency recurses with a counter that never moves. On this peer emit delivery is
+sync-inline, which makes that a stack overflow rather than a runaway loop.
+
+MEASURED, three arms (`test/reactive.test.ts`, self-feeding subgraph): the spec's counter
+alone freezes; the backstop alone freezes; with BOTH disabled the peer dies with
+`RangeError: Maximum call stack size exceeded`. So it is genuinely a backstop on the corpus
+we have — and the last row is why §7.3's MUST is not decoration.
+""" }
+
+initial_evaluation_on_install = { value = "every successful install performs one evaluation before returning", cite = "§3.3's re-installation clause (a SHOULD)", note = """
+§3.3 names an initial evaluation only in the re-installation paragraph — *"Implementations
+SHOULD also clear any `compute/error` entity at the old result_path and perform an initial
+evaluation after installation"* — and is silent for a first install.
+
+We do it on BOTH, so install and re-install are one path. A `result_path` that is absent
+until the first dependency happens to change is a second state every downstream reader has
+to handle, and doing it uniformly satisfies the re-install SHOULD without a branch that
+exists only to satisfy it. The oracle asserts nothing about `result_path` at install time in
+either direction, so this is a choice and not a measurement.
+""" }
+
+# ── [substrate] — facts about the PEER, measured, per (peer × face) ─────────────────
+[substrate.evaluator_seam]
+must = "§6.13 / core §6.6 — an installed evaluator is consulted for an entity-native body the built-in `compute/literal` path does not handle"
+typescript = "INSTALLED, read back — `Peer.setExpressionEvaluator` accepts our evaluator and `peer.expressionEvaluator` returns the same object"
+python = "unknown -- no port"
+rust = "unknown -- no port"
+other_peers = "unknown (43). `setExpressionEvaluator` is keystone's H7 and landed on `typescript` on 2026-09-04; the other 45 have never been asked, and 20 of the 46 have no `compute/literal` ladder to hang one off at all (keystone's census)."
+probe = "languages/typescript/gates/host-seam/probe-entity-native.mjs"
+note = """
+Measured 2026-09-04 with five controls, scenario 3: an evaluator installed through the seam
+answers a `compute/arithmetic` body `200 value=5` computed from operands read out of the
+tree, while the built-in literal path still answers FIRST and the evaluator is never
+consulted for it. That ordering is the whole safety argument — `core_register_body_binding`
+drives the literal path on all 46 peers, so installing an evaluator cannot move a
+conformance result.
+"""
+
+[substrate.type_constraints_unrenderable]
+must = "§2.2 — `compute/arithmetic`, `compute/compare` and `compute/logic` each declare `constraints: {op: {one_of: [...]}}`"
+typescript = "NOT RENDERABLE — the peer's `TypeDef` renders name/extends/fields/layout and `FSpec` renders type_ref/optional/array_of/map_of/union_of/key_type/byte_size. There is no constraints slot."
+python = "unknown -- no port"
+rust = "unknown -- no port"
+note = """
+The `one_of` is enforced in the EVALUATOR and is absent from the published type entity.
+`entity-core-go` registers its compute types by reflection over Go structs and has no
+constraints slot either, so the reference's published type entities do not carry them — but
+that is corroboration, not authority. The row exists because the three ports MUST agree on
+this or their type entities diverge, and `gates/type-parity` is where that would surface.
+"""
+
+[substrate.content_store_put_returns_void]
+must = "§4.1 — `result_fields[name] = ctx.content_store.put(materialize(value, ctx))`"
+typescript = "SIGNATURE DIFFERS — `ContentStore.put(entity): void`. The hash comes off `entity.contentHash` / `entity.contentHashHex`."
+python = "unknown -- no port"
+rust = "unknown -- no port"
+note = """
+Trivial to adapt and recorded anyway, because a template derived from §4.1's pseudocode
+would get it wrong on this peer and the failure would be a type error rather than a silent
+one — which is the good case. It is here so the second port does not re-derive it, and
+because AP-10's lesson is that a value which differs between drivers is a fact that escaped
+the schema.
+"""
+
+[substrate.ecf_signed_and_float_constructors]
+must = "§2.2 — arithmetic produces negative integers and IEEE-754 binary64 floats"
+typescript = "THE ERGONOMIC LAYER IS NARROWER THAN THE VALUE MODEL — `Ecf` exports `uint(bigint)` and no signed-int or float constructor. The extension reaches `codec.ecfInt` / `codec.ecfFloat` directly."
+python = "unknown -- no port"
+rust = "unknown -- no port"
+note = """
+NOT a defect in the peer: `Ecf` is the protocol layer's ergonomic surface and the protocol
+entities it builds have no negative or float fields. COMPUTE is the first extension in this
+repo whose VALUES are arithmetic, so it is the first to need the wider layer. Recorded
+because "the SDK-ergonomic layer is narrower than the codec" is exactly the kind of per-peer
+fact a second port meets and a template hides.
+"""
+
+# ── [contract.error_codes] — §9.1's code set, TRANSCRIBED ───────────────────────────
+#
+# Keyed `<op>.<code>`, because a code set is defined PER OPERATION — Appendix A's own
+# framing, adopted here. COMPUTE's §9.1 table is not per-operation, so every row is under
+# `eval`: it is the only operation this port implements, and §9.1's codes are all
+# evaluation outcomes. `install`/`uninstall` would draw on the same set plus §3.3's
+# `embedded_cap_unauthorized`, which is why they are NOT listed — declaring a code for an
+# operation we answer `501` for would be a claim about a surface that does not exist.
+#
+# ** §9.1's TABLE DOES NOT RECORD A PROPERTY v3.27 ADDED, and it decides behaviour. ** Three
+# codes differ in whether their counter survives an element: `depth_exceeded` CONTAINS (the
+# counter is restored on unwind, §5.1), while `budget_exhausted` and `cascade_limit`
+# SHORT-CIRCUIT everywhere — cumulative and chain-wide respectively. That decides what a
+# §3.5 collection primitive does with an error in a contained position, is not derivable
+# from the table, and is transcribed in the comments below rather than lost.
+[contract.error_codes]
+"eval.budget_exhausted" = { cite = "§9.1", note = "computation budget reached 0. SHORT-CIRCUITS everywhere (cumulative, v3.27)" }
+"eval.depth_exceeded" = { cite = "§9.1", note = "maximum recursion depth. CONTAINS: the counter is restored on unwind (§5.1, v3.27)" }
+"eval.type_mismatch" = { cite = "§9.1", note = "incompatible operand types" }
+"eval.division_by_zero" = { cite = "§9.1", note = "division or modulo by zero. INTEGER only; float division by zero is IEEE-754 (§4.1)" }
+"eval.not_found" = { cite = "§9.1", note = "lookup path missing in scope and tree, or hash unresolvable" }
+"eval.unknown_type" = { cite = "§9.1", note = "unrecognized compute entity type" }
+"eval.missing_argument" = { cite = "§9.1", note = "required argument not provided to closure" }
+"eval.invalid_expression" = { cite = "§9.1", note = "malformed compute expression" }
+"eval.cascade_limit" = { cite = "§9.1", note = "reactive cascade depth exceeded. SHORT-CIRCUITS everywhere (chain-wide, v3.27)" }
+"eval.permission_denied" = { cite = "§9.1", note = "capability does not cover the target path or operation" }
+"eval.installation_grant_invalid" = { cite = "§9.1", note = "installation grant revoked, expired, or missing" }
+"eval.index_out_of_range" = { cite = "§9.1", note = "array index negative or >= length (compute/index, builtins/assoc)" }
+"eval.cast_out_of_range" = { cite = "§9.1", note = "numeric-cast float->integer out of range, NaN, or +/-Inf" }
+"eval.count_out_of_range" = { cite = "§9.1", note = "builtins/range `n` negative or above max array length" }
+"eval.scope_unreachable" = { cite = "§9.1", note = "a kind:entity scope binding's hash resolves nowhere (§2.3 N8)" }
+"eval.ambiguous_resource" = { cite = "§3.2 handle_eval", note = "NOT IN §9.1 TABLE - the same §9.x-constants drift as the operations table, folded into A-8 rather than filed separately" }
+
+# ── [error_surface] — every code this port can put on the wire, by AUTHORITY ─────────
+[error_surface]
+
+# ── spec_table — WHERE §9.1 IS, so the `spec` class is checked against the BYTES ────
+#
+# Added 2026-09-10. `tools/check-error-codes.py` re-parses this table out of the pinned
+# snapshot and fails any code declared class `spec` that it does not name. Its first run
+# on COMPUTE found `ambiguous_resource` — declared `spec` under a header reading *"Defined
+# in this extension's own §9.1 code set"*, and NOT in §9.1's fifteen rows. The same file's
+# `[contract.error_codes]` row for it already said `"NOT IN §9.1 TABLE"`. **One contract,
+# two readings of one code, and nothing compared them** until the gate pointed at the
+# spec instead of at a second transcription.
+#
+# `code_column = 1` because §9.1 is `| Code | Meaning |`, two columns. CONTENT's and
+# HISTORY's Appendix A is four columns with the code in the second — declared per
+# extension, because it is a per-document VALUE and a gate that assumes one shape reports
+# the other as a deviation (which the first draft did, on `capability_denied`).
+spec_table = { heading = "### 9.1 Error Codes", code_column = 1 }
+# Class 1 — SPEC. Defined in this extension's own §9.1 code set, above.
+#
+# TWELVE of the sixteen. The four that are NOT emitted by this port are listed under
+# `not_emitted` below rather than omitted, because `tools/check-error-codes.py` reads BOTH
+# directions since 2026-09-08 (D16's fifth instance): a code the spec names and no port
+# emits was outside the gate's corpus entirely, which is how `EXTENSION-HISTORY`
+# Appendix A's `403 access_denied` sat undeclared through an entire re-pin.
+spec = [
+  "budget_exhausted", "depth_exceeded", "type_mismatch", "division_by_zero",
+  "not_found", "unknown_type", "missing_argument", "invalid_expression",
+  "permission_denied", "index_out_of_range", "cast_out_of_range", "scope_unreachable",
+  # ── THE LAST THREE ARE EXPORTED, NOT RAISED, AND THE GATE IS WHY THEY MOVED HERE ──
+  # They were in `not_emitted` on the first draft, on the reasoning that no code path
+  # raises them: `cascade_limit` and `installation_grant_invalid` need §7 reactive mode
+  # and `count_out_of_range` needs §3.5's `range` builtin. The emit-site scanner then
+  # found all three in `index.ts` — because `[sdk_surface].required` names the `CODE_*`
+  # constants as cross-port contract, so the port EXPORTS them.
+  #
+  # The gate is right and the first draft was wrong in an interesting way: **exported is
+  # not emitted, and `not_emitted` was making a claim about the source that the source
+  # contradicts.** A reader greps this port for `count_out_of_range` and finds it. So
+  # these are declared `spec` — the port names them and stands behind the spelling — and
+  # the fact that no path raises one yet is a statement about §3.5 and §7 being absent,
+  # which `[assumptions]` already carries and this list is the wrong place to repeat.
+  "cascade_limit", "installation_grant_invalid", "count_out_of_range",
+]
+
+# Class 2 — CORE. `ENTITY-CORE-PROTOCOL` §3.3's status table, which enumerates its
+# more-specific codes by name. None: every code this port emits during evaluation is a
+# `compute/error` VALUE at status 200 (F10), not a transport status, so the core set does
+# not come into it. The one place we DO emit a transport status is `unknown_operation`
+# for an operation the manifest does not declare, which §3.3's 400 row names.
+core = ["unknown_operation"]
+
+# Class 3 — UNRESOLVED. Emitted, and defined in NO spec code set. Named, dated, routed.
+# NOT a blessing: `--strict` turns each entry into an error.
+#
+# ** THIS CLASS QUADRUPLED ON 2026-09-10 AND EVERY NEW ENTRY IS §3.3's OWN PSEUDOCODE. **
+# That is A-20, and the shape is D16's third instance exactly: the axis with SOME upstream
+# coverage is more dangerous than the one with none, because the coverage is what stops
+# anyone asking. §9.1 is titled *"Error Codes"*, is a table, and reads closed. It has
+# fifteen rows. `handle_install` raises FIVE codes that are not among them:
+#
+#   grep -n 'ambiguous_resource\\|hash_mismatch\\|no_authorization_path\\|' \\
+#        'embedded_cap_unauthorized\\|chain_unreachable' \\
+#        shared/spec-data/compute-v3.29/EXTENSION-COMPUTE.md
+#   -> lines 711, 766, 813, 823, 932, 944, 947, 949, 1050, 2604 — §3.2, §3.3, §3.4, §10.1.
+#      NONE in §9.1's table (lines 2527-2543).
+#
+# Four of them are new here because install is new here; `ambiguous_resource` was
+# MIS-DECLARED as `spec` since the first draft of this file, on the strength of the header
+# comment above it rather than on §9.1's rows. Found by pinning §9.1 as a `[[spec_lists]]`
+# entry — the gate written for exactly this, finding it on the section it was pointed at.
+#
+#   not_implemented          — `install`/`uninstall` answer this when the §7 engine is
+#     absent from the composition. Core §3.3's 501 default is `not_supported`; we do not
+#     use it, because "not supported" says the peer will never do this and the truth is
+#     that this COMPOSITION did not install the face.
+#   ambiguous_resource       — §3.2/§3.3/§3.4, three sites, 400. Not in §9.1.
+#   hash_mismatch            — §3.3 Phase 2b, 400. Not in §9.1.
+#   no_authorization_path    — §3.3 Phase 2b, 400. Not in §9.1.
+#   embedded_cap_unauthorized — §3.3 CP1 and §10.1 by name, 403. Not in §9.1.
+#   chain_unreachable        — §3.3 CP1, 404. Not in §9.1.
+#
+# ** AND A LIMIT OF THE EMIT-SITE SCANNER, DECLARED RATHER THAN LEFT TO BE DISCOVERED. **
+# The last two do NOT appear in `check-error-codes.py`'s site list, and the reason is
+# structural: the install audit returns an `AuditRefusal(status, code, message)` VALUE and
+# the handler converts it at one call site — `errorResult(audit.status, audit.code, …)`.
+# The scanner matches literal codes at emit calls, so a code that travels as DATA to a
+# single generic site is invisible to it however many sites it scans. `MIN_SITES` cannot
+# see this either: the cell matched 142 sites.
+#
+# That is the same shape as `check-spec-lists.py`'s recorded gap — *a corpus assertion
+# bounds a pattern that STOPS matching; it does nothing about one that matches the boring
+# half* — in a second instrument. Recorded here, not patched: the fix is a second extractor
+# for refusal-object constructors, and it is worth writing when a second extension does
+# this rather than on one.
+unresolved = [
+  "not_implemented",
+  "ambiguous_resource", "hash_mismatch", "no_authorization_path",
+  "embedded_cap_unauthorized", "chain_unreachable",
+]
+
+# `not_emitted` is EMPTY, and that is a measured statement rather than a default: every
+# code in §9.1's set is named by this port's source and found by the emit-site scanner.
+# The key is kept so a future re-pin that adds a code nobody names has somewhere to land.
+not_emitted = []
+
+# ── [[spec_lists]] — THE SPEC'S OWN ENUMERATIONS, PINNED ────────────────────────────
+#
+# ** THE GATE THAT DID NOT EXIST WHILE FOUR DEVIATIONS WERE FOUND BY HAND. **
+# `tools/check-spec-lists.py`, added 2026-09-10, re-parses each enumeration below out of
+# the pinned snapshot and requires the parse to EQUAL the declaration. A re-pin that
+# adds, drops or re-words a member fails loudly instead of silently invalidating a
+# transcription — which is the event that produced A-10 and A-12 four amendments apart in
+# a document nobody re-diffed.
+#
+# Compare-to-DECLARATION, never list-to-list: `is_compute_expression` SHOULD be shorter
+# than `is_compute_type`, so a gate that diffed the spec's lists against each other would
+# put correct-by-design differences in front of a reader on day one, and a false red costs
+# the instrument (AP-4). The gate has no opinion about the spec; the DECLARATION carries
+# our reading and the gate holds the declaration to the bytes.
+#
+# ** ITS FIRST RUN STRENGTHENED A ROUTED FINDING. ** A-10 was filed as *"§4.2's and
+# §4.7's predicates omit `compute/index`, `compute/length` and `compute/numeric-cast`"* —
+# two sites, a RESOLUTION failure. The parse says §4.1's `evaluate_inner` **arm ladder
+# omits them too**, which is an EVALUATION failure: three types §10.1 MUSTs by name, in
+# the switch that evaluates. Three sites, one amendment (N.1/N.4), and the third is the
+# one that runs. A-10 is re-sent with it.
+
+[[spec_lists]]
+id          = "evaluate_inner_arms"
+section     = "4.1"
+anchor      = """evaluate_inner(entity, scope, budget, ctx):
+  match entity.type:"""
+terminator  = "default:"
+# A TOML LITERAL string (single quotes), so the backslashes reach the regex engine
+# unprocessed. In a basic `"..."` string `\s` is an invalid escape and `\\s` would arrive
+# as a literal backslash-s, which matches nothing — and a pattern matching nothing means
+# this list parses to zero members, which the gate REFUSES rather than reporting.
+member_pattern = '^\s*"([^"]+)":\s*$'
+members = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply", "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+]
+implemented = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply", "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+  "compute/index", "compute/length", "compute/numeric-cast",
+  "compute/closure", "compute/scope", "compute/result", "compute/error",
+]
+deviation = """
+THIRTEEN ARMS FOR TWENTY TYPES, AND THE SEVEN MISSING ONES ARE TWO SEPARATE FINDINGS.
+
+** +3, A-10's third site (the sharp one). ** `compute/index`, `compute/length` and
+`compute/numeric-cast` have no arm. §2.2 defines all three with a heading and a `:=`
+block, §10.1 MUSTs them by name — *"All eight inline expression types (§2.2): field,
+arithmetic, compare, logic, construct, index, length, numeric-cast"* — and §2.3 N3, §3.3's
+subgraph-boundary paragraph and §3.5's collection semantics all reference them as
+working. A literal transcription of §4.1 answers `unknown_type` for three MUST-ed types.
+A-10 was filed against §4.2 and §4.7, where the failure is that a sub-expression will not
+RESOLVE. This is the same amendment reaching neither of the three places it had to, and
+the third place is the switch that EVALUATES.
+
+** +4, A-12. ** `compute/closure`, `compute/scope`, `compute/result` and `compute/error`
+have no arm, while §2.3's SA-1 is a MUST: *"Evaluating a value-type entity returns it
+unchanged … generalizing the `compute/lookup/hash` return-non-expressions-as-values
+rule."* Measured cost: `v319b_scope_unreachable` stores a `compute/closure` at a tree path
+and applies it, and through 2026-09-09 this port answered `unknown_type` where the vector
+requires `scope_unreachable` — `load_scope` was never reached. See
+[assumptions].value_type_evaluation.
+
+We implement twenty. The SA-1 arm sits at the FALLTHROUGH rather than as four cases,
+because SA-1's own wording is about the default arm.
+"""
+
+[[spec_lists]]
+id         = "is_compute_type"
+section    = "4.2"
+anchor     = """is_compute_type(entity):
+  return entity.type in ["""
+terminator = "]"
+members = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply", "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+  "compute/closure", "compute/scope",
+  "compute/result", "compute/error",
+  "system/compute/subgraph",
+  "system/compute/install-request", "system/compute/install-result",
+]
+implemented = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply", "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+  "compute/index", "compute/length", "compute/numeric-cast",
+  "compute/closure", "compute/scope",
+  "compute/result", "compute/error",
+  "system/compute/subgraph",
+  "system/compute/install-request", "system/compute/install-result",
+]
+deviation = """
+A-10's FIRST SITE. Twenty declared, twenty-three implemented; the three additions are
+`compute/index`, `compute/length`, `compute/numeric-cast`.
+
+NOT COSMETIC. This list IS Tier 1 of `validate_compute_resolvable`, and Tier 1 is the only
+tier that admits an ordinary sub-expression outside an installed subgraph and without
+`content_store_access`. Every sub-expression is referenced BY HASH and resolved through
+`resolve()`, so transcribing this list literally produces a peer on which
+`arithmetic(add, literal, length(...))` answers `not_found` on a valid program.
+
+The list has been corrected once already for a different addition — §10.1 MUSTs
+`is_compute_type` BY NAME for the `compute/lookup/hash` case — which is what makes this a
+missed sweep rather than a design choice. `entity-core-go` carries all three
+(CORROBORATION, not authority — L18), which is also why no conformance vector can be
+failing on it today.
+
+The eliminated `system/compute/uninstall-request` is correctly absent (v3.12, path-as-
+resource); the spec notes it in an unquoted fence comment, which is why the parser reads
+quoted tokens only.
+"""
+
+[[spec_lists]]
+id         = "is_compute_expression"
+section    = "4.7"
+anchor     = """is_compute_expression(entity):
+  return entity.type in ["""
+terminator = "]"
+members = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply",
+  "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+]
+implemented = [
+  "compute/literal",
+  "compute/lookup/scope", "compute/lookup/tree", "compute/lookup/hash",
+  "compute/apply",
+  "compute/if", "compute/let", "compute/lambda",
+  "compute/arithmetic", "compute/compare", "compute/logic",
+  "compute/field", "compute/construct",
+  "compute/index", "compute/length", "compute/numeric-cast",
+]
+deviation = """
+A-10's SECOND SITE. Thirteen declared, sixteen implemented — the same three additions.
+
+The four VALUE types are correctly absent here and the spec says so in the next sentence:
+*"`compute/closure`, `compute/scope`, `compute/result`, and `compute/error` are value
+types, not expression types. A stored `compute/closure` at a tree path is returned as a
+value by `compute/lookup/tree`, not re-evaluated."* That sentence is also the one that
+makes §4.1's missing SA-1 arm a defect rather than a reading: the document knows the four
+are values and knows evaluation must return them, and only the switch does not.
+
+This predicate gates the handler's own §3.2 pre-check, so the literal thirteen would make
+`system/compute:eval` refuse a top-level `compute/length` with
+`400 invalid_expression` — a different and more visible failure than §4.2's.
+"""
+
+# ── [spec_lists_unlisted] — a type the spec defines that no enumeration names ───────
+#
+# R2 requires every defined type to reach a declared list or be excused HERE with a
+# reason. The excuses are the interesting output: two of the three classes below are
+# structural facts about the corpus, and the third is A-10 again.
+[spec_lists_unlisted]
+"system/handler" = """
+NOT A TYPE THIS SPEC OWNS. §3.1 writes the compute handler's MANIFEST as a
+`system/handler := { … }` block, which is an INSTANCE of a core type rendered in the
+definition syntax. The parser cannot tell an instance from a definition and should not
+try; excusing it by name is cheaper and more honest than a heuristic. It is the one type
+in this snapshot the parser finds that our type layer does not publish, which is why
+`computeTypeDefs()` is 33 against the parse's 34.
+"""
+"compute/index" = """
+A-10, THE SAME THREE, FROM THE OTHER DIRECTION — and this is the entry that makes the
+finding legible without reading a deviation note. Defined at §2.2 with a heading and a
+`:=` block, MUSTed at §10.1 by name, and named by NO enumeration in the document: not
+§4.1's arms, not §4.2's Tier 1, not §4.7's expression list. Three machinery lists, zero
+mentions. Excused here so R2 does not fire, and the excuse IS the routed claim.
+"""
+"compute/length" = "A-10. See `compute/index` above — same amendment, same three lists, same absence."
+"compute/numeric-cast" = "A-10. See `compute/index` above — same amendment, same three lists, same absence."
+"system/compute/group" = """
+§3.5's one pinned RESULT type (`group-by`'s element, carrying `key` and `members`). It is
+not an expression, not a value type in §2.3's sense, and not an args type — so no
+predicate admits it and none should. It is constructed by the evaluator and materializes
+like any other entity; §3.5 is explicit that it is *"a pinned type NAME, not a
+type-extension registration."*
+"""
+"system/compute/scope-binding" = """
+§2.3's kind-tagged binding record — the CONTENTS of a `compute/scope`, never resolved on
+its own, so §4.2's Tier 1 correctly does not admit it. Reaching it always goes through the
+scope entity that contains it (§4.3 `load_scope`).
+"""
+"system/compute/map-args" = "§3.5 args type. Consumed as a `compute/apply.args` map, never resolved as an entity, so no §4 predicate admits it — the args types exist for handler-mode's V30 typed-params construction."
+"system/compute/filter-args" = "§3.5 args type. See `system/compute/map-args`."
+"system/compute/fold-args" = "§3.5 args type. See `system/compute/map-args`."
+"system/compute/range-args" = "§3.5 args type (v3.24). See `system/compute/map-args`."
+"system/compute/group-by-args" = "§3.5 args type (v3.24). See `system/compute/map-args`."
+"system/compute/concat-args" = "§3.5 args type (v3.24). See `system/compute/map-args`. Its `collections` field is ONE hash of an expression, not an array of hashes (v3.27) — see [assumptions] and the §3.5 requirement row."
+"system/compute/assoc-args" = "§3.5 args type (v3.24). See `system/compute/map-args`."
+"system/compute/store-args" = "§3.5 args type, and the one impure builtin's. See `system/compute/map-args` and [assumptions].store_write_mechanism."
+
+
+# ── [sdk_surface] — D16. Ungated by anything upstream, so ours to set ───────────────
+#
+# ONE language cell today, so this block is a declaration of intent rather than a live
+# comparison — `tools/sdk-parity.py` needs two. It is written NOW rather than at the second
+# port precisely because that is D16: an axis with no upstream authority gets its gate at
+# the SECOND implementation, and CONTENT's 18 drift entries were one decision made once in
+# `typescript` and never made again.
+#
+# THE DECISION, made deliberately and matching HISTORY: FLAT names are the contract in every
+# port. There is no `ComputeTypes` bundle object and there will not be one.
+[sdk_surface]
+required = [
+  # type-path constants — 33, flat
+  "LITERAL", "LOOKUP_SCOPE", "LOOKUP_TREE", "LOOKUP_HASH", "APPLY", "IF", "LET", "LAMBDA",
+  "ARITHMETIC", "COMPARE", "LOGIC", "FIELD", "CONSTRUCT", "INDEX", "LENGTH", "NUMERIC_CAST",
+  "CLOSURE", "SCOPE", "SCOPE_BINDING", "RESULT", "ERROR",
+  "SUBGRAPH", "INSTALL_REQUEST", "INSTALL_RESULT",
+  "MAP_ARGS", "FILTER_ARGS", "FOLD_ARGS", "RANGE_ARGS", "GROUP_BY_ARGS", "GROUP",
+  "CONCAT_ARGS", "ASSOC_ARGS", "STORE_ARGS",
+  # the three collections
+  "CORE_EXPRESSION_TYPES", "INLINE_EXPRESSION_TYPES", "ALL_TYPES",
+  # paths and limits
+  "COMPUTE_PATTERN", "BUILTINS_PREFIX", "PROCESSES_PREFIX",
+  "DEFAULT_MAX_OPS", "DEFAULT_MAX_DEPTH", "RECOMMENDED_MAX_CASCADE_DEPTH",
+  # §9.1's codes
+  "CODE_BUDGET_EXHAUSTED", "CODE_DEPTH_EXCEEDED", "CODE_TYPE_MISMATCH",
+  "CODE_DIVISION_BY_ZERO", "CODE_NOT_FOUND", "CODE_UNKNOWN_TYPE",
+  "CODE_MISSING_ARGUMENT", "CODE_INVALID_EXPRESSION", "CODE_CASCADE_LIMIT",
+  "CODE_PERMISSION_DENIED", "CODE_INSTALLATION_GRANT_INVALID",
+  "CODE_INDEX_OUT_OF_RANGE", "CODE_CAST_OUT_OF_RANGE", "CODE_COUNT_OUT_OF_RANGE",
+  "CODE_SCOPE_UNREACHABLE", "CODE_AMBIGUOUS_RESOURCE",
+  # operations
+  "isComputeExpression", "isComputeType",
+  "computeTypeDefs", "computeTypeEntities", "publishComputeTypes", "computeEntity",
+  "ComputeHandler", "ComputeEvaluator", "installCompute",
+  "assertNotBuiltinOverride", "DEFAULT_LIMITS",
+  # ── §7, added 2026-09-10 ──────────────────────────────────────────────────────────
+  #
+  # `ReactiveEngine` is PUBLIC and `internal/evaluator.js` is not, and the difference is
+  # the authority argument rather than a judgement about who deserves an API. `evaluate`
+  # takes its whole authority as a parameter — a caller builds an `EvalContext` and sets
+  # `hasContentStoreAccess: true`, which is §4.2 Tier 0. `ReactiveEngine` has no such
+  # door: every re-evaluation reads its authority from the installation grant recorded on
+  # the subgraph metadata, so holding the engine lets a caller register a dependency and
+  # trigger a re-evaluation and widens nothing that evaluation may read.
+  #
+  # It is here because it IS the `emit_consumer` face's object, exactly as
+  # `HistoryRecorder` is HISTORY's, and an in-process embedder wanting reactive mode
+  # without the wire has to reach it.
+  "ReactiveEngine",
+  # §3.3's `deterministic_id`, exported because it is a CROSS-PEER identity and not an
+  # internal detail: *"a subgraph installed by Peer A at root path `app/cell/A1` is
+  # discoverable at the same `system/compute/processes/{subgraph_id}` on any peer"*. A
+  # caller that wants to inspect a subgraph needs the derivation, and re-deriving it is
+  # how two ports disagree about a normative string nothing on the wire checks.
+  "deterministicId",
+]
+substrate = [
+  # Still substrate, and now reading `false`. It names the one entry point that CANNOT
+  # narrow §6.2 per tree read — the H7 evaluator seam, whose `ExpressionRequest` carries
+  # the `Execute` and no verified token. The other two do. See
+  # `[assumptions].capability_check_scope` for what this constant used to claim and why
+  # that was AP-34.
+  "CAPABILITY_CHECK_IS_DISPATCH_SCOPED",
+]
+drift = []
+
+# ── [conformance] — D16's fourth instance. The requirement map ──────────────────────
+#
+# §10 has no `<PREFIX>-R<n>` ids: `SPECIFICATION-FORMAT` v1.3 §8.5a is a `[MUST]` shape
+# whose adoption is **1 of 26** and §330 names compute in its scope (A-9). So the join key
+# is the requirement TEXT and the shape is `level-sections`, exactly as CONTENT's §11 is.
+#
+# Local `CMP-R<n>` ids are deliberately NOT minted. HISTORY minted `H-R1…H-R15` filling the
+# same gap and the moment §8.5a closed it they became a second numbering for one set of
+# obligations, which is the thing this block exists to prevent. When arch re-issues §10
+# under §8.5a this file is re-keyed and nothing else changes.
+[conformance]
+spec_file       = "EXTENSION-COMPUTE.md"
+section         = "10"
+shape           = "level-sections"
+oracle_category = "compute"
+
+[conformance.levels]
+"MUST Implement"         = "MUST"
+"SHOULD Implement"       = "SHOULD"
+"MAY Implement"          = "MAY"
+"Implementation-Defined" = "IMPL-DEFINED"
+
+# ── THE 84 REQUIREMENT ROWS ─────────────────────────────────────────────────────────
+#
+# **THE JOIN IS BY SECTION, AND THAT IS THE COARSEST HONEST KEY AVAILABLE.** §10 has no
+# `<PREFIX>-R<n>` ids (§8.5a is at 1 of 26 — A-9), so a row cannot be joined to a check by
+# id. What every row DOES carry is one or more section references, and every oracle check
+# carries a `spec_ref`. Joining those two is mechanical and reproducible, and it is what
+# the `oracle` lists below are: **every check in the executed corpus that cites a section
+# this row cites, and that PASSED in our composed run.**
+#
+# WHAT THAT MEANS AND WHAT IT DOES NOT. A row citing §2.2 joins 46 passing checks, and
+# §2.2 has eight inline types in it — so the join says *"this section is measured"*, not
+# *"this requirement is measured"*. That is weaker than HISTORY's per-id mapping and it is
+# labelled rather than dressed up: `note` on every row where the join is broad prints the
+# real count and names the reason. **The day arch re-issues §10 under §8.5a, these rows
+# re-key to ids and the coarseness goes away** — which is exactly why we did not mint local
+# `CMP-R<n>` ids to paper over it (HISTORY's `H-R1…H-R15` became a second numbering the
+# moment the gap closed).
+#
+# `oracle = []` with a `gap` is a row NOTHING measures. 25 of the 84 are in that state, and
+# most name a section this port does not implement — §3.3 install, §3.5 builtins, §7
+# reactive, §4.6 memoization. Those are absences we declared, not coverage we lost.
+#
+# REGENERATED, NOT HAND-MAINTAINED. The join above is a script over the spec's §10 bullets
+# and the executed report; re-running it after a re-pin is how a changed row gets noticed,
+# and `tools/req-coverage.py` fails on an undeclared or stale row either way.
+
+[[conformance.requirement]]
+text   = "All eight core expression types (§2.1): literal, lookup/scope, lookup/tree, lookup/hash, apply, if, let, lambda"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "All eight inline expression types (§2.2): field, arithmetic, compare, logic, construct, index, length, numeric-cast"
+oracle = ["compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub", "compute/eval_compare_eq_false", "compute/eval_compare_eq_true"]
+note   = "46 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Closure and scope value types (§2.3)"
+oracle = ["compute/types_value", "compute/v319b_scope_entity_round_trip"]
+
+[[conformance.requirement]]
+text   = "Result and error types (§2.4)"
+oracle = ["compute/types_result_error"]
+
+[[conformance.requirement]]
+text   = "Evaluation algorithm with entity resolution and scope (§4.1, §4.2, §4.3)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v36_resolve_rejects_non_compute", "compute/v37_lookup_hash_eval"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Special form semantics for `compute/if` — non-taken branch not evaluated (§2.1)"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/apply` dual mode — handler dispatch and closure application (§2.1)"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Budget decrementation on every evaluation step (§5.1)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+note   = "No oracle check in the executed corpus cites §5.1. Driven by our own unit tests, which is Kind C and is never a conformance verdict -- the standing rule is that an official green requires the suite we do not author."
+
+[[conformance.requirement]]
+text   = "Budget exhaustion produces `budget_exhausted` error (§5.1)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+note   = "No oracle check in the executed corpus cites §5.1. Driven by our own unit tests, which is Kind C and is never a conformance verdict -- the standing rule is that an official green requires the suite we do not author."
+
+[[conformance.requirement]]
+text   = "Depth limit enforcement (§5.4)"
+oracle = ["compute/eval_depth_limit", "compute/v38_depth_non_tail"]
+
+[[conformance.requirement]]
+text   = "Capability verification for impure operations (§6.2)"
+oracle = []
+note   = "THE WEAKEST ROW IN THIS PORT. The capability check is DISPATCH-SCOPED, not per tree read -- a caller who can reach system/compute:eval can read any path through compute/lookup/tree. See [assumptions].capability_check_scope; routed to keystone as a seam question."
+
+[[conformance.requirement]]
+text   = "Deterministic evaluation order (§8.2)"
+oracle = ["compute/eval_construct_deterministic", "compute/eval_let_sequential"]
+
+[[conformance.requirement]]
+text   = "Identical result hashes for identical inputs on pure expressions (§8.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub"]
+note   = "18 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Normative arithmetic semantics: float promotion for non-exact division, truncated mod, IEEE 754 binary64, canonical CBOR encoding of special values (§2.2)"
+oracle = ["compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub", "compute/eval_compare_eq_false", "compute/eval_compare_eq_true"]
+note   = "46 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Normative comparison semantics: type compatibility rules, float promotion for mixed numeric operands, lexicographic string ordering without Unicode normalization (§2.2)"
+oracle = ["compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub", "compute/eval_compare_eq_false", "compute/eval_compare_eq_true"]
+note   = "46 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Eval handler `is_compute_expression` pre-check for non-null entities (§3.2)"
+oracle = []
+note   = "No check in the executed corpus cites §3.2, or every check that does is failing in this port. Not measured here."
+
+[[conformance.requirement]]
+text   = "`capture_scope` MUST call `ctx.mark_encountered` after content store write (§4.4)"
+oracle = ["compute/eval_closure_captures_scope"]
+
+[[conformance.requirement]]
+text   = "`load_scope` MUST use direct content store access for `closure.data.env` hash, MUST mark encountered, MUST return error if missing (§4.3)"
+oracle = []
+note   = "No check in the executed corpus cites §4.3, or every check that does is failing in this port. Not measured here."
+
+[[conformance.requirement]]
+text   = "`resolve()` MUST validate resolved entities via `validate_compute_resolvable` — Tier 0 (`content_store_access`) and Tier 1 (`is_compute_type`) (§4.2)"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "`is_compute_type` function — includes `compute/lookup/hash` (§4.2)"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "Encountered-during-read minimum resolution guarantee — scoped to `system/hash`-typed fields and compute-typed entities (§4.2)"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "`compute/lookup/hash` evaluation: resolve hash, return non-expressions as values (§4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Install audit collects `compute/lookup/hash` targets and validates path hints against caller's tree GET grant (§3.3 Phase 2b)"
+oracle = ["compute/reactive_install", "compute/cp1_install_static_literal_adversary_rejected", "compute/cp1_install_dynamic_capability_deferred"]
+gap    = """
+PHASE 2b HAS NO VECTOR IN EITHER DIRECTION. Four subgraphs install across the category and
+none contains a `compute/lookup/hash`, so the hint-resolves / hash-matches / caller-may-read
+triple never runs, `no_authorization_path` is never raised, and `hash_mismatch` is never
+raised. The checks above measure that an install SUCCEEDS and that CP1 refuses a foreign
+embedded capability; they say nothing about the data-reference half of the audit.
+"""
+
+[[conformance.requirement]]
+text   = "Sealed `authorized_data_hashes` on subgraph metadata (§3.3)"
+oracle = ["compute/reactive_install", "compute/cp1_install_static_literal_adversary_rejected", "compute/cp1_install_static_literal_self_issued_accepted", "compute/cp1_install_dynamic_capability_deferred"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+PARTIAL, AND THE SEALED SET ITSELF IS THE UNMEASURED HALF. The oracle installs four
+subgraphs and every one of them succeeds, so Phase 1-3 run -- but NO vector installs a
+subgraph containing a `compute/lookup/hash`, so `authorized_data_hashes` is EMPTY in every
+executed install and §4.2 Tier 2 is never consulted. Phase 2b's three validations (hint
+resolves, entity hashes to the reference, caller may read the hint path) have no vector in
+either direction. Ours covers the field's presence on the metadata and the Tier 2 plumbing;
+the validations are unmeasured cross-impl.
+"""
+
+[[conformance.requirement]]
+text   = "`validate_compute_resolvable` Tier 2: sealed set check for installed subgraphs (§4.2)"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "Tail calls in identified tail positions (closure body, if branches, let body, lookup/tree expression, lookup/hash expression) MUST NOT consume depth (§4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Budget MUST still decrement for tail calls (§4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/lookup/tree` MUST support optional `relative` field; relative paths resolve against `ctx.subgraph_root` via `clean_path` (§2.1, §4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_literal_bool"]
+note   = "25 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/lookup/hash` path hint MUST support optional `relative` field (§2.1)"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Install audit and dependency walker MUST resolve relative paths **and canonicalize peer-relative paths to `/{local_peer_id}/…` (ENTITY-CORE-PROTOCOL.md §5.4)** before collecting/registering, so dependencies key on the absolute-at-rest path tree writes notify on (§3.3, §7.1)"
+oracle = ["compute/eval_depth_limit", "compute/q23_install_builtin_apply_capability_resource", "compute/q23_install_builtin_apply_resource_only", "compute/v310_f5_install_capability_without_resource", "compute/v38_depth_non_tail"]
+
+[[conformance.requirement]]
+text   = "`compute/lookup/tree` MUST check `ctx.capability` covers the target path before reading (§4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/apply` handler mode with `capability` field MUST dual-check: `ctx.capability` must cover the target — including the resource — before dispatching with the provided capability (§4.1) (v3.10 — F2 full-resolution)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/apply` MUST support optional `resource` field carrying a `system/hash` reference resolving to a `system/protocol/resource-target` (§2.1) (v3.10 — F1)"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "When `compute/apply.capability` is present, `compute/apply.resource` MUST also be present; absent → `invalid_expression` at both eval-time (§4.1) and install-time audit (§3.3) (v3.10 — F5)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/q23_install_builtin_apply_capability_resource", "compute/q23_install_builtin_apply_resource_only", "compute/v310_f5_eval_capability_without_resource"]
+note   = "15 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`dispatch_execute` MUST carry the resource through to the constructed EXECUTE's `resource` field (§4.1) (v3.10 — F4)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Install audit MUST collect static-literal resource targets from `compute/apply.resource` and use them in `check_grant_covers` (§3.3) (v3.10 — F3)"
+oracle = ["compute/q23_install_builtin_apply_capability_resource", "compute/q23_install_builtin_apply_resource_only", "compute/v310_f5_install_capability_without_resource"]
+
+[[conformance.requirement]]
+text   = "Install audit MUST verify that `ctx.execute.data.author` appears **as a granter anywhere in** the static-literal `compute/apply.capability` authority chain, via `check_creator_authority` (ENTITY-CORE-PROTOCOL.md §5.5 — in-chain, *not* rooted-at-author); reject with 403 `embedded_cap_unauthorized` when it does not (§3.3) (v3.11 — CP1)"
+oracle = ["compute/q23_install_builtin_apply_capability_resource", "compute/q23_install_builtin_apply_resource_only", "compute/v310_f5_install_capability_without_resource"]
+
+[[conformance.requirement]]
+text   = "Install audit MUST run the CP1 in-chain check BEFORE F3 resource-coverage check on the same `compute/apply` entity (v3.11)"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "`dispatch_execute` MUST propagate full execution context (author, caller_capability, chain_id) per ENTITY-CORE-PROTOCOL.md §6.8 (§4.1)"
+oracle = ["compute/algo_fibonacci_10", "compute/algo_fibonacci_5", "compute/eval_literal_bool", "compute/eval_literal_int", "compute/eval_literal_string", "compute/v310_f5_eval_capability_without_resource", "compute/v37_lookup_hash_eval", "compute/v37_lookup_hash_field_extract"]
+note   = "12 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Eval can be invoked with pre-populated scope for entity-native handler dispatch (§3.2)"
+oracle = []
+note   = "No check in the executed corpus cites §3.2, or every check that does is failing in this port. Not measured here."
+
+[[conformance.requirement]]
+text   = "Builtin handler override prohibition — registration targeting `system/compute/builtins/*` MUST be rejected (§3.5)"
+oracle = ["compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/export-surface.test.ts"]
+gap    = "OURS TO ENFORCE AS OF v3.29 AND MEASURED ONLY BY US -- see [assumptions].builtins_override_guard. `assertNotBuiltinOverride` carries a negative control in both directions, including the `system/compute/builtinsomething` near-miss a `startsWith` without the separator would wrongly refuse. No oracle check anywhere attempts a registration at a builtins path, which is why the unit test is the only thing standing between the rule and a `throw` nobody ran."
+
+[[conformance.requirement]]
+text   = "Collection builtins `map`/`filter`/`fold` with the spec-pinned args types + observable semantics (§3.5)"
+oracle = ["compute/v314_builtin_map", "compute/v314_builtin_filter", "compute/v314_builtin_fold", "compute/v314_builtin_fold_empty", "compute/v319_f11_filter_fn_arg", "compute/v319_n5_closure_field", "compute/v314_args_types_registered"]
+# RE-MAPPED 2026-09-10, AND THE OLD MAPPING IS THE INSTRUCTIVE PART. Through 2026-09-09
+# this row cited ONLY `v314_args_types_registered` -- a check that asserts the args TYPE
+# ENTITIES are published and never dispatches a builtin. It passed while all six
+# behavioural checks failed, so the row read `oracle` (fully measured) for a section this
+# port did not implement at all. AP-19 in our own contract: a check named after a
+# requirement is not a measurement of it, and here the check was not even named after it.
+# The six behavioural vectors run now and are cited first.
+
+[[conformance.requirement]]
+text   = "The v3.24 collection primitives `range`/`group-by`/`concat`/`assoc` with their pinned args types, result shapes and error codes (§3.5) — `concat-args.collections` is **one** `system/hash` (v3.27)"
+oracle = ["compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+gap    = "IMPLEMENTED AND MEASURED ONLY BY US. All four are in `evalBuiltin` and every one has a unit test, including the two error codes §3.5 pins by name (`count_out_of_range` for a negative or oversized `range(n)`, `index_out_of_range` for `assoc`) and the v3.27 correction that `concat-args.collections` is ONE hash rather than an array of them. **The oracle has no vector for any of the four** — `grep -c \"builtins/range\\|builtins/group-by\\|builtins/concat\\|builtins/assoc\" ../entity-core-go/cmd/internal/validate/compute.go -> 0 -- so `compute` scores them through `v314_args_types_registered`, which only checks that the args types are published. Four §10.1 MUSTs whose observable semantics no cross-impl instrument reads: `range`'s refuse-not-clamp rule, `group-by`'s first-appearance ordering and materialized-key equality, `concat`'s one-level join, `assoc`'s index code. Routed to core-go as a vector request; the unit tests are OURS and do not settle cross-impl agreement (L18)."
+
+[[conformance.requirement]]
+text   = "The consumed/contained disposition table and the rule that generates it — placed-without-reading contains, read-to-decide consumes (§3.5) (v3.27 — D2)"
+oracle = ["compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+gap    = "IMPLEMENTED PER THE RULE, NOT PER THE TABLE, and measured only by us. `containedElement` is the one function every contained position routes through and the five rows are call sites of it: `map`'s output element, `fold`'s accumulator, `filter`'s ELEMENT (its predicate result short-circuits instead), `group-by`'s members, `concat`'s elements, `assoc`'s value. The oracle's six passing builtin vectors all carry integer collections and error-free closures, so **not one of them puts an error in a contained position** -- the dispositions are unmeasured cross-impl in every direction. This is the row where the two readings produce a different VALUE rather than a different cost (§3.5 on `fold`), so it is the one most worth a vector."
+
+[[conformance.requirement]]
+text   = "A `compute/error` behaves identically minted or value-form; no disposition may key on how it was produced (§3.5, restating §2.4) (v3.27 — D1)"
+oracle = ["compute/types_result_error", "compute/v319_f10_error_at_200", "compute/eval_error_propagation", "compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+gap    = "The oracle measures the F10 boundary (an evaluated error is a VALUE at 200) and error propagation through a consumer, both of which pass. What it does not measure is the D1 rule itself: that a MINTED and a VALUE-FORM error with the same code take the same disposition. This port funnels both through `asComputeError` -> `toEntity()` and re-materializes a stored error code-only for exactly that reason, and §2.3 SA-1 -- landed here 2026-09-10 -- is what makes the value form reachable at all. Unmeasured cross-impl."
+
+[[conformance.requirement]]
+text   = "Evaluation-limit dispositions: `depth_exceeded` contains; `budget_exhausted` and `cascade_limit` short-circuit in every position, **keyed on the `code` in both arms** (§3.5) (v3.27 — D5/D6)"
+oracle = ["compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+gap    = "IMPLEMENTED AS `isHalting`, ONE FUNCTION, READ IN SIX PLACES -- and `cascade_limit` is in it while §7 reactive mode is NOT in this port, which is deliberate: §3.5 makes the disposition keyed on the CODE in both arms, and §7.3 requires the value form to exist (a reactive peer writes a `compute/error{budget_exhausted}` to `result_path`), so a downstream expression reading that path through `compute/lookup/tree` receives one from a conformant peer that is not us. A port that only minted its own would answer this row by accident. Unmeasured by the oracle in every position."
+
+[[conformance.requirement]]
+text   = "`group-by` entity-valued key equality is byte-identity over the **materialized** encoding (§3.5) (v3.27 — D4)"
+oracle = ["compute/v314_args_types_registered"]
+ours   = ["languages/typescript/extensions/compute/test/evaluator.test.ts"]
+gap    = "`keyIdentity` compares the MATERIALIZED content hash for an entity-valued key and the canonical ECF bytes otherwise, which decides the same question a byte comparison would (a content hash IS the digest of those bytes) and never reads the in-flight form. No oracle vector reaches `group-by` at all, so nothing cross-impl tests the one thing this row exists to prevent: an implementation-private representation becoming part of a group's identity."
+
+[[conformance.requirement]]
+text   = "Dependency registration completeness — every `compute/lookup/tree` reachable in the expression graph is registered, **including references inside container-valued fields** (§7.1) (v3.27 — D8)"
+oracle = ["compute/d8_reeval_dep_in_let_binding", "compute/d8_reeval_dep_in_apply_arg"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+** THE ONE §7 ROW THE CORPUS MEASURES PROPERLY, AND IT MEASURES ONLY §7.1's HALF. ** D8's
+two rows are a real discriminator: row (b) puts the only `lookup/tree` inside `apply.args`,
+which a walker written to the pre-v3.27 listing misses entirely, and its positive control
+(`reactive_final_result`) proves the direct-dependency path works on the peer first — so a
+failure is attributable to walk completeness rather than to a broken reactive mechanism.
+
+** THE SAME COMPLETENESS PROPERTY IN §3.3's WALKER IS UNMEASURED AND UNMEASURABLE HERE
+(A-17). ** §3.3's `audit_walk` builds `read_paths`, which Phase 2 capability-checks, and its
+listing descends only scalar fields — so a transcription authorizes a top-level tree read
+and skips the same read inside `apply.args`. `validate-peer` runs `--debug-open-grants`, so
+every Phase 2 check passes whatever the audit collected and an under-authorizing audit
+scores identically. Our test asserts the property over every container shape §2.1's grammar
+allows rather than over v3.27's two enumerated exceptions, and was verified red against the
+§3.3-listing walker planted as a defect.
+"""
+
+[[conformance.requirement]]
+text   = "`store` builtin for tree writes, capability-gated per §6.3 (§3.5)"
+oracle = ["compute/v314_builtin_store_roundtrip", "compute/v314_args_types_registered"]
+gap    = "THE WRITE IS MEASURED; THE GATE IS NOT. `v314_builtin_store_roundtrip` passes: the builtin evaluates its `value`, wraps a bare primitive in `primitive/any` per SA-9, and the value is read back at the path. What no instrument reads is the second half of the row -- §6.3's `check_path_permission(\"put\", path, capability)` and its no-silent-escalation clause. This port answers `canWritePath` at the dispatch boundary (the declared substrate gap), and the write mechanism is a direct `EntityTree.put` rather than SA-10's `system/tree:put` dispatch, which is the permitted alternative in SA-10's own second sentence. See [assumptions].store_write_mechanism."
+
+[[conformance.requirement]]
+text   = "Entity-defined handler evaluation — handlers whose logic is a compute expression (`expression_path`, ENTITY-CORE-PROTOCOL.md §3.7)"
+oracle = []
+note   = "No check in the executed corpus cites §3.7, or every check that does is failing in this port. Not measured here."
+
+[[conformance.requirement]]
+text   = "Integer `add`/`sub`/`mul` sign-agnostic 64-bit two's-complement (truncate to 64 bits on arbitrary-precision hosts); `div`/`mod`/`compare` signed-default; integer results canonically encoded by their signed interpretation; `numeric-cast` eager / point-of-use (§2.2 rules 8–11)"
+oracle = ["compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub", "compute/eval_compare_eq_false", "compute/eval_compare_eq_true"]
+note   = "46 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "`compute/numeric-cast` conversion semantics — intra-numeric, with the pinned edge cases (§2.2)"
+oracle = ["compute/eval_arithmetic_add", "compute/eval_arithmetic_div_exact", "compute/eval_arithmetic_div_float", "compute/eval_arithmetic_mod", "compute/eval_arithmetic_mul", "compute/eval_arithmetic_sub", "compute/eval_compare_eq_false", "compute/eval_compare_eq_true"]
+note   = "46 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "All error codes (§9.1)"
+oracle = ["compute/eval_division_by_zero", "compute/eval_error_not_found", "compute/v314_cast_inf_to_int", "compute/v314_cast_nan_to_int", "compute/v314_cast_neg_float_to_uint"]
+
+[[conformance.requirement]]
+text   = "Compute handler at `system/compute/*` (§3.1)"
+oracle = ["compute/handler_manifest_decode", "compute/handler_op_eval", "compute/handler_op_install", "compute/handler_op_uninstall", "compute/handler_present"]
+
+[[conformance.requirement]]
+text   = "The inline-equivalent builtin handler aliases at `system/compute/builtins/{arithmetic,compare,logic,field,construct}` (§3.5) — the collection builtins and `store` are now MUST (§10.1)"
+oracle = ["compute/v314_builtin_arithmetic_alias", "compute/v319c_inline_vs_builtin_construct_hash_agreement", "compute/v314_args_types_registered"]
+gap    = "TWO OF THE FIVE ARE MEASURED. `arithmetic` has a value vector and `construct` has the stronger one -- `v319c_inline_vs_builtin_construct_hash_agreement` compares the MATERIALIZED HASH of the inline and alias forms, which is the check that catches the defect the row exists to prevent (a second derivation of the bare form; `entity-core-rust` shipped one). `compare`, `logic` and `field` have no vector. All five share the inline code path here, so a fork is unconstructible rather than merely untested -- but that is a fact about this port's structure and not a measurement, and the next port gets no help from it."
+
+[[conformance.requirement]]
+text   = "Install and uninstall operations (§3.3, §3.4) — required if reactive mode is implemented"
+oracle = ["compute/handler_op_install", "compute/handler_op_uninstall", "compute/reactive_install", "compute/cp1_install_static_literal_adversary_rejected", "compute/cp1_install_static_literal_self_issued_accepted", "compute/cp1_install_dynamic_capability_deferred", "compute/q23_install_builtin_apply_capability_resource", "compute/q23_install_builtin_apply_resource_only", "compute/v310_f5_install_capability_without_resource"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+INSTALL IS WELL MEASURED; UNINSTALL IS MEASURED ONLY AS A MANIFEST ROW. `handler_op_uninstall`
+asserts the operation is DECLARED and no vector calls it, so §3.4's three behaviours — clear
+the registrations, delete the metadata, LEAVE THE EXPRESSION ENTITIES IN THE TREE — have no
+wire coverage in either direction. The third is the one worth a vector: a port that deleted
+the expression would pass every check in this category.
+"""
+
+[[conformance.requirement]]
+text   = "Subgraph metadata at `system/compute/processes/*` (§2.5)"
+oracle = ["compute/types_subgraph"]
+
+[[conformance.requirement]]
+text   = "Memoization for pure expressions (§4.6)"
+oracle = []
+note   = "§4.6 memoization is a SHOULD and is not in this port. It is unobservable from outside except through the budget, which is why nothing upstream measures it either."
+
+[[conformance.requirement]]
+text   = "Scope capture optimization — capture only referenced bindings (§4.4)"
+oracle = ["compute/eval_closure_captures_scope"]
+
+[[conformance.requirement]]
+text   = "`max_compute_operations` and `max_compute_depth` resource limit enforcement (§5.5)"
+oracle = []
+note   = """
+NOTHING, AND IT IS THE SAME HOLE AS §7.4's. No vector issues a capability carrying
+`constraints["system/compute"]`, so neither the explicit-eval path (§5.2's minimum rule) nor
+the reactive path (§7.4) is exercised against a real constraint. The port applies both and
+reads the constraint from the GRANT ENTRY rather than from the token, which is where core §5
+puts it and is not where §5.2/§5.5 spell it — A-21, routed. Untested here because building a
+constrained-capability fixture means minting a signed token, which is the dispatch layer's
+job and not this extension's.
+"""
+
+[[conformance.requirement]]
+text   = "Write authorization checks per §6.3 table"
+oracle = ["compute/v314_builtin_store_roundtrip"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+THE WRITE IS MEASURED; THE GATE IS MEASURED ONLY BY US, AND ONLY ON THE READ HALF.
+`v314_builtin_store_roundtrip` proves `store` writes and the value reads back — under
+`--debug-open-grants`, so the capability check cannot refuse. §6.3's table gives the two
+operations different authorities (a tree READ rides `ctx.capability`; a `store` WRITE rides
+the caller's with the handler forbidden from substituting its own grant), and this port
+implements them as two predicates for that reason. Ours drives a narrow `app/*` grant and
+requires `permission_denied` on a read outside it, through a real `HandlerContext`. The
+WRITE half has no equivalent test yet — `store` under a narrow grant is the vector owed.
+"""
+
+[[conformance.requirement]]
+text   = "Content store access gating (§4.2)"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "Reactive mode with exact-match dependency registration keyed by `(expression_uri, subgraph_path)` tuples (§7.1)"
+oracle = ["compute/reactive_install", "compute/reactive_initial_result", "compute/reactive_converged_result", "compute/reactive_final_result", "compute/v38_dynamic_handler", "compute/v38_dynamic_handler_swap"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+PARTIAL: the registration and the wake-up are measured; the EXACT-MATCH rule is not. §7.1
+is emphatic that `match(path)` is equality and never prefix or subtree — *"a tree write at
+`app/data/sheet1/cells/A1` does NOT trigger re-evaluation of expressions depending on
+`app/data/sheet1`"* — and no vector writes a child of a watched path and asserts that
+nothing fired. A port with a prefix index passes all six checks above and every application
+built on it silently re-evaluates more than it should.
+"""
+
+[[conformance.requirement]]
+text   = "Installation grant verification on reactive re-evaluation (§7.2)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+NO VECTOR EXPIRES OR REVOKES A GRANT MID-RUN, so the whole clause -- fetch the grant by
+hash, check expiry, freeze with `installation_grant_invalid` on failure -- is unmeasured by
+the corpus. It is also where §3.3 Phase 3's easiest omission surfaces: the spec spends five
+comment lines on *"the compute handler MUST persist the caller's capability entity to the
+content store before recording its content hash"*, and a port that skips it answers 200 at
+install and breaks on the FIRST re-evaluation. Our test installs with a grant hash that
+resolves to nothing and requires the freeze, with a valid-grant control beside it.
+"""
+
+[[conformance.requirement]]
+text   = "Convergence check before tree write on re-evaluation (§7.2)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+** OURS, AND THE SECTION-JOIN WOULD SAY OTHERWISE -- AP-32's TRAP, DECLINED. ** Six
+`reactive_*` checks cite §7.2 and all six pass; none of them measures this clause. §7.2's
+rule is that a re-evaluation producing the SAME result hash performs NO tree write, and a
+wire client reading `result_path` sees the right value whether or not the write happened.
+There is no observable at the boundary.
+
+AND ON THIS PEER THERE IS NO OBSERVABLE IN-PROCESS EITHER (AP-33): `EntityTree.put` emits
+only when the bound hash changed and `ContentStore.put` only when the hash is new, so the
+clause is REDUNDANT here and a port that never implemented it is indistinguishable. Our
+test therefore asserts `#reEvaluate`'s own return value -- `null` on convergence -- which
+is the one quantity in this process that reflects our decision rather than the peer's. It
+was verified red against a planted defect; the earlier observable-only assertion was not.
+"""
+
+[[conformance.requirement]]
+text   = "Cascade depth limiting via shared counter (§7.3)"
+oracle = ["compute/v38_cascade_chain"]
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+PARTIAL. `v38_cascade_chain` proves a cascade PROPAGATES (A writes, B wakes, B writes) —
+which is the counter being carried, not the counter being enforced. The threshold is 16 and
+no vector approaches it. See `Freeze on cascade depth exceeded (§7.2)` for what that costs
+on a sync-inline peer.
+"""
+
+[[conformance.requirement]]
+text   = "Subgraph status field (`active`/`frozen`) on metadata (§2.5)"
+oracle = ["compute/types_subgraph"]
+
+[[conformance.requirement]]
+text   = "Frozen subgraph skip in reactive trigger handling (§7.2)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+Nothing in the corpus freezes a subgraph, so nothing exercises the skip. Ours reaches it
+through the cascade-limit path, which is the only route to a frozen subgraph that does not
+require a revoked grant.
+"""
+
+[[conformance.requirement]]
+text   = "Freeze on cascade depth exceeded (§7.2)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+`v38_cascade_chain` drives a TWO-deep cascade and passes; the LIMIT is sixteen and no vector
+approaches it. **On this peer that is not a cosmetic gap.** Emit delivery is sync-inline, so
+an unbounded cascade is unbounded recursion — measured, three arms: with the §7.3 counter
+disabled the re-entrancy backstop freezes; with the backstop disabled the §7.3 counter
+freezes; with BOTH disabled the peer dies with `RangeError: Maximum call stack size
+exceeded`. A wire oracle cannot see the difference between the first three and can only see
+the fourth as a timeout.
+"""
+
+[[conformance.requirement]]
+text   = "Re-installation recovery for frozen subgraphs (§3.3)"
+oracle = []
+note   = """
+NOTHING. Nothing in the corpus freezes a subgraph, so nothing re-installs one. §3.3 names
+three behaviours here and each is a distinct way to get it wrong: re-audit and overwrite
+with `status: "active"`; ATOMICITY — a re-install whose audit fails leaves the frozen
+metadata unchanged; and the SHOULD to clear a `compute/error` at the old result path. This
+port satisfies all three by construction (Phases 1-2b are pure, Phases 3-4 are the commit,
+and install always evaluates once), which is a fact about its shape and not a measurement.
+"""
+
+[[conformance.requirement]]
+text   = "Independent reactive budget (§7.4)"
+oracle = []
+note   = """
+UNMEASURED IN BOTH DIRECTIONS AND CARRYING A SPEC DEVIATION (A-21). §7.4 says the reactive
+budget is fresh, independent, and bounded by the installation grant's
+`constraints["system/compute"]`. No vector issues a constrained capability, so neither the
+independence nor the bound is exercised. And §5.2/§5.5 spell the constraint's location as a
+field on the TOKEN while core §5 carries it on each GRANT ENTRY — a literal transcription
+reads nothing and silently falls back to peer defaults, which is the constraint escalation
+§5.5 exists to prevent. We read the grant entries and take the tightest value; routed.
+"""
+
+[[conformance.requirement]]
+text   = "Dependency index rebuild on restart (§7.1)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+THE PEER NEVER RESTARTS INSIDE A CONFORMANCE RUN, so §7.1's `rebuild_dependency_index` MUST
+has no vector and structurally cannot have one in a single-process oracle. We call it from
+`installCompute` as well as conceptually at restart — vacuous on a fresh peer, and not
+vacuous for a composition installed onto a tree restored from elsewhere, which is exactly
+the state the MUST is written for. Our tests drive every §7.1 assertion through `rebuild()`
+rather than through the install path, so the scan-and-re-register code is the code under
+test rather than a second path nobody runs.
+"""
+
+[[conformance.requirement]]
+text   = "Type definitions for all compute types (§2.1–§2.6) registered at `system/type/{type_name}` tree paths, enabling type-aware tooling discovery"
+oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]
+note   = "13 passing checks in the executed corpus cite this section; the first 8 are named. The join is by SECTION -- the coarsest honest key while §10 has no §8.5a ids (A-9), so this says the section is measured rather than this row is."
+
+[[conformance.requirement]]
+text   = "Peer-configurable cascade depth limit *value* (§7.3) — a local resource bound, not a determinism concern. (Per the standard-IR-floor convergence, v3.14: every compute-deterministic capability is MUST-given-COMPUTE — §10.1 — and only resource bounds stay flexible. The collection builtins, `store`, and entity-native handler evaluation were promoted out of this section into §10.1.)"
+oracle = []
+note   = "§7 reactive mode is not in this port."
+
+[[conformance.requirement]]
+text   = "Compute process tree layout (where expressions and results are stored)"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Default compute budget value"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Reactive re-evaluation scheduling (synchronous vs queued)"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Memoization table size limits and eviction policy"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Scope capture strategy (full capture vs referenced-only)"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Builtin handler registration mechanism"
+oracle = []
+note   = "The row cites no section, so the section join has nothing to key on. Uncovered by construction rather than by omission."
+
+[[conformance.requirement]]
+text   = "Subgraph ID derivation from root expression path (§3.3)"
+oracle = []
+ours   = ["languages/typescript/extensions/compute/test/reactive.test.ts"]
+gap    = """
+** A NORMATIVE CROSS-PEER IDENTITY THAT NOTHING ON THE WIRE READS. ** §3.3 pins
+`base32_lower_no_padding(sha256(utf8_bytes(root_path)))` and says why: *"a subgraph
+installed by Peer A at root path `app/cell/A1` is discoverable at the same
+`system/compute/processes/{subgraph_id}` on any peer."* No check in `validate-peer` reads
+`subgraph_path` back out of the install result, so two implementations could disagree
+forever and every run would stay green. v7.68 also pins it as NOT a `content_hash_format`
+dispatch site — using the peer's configured hash function here would look consistent and
+break the property.
+
+OURS, AND DELIBERATELY NOT FROM OUR OWN READING: the test's four expectations are the OUTPUT
+of `deterministicID` in `entity-core-go/ext/compute/engine.go`, run 2026-09-10 — a different
+codebase, a different base32 library, a different author. A second reading of the same prose
+by the same team is not evidence (L18).
+"""
+
+[[conformance.requirement]]
+text   = "Tree-scoped hash resolution mechanism beyond the minimum guarantee — encountered-during-read is required (§4.2); reverse index and scan are permitted enhancements"
+oracle = ["compute/v36_resolve_rejects_non_compute"]
+
+[[conformance.requirement]]
+text   = "Cascade depth limit value (§7.3) — recommended 16, implementations MAY allow configuration"
+oracle = []
+note   = "§7 reactive mode is not in this port."
+
+[[conformance.requirement]]
+text   = "The evaluation strategy itself — the reference tree-walk (§4) or an admitted alternate engine (§11); the representation of any alternate engine stays implementation-local (§11.5)"
+oracle = []
+note   = "§11 alternate-engine admission -- no alternate engine in this port."

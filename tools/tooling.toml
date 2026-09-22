@@ -144,6 +144,9 @@ __future__ = "2.1"
 argparse   = "3.2"
 ast        = "2.6"
 collections = "3.0"
+copy       = "3.0"   # check-spec-lists.py --self-test, deep-copying the clean contract so
+                     # each planted defect mutates a fresh one. A control that mutates the
+                     # shared corpus makes defect N+1 a function of defect N.
 glob       = "3.0"
 hashlib    = "3.0"
 importlib  = "3.1"

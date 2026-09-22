@@ -238,7 +238,28 @@ def check_snapshots(resolved: list[dict]) -> list[dict]:
 #: The first two compositions did not need this because on both peers all four faces were
 #: available, so "the composition installs CONTENT" was unambiguous. It is not unambiguous
 #: any more, and the cost of leaving it implicit is a report that reads as a full install.
-FACES = {"types", "handler", "emit_consumer", "sdk"}
+#:
+#: **`evaluator` IS THE FIFTH, ADDED 2026-09-09 AT THE FIRST COMPUTE COMPOSITION, and it
+#: is an addition to the VOCABULARY rather than a relaxation of the check.** The four came
+#: from `DESIGN-THE-SDK-LAYER` §1, written before this repo had met an extension that
+#: installs anywhere else. COMPUTE does: `Peer.setExpressionEvaluator` (keystone's H7, which
+#: this repo routed on 2026-09-03) is a seam of its own, reached by its own method, answered
+#: independently of the other four.
+#:
+#: It qualifies by D13's own test and not by analogy. A face is a thing a peer answers
+#: SEPARATELY -- that is the whole content of the face amendment, earned on `rust`, where
+#: types and emit install and the handler body cannot. Here `handler` and `evaluator` are two
+#: seams into the same dispatch path and a peer can host either without the other: every peer
+#: in the cohort hosts a handler, and `setExpressionEvaluator` exists on ONE of the 46. Folding
+#: the evaluator into `handler` would report `installed` for a peer that refused it, which is
+#: precisely the category error the amendment exists to stop.
+#:
+#: **Routed as a vocabulary question, not settled unilaterally**, because
+#: `DESIGN-THE-SDK-LAYER` §1's four-face model is cited by two other documents and by the
+#: `[substrate.faces]` block in every `EXTENSION.toml`. Adding the value here is the smaller
+#: half; whether the SDK-layer design should say "the faces are open-ended, enumerated per
+#: extension" is the real question and it belongs in that document.
+FACES = {"types", "handler", "emit_consumer", "sdk", "evaluator"}
 
 #: `not-installable` is the load-bearing one. It is NOT `not-installed`: the difference is
 #: between a choice and a substrate fact, and only the first is revisitable.

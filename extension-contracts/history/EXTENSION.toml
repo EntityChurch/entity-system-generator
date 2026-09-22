@@ -25,6 +25,30 @@
 ## derivation table in `shared/spec-data/history-v1.8/MANIFEST.md` as its proposed content.
 ## STILL OPEN at v1.8: the §3.3 declaration header did not arrive, so `[contract]` stays derived.
 
+# ── spec_lists_none — this spec ENUMERATES NOTHING, and that is a measured claim ─────
+#
+# `tools/check-spec-lists.py` (2026-09-10) pins each enumeration a spec makes of its own
+# type names, because four of COMPUTE's declared deviations are one amendment failing to
+# reach a list. This spec has no such list to pin: it declares no membership predicate,
+# because it is a handler extension and not an interpreter — nothing in it has to decide
+# *"is this entity one of mine"*.
+#
+# THE SEARCH, so the claim is a measurement and not a reading:
+#
+#     $ grep -cnE 'type in \[|match [a-z_.]*\.type:|is_[a-z_]+_type\(' \
+#           shared/spec-data/history-v1.10/EXTENSION-HISTORY.md
+#     0
+#
+# The only bracketed lists in this corpus are PATH PATTERNS — HISTORY §7's excluded
+# namespaces (`"system/signature/*"`, `"system/capability/grants/*"`, `"system/peer/*"`) —
+# which are not type names.
+#
+# DECLARED RATHER THAN LEFT BLANK, because the gate treats an absent declaration as a
+# FAILURE. An extension that simply omitted `[[spec_lists]]` would make R2 go quiet, and
+# an instrument that reports OK when it has nothing to read is the exact false green this
+# gate exists to prevent. When a re-pin adds a predicate, this key is what has to go.
+spec_lists_none = "No type-membership enumeration in this spec. Verified by the grep above at history-v1.10: the extension declares no `is_*_type` predicate because it has no IR to admit. If a re-pin adds one, delete this key and declare the list."
+
 [extension]
 name     = "HISTORY"
 spec     = "EXTENSION-HISTORY.md"
@@ -110,9 +134,18 @@ service_owning = false               # §11.6.9 start/stop not required; the rec
                                      # over the peer's tree and content store
 
 [install]
-model = "sdk-native"                 # same forcing as CONTENT: the wire `system/handler:register`
-                                     # op refuses `system/*` patterns (core §6.2) and this pattern
-                                     # IS `system/history`. Not a choice.
+model = "sdk-native"                 # UNCHANGED VALUE, WITHDRAWN AUTHORITY. This comment used to
+                                     # read *"same forcing as CONTENT: the wire
+                                     # `system/handler:register` op refuses `system/*` patterns
+                                     # (core §6.2) and this pattern IS `system/history`. Not a
+                                     # choice."* `ENTITY-CORE-PROTOCOL` 0.8.2.13 withdrew that
+                                     # reservation entirely; a peer that refuses and a peer that
+                                     # permits are both conformant. The two peers we compose
+                                     # against still refuse, so nothing about this build changes.
+                                     # The reading is in CONTENT's
+                                     # `[substrate.wire_install_refusal]`, which is the one home
+                                     # for it -- this extension inherits the MEASUREMENT and no
+                                     # longer inherits a rule.
 
 # ── [emit_consumer] — the position, the class, and the self-guard ───────────────────────
 # All three are normative and NONE of them is in `EXTENSION-HISTORY.md` alone, which is why
@@ -546,6 +579,20 @@ mysterious asymmetry.
 token_is_the_code_not_the_message = true
 
 [error_surface]
+
+# ── [error_surface].spec_table — WHERE THE SPEC'S OWN CODE TABLE IS ─────────────────
+#
+# Added 2026-09-10. `tools/check-error-codes.py` re-parses this table out of the pinned
+# snapshot and fails any code declared class `spec` that the table does not name — the
+# third direction on this axis, after emitted-vs-declared and declared-vs-emitted. Until
+# it existed the `spec` class was a hand transcription checked against another hand
+# transcription, and the pinned bytes every one of those claims cites were read by nothing.
+#
+# HEADING AND COLUMN are declared rather than inferred, and the gate's own first draft is
+# why: it scanned for `| `token` |` document-wide and produced five FALSE REDS — it matched
+# two unrelated tables in COMPUTE, and it missed `capability_denied` here entirely, because
+# this appendix puts the code in column 2. A false red costs the instrument (AP-4).
+spec_table = { heading = "## Appendix A: Error Codes", code_column = 2 }
 # Class 1 — SPEC. Defined in this extension's own code set, `[contract.error_codes]` above.
 #
 # `not_in_history` MOVED HERE FROM `unresolved` AT THE v1.8 RE-PIN, and it is the routed

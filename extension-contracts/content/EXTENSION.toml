@@ -14,6 +14,30 @@
 ##
 ## Everything below [contract] IS authored here, and each block says why it exists.
 
+# ── spec_lists_none — this spec ENUMERATES NOTHING, and that is a measured claim ─────
+#
+# `tools/check-spec-lists.py` (2026-09-10) pins each enumeration a spec makes of its own
+# type names, because four of COMPUTE's declared deviations are one amendment failing to
+# reach a list. This spec has no such list to pin: it declares no membership predicate,
+# because it is a handler extension and not an interpreter — nothing in it has to decide
+# *"is this entity one of mine"*.
+#
+# THE SEARCH, so the claim is a measurement and not a reading:
+#
+#     $ grep -cnE 'type in \[|match [a-z_.]*\.type:|is_[a-z_]+_type\(' \
+#           shared/spec-data/content-v3.7/EXTENSION-CONTENT.md
+#     0
+#
+# The only bracketed lists in this corpus are PATH PATTERNS — HISTORY §7's excluded
+# namespaces (`"system/signature/*"`, `"system/capability/grants/*"`, `"system/peer/*"`) —
+# which are not type names.
+#
+# DECLARED RATHER THAN LEFT BLANK, because the gate treats an absent declaration as a
+# FAILURE. An extension that simply omitted `[[spec_lists]]` would make R2 go quiet, and
+# an instrument that reports OK when it has nothing to read is the exact false green this
+# gate exists to prevent. When a re-pin adds a predicate, this key is what has to go.
+spec_lists_none = "No type-membership enumeration in this spec. Verified by the grep above at content-v3.7: the extension declares no `is_*_type` predicate because it has no IR to admit. If a re-pin adds one, delete this key and declare the list."
+
 [extension]
 name    = "CONTENT"
 spec    = "EXTENSION-CONTENT.md"
@@ -100,6 +124,20 @@ internal_predicate_on_wire = { status = 500, code = "storage_error", cite = "App
 # (D17's distinction), so it is recorded and not gated.
 
 [error_surface]
+
+# ── [error_surface].spec_table — WHERE THE SPEC'S OWN CODE TABLE IS ─────────────────
+#
+# Added 2026-09-10. `tools/check-error-codes.py` re-parses this table out of the pinned
+# snapshot and fails any code declared class `spec` that the table does not name — the
+# third direction on this axis, after emitted-vs-declared and declared-vs-emitted. Until
+# it existed the `spec` class was a hand transcription checked against another hand
+# transcription, and the pinned bytes every one of those claims cites were read by nothing.
+#
+# HEADING AND COLUMN are declared rather than inferred, and the gate's own first draft is
+# why: it scanned for `| `token` |` document-wide and produced five FALSE REDS — it matched
+# two unrelated tables in COMPUTE, and it missed `capability_denied` here entirely, because
+# this appendix puts the code in column 2. A false red costs the instrument (AP-4).
+spec_table = { heading = "## Appendix A: Error Codes", code_column = 2 }
 # Class 1 — SPEC. Defined in this extension's own code set, `[contract.error_codes]` above.
 spec = ["ambiguous_input", "missing_input", "hash_mismatch", "capability_denied"]
 
@@ -193,11 +231,39 @@ service_owning = false               # §11.6.9 start/stop not required; the han
 
 [install]
 model = "sdk-native"                 # installed in-process against a live peer object, NOT over the
-                                     # wire. Forced, not chosen: the peer's `system/handler:register`
-                                     # op refuses `system/*` patterns (§6.2 "user-installed handlers
-                                     # MUST NOT register at system/* paths"), and CONTENT's pattern
-                                     # IS system/content. Every system-namespace extension inherits
-                                     # this. Measured on both tier-A peers.
+                                     # wire. THE VALUE IS UNCHANGED; ITS AUTHORITY IS WITHDRAWN.
+                                     # See [substrate.wire_install_refusal] and the note below.
+
+# ── [substrate.wire_install_refusal] — was "forced by the spec", is now "refused by two peers" ──
+#
+# THROUGH 2026-09-09 THIS BLOCK DID NOT EXIST AND `model` CARRIED ITS OWN JUSTIFICATION:
+# *"Forced, not chosen: the peer's `system/handler:register` op refuses `system/*` patterns
+# (§6.2 'user-installed handlers MUST NOT register at system/* paths')... Every system-namespace
+# extension inherits this."* **The sentence it quoted has been withdrawn from the core protocol.**
+#
+# `ENTITY-CORE-PROTOCOL` 0.8.2.13 (`entity-core-protocol` @ `02ad9a6`) withdraws the reservation
+# outright -- both the unscoped form and the dispatch-path-scoped variant -- and §6.13 now reads:
+# *"Installation at a `system/*` path is authorized by the same mechanism as any other
+# registration... The protocol places no additional constraint on the `system/*` prefix."*
+# Its Appendix line is explicit that this is no longer a conformance requirement: *"A peer that
+# refuses `system/*` registrations is applying deployment policy and remains conformant; so does
+# one that permits them."*
+#
+# SO THE MEASUREMENT SURVIVES AND THE GENERALISATION DOES NOT. Two peers refuse, measured, and
+# each quotes the withdrawn sentence back to the caller in its own error string
+# (`protocol-generator/python/src/entity_core/peer/handlers.py` `_is_reserved_system_pattern`;
+# `protocol-generator/typescript/src/handlers/handlers-handler.ts:44` -- keystone @ `97bf1a05`).
+# *"Every system-namespace extension inherits this"* was a claim about the SPEC and is now a claim
+# about A DEPLOYMENT POLICY on 2 of 46 peers, 44 of which are unmeasured. That is D12/L8's shape on
+# our own file: a cohort's uniform behaviour is a fact about the cohort, not about the standard.
+[substrate.wire_install_refusal]
+must         = "NONE -- 0.8.2.13 withdrew the reservation. What remains is a deployment policy the protocol explicitly declines to constrain either way."
+typescript   = "REFUSES -- `403 forbidden_pattern`, quoting the withdrawn §6.2 sentence"
+python       = "REFUSES -- same, via `_is_reserved_system_pattern`"
+rust         = "unknown -- never asked; this extension's handler face is not installable there at all, so the wire path was never reached"
+other_peers  = "unknown (43) -- no probe has ever run this on any peer outside the tier-A pair"
+consequence  = "`model = 'sdk-native'` is unchanged and is still the only thing that works TODAY on the peers we compose against. It is no longer FORCED, so it is no longer a fact a new extension may inherit without asking."
+probe        = "unknown -- no gate in this tree exercises a wire register at a `system/*` pattern. The refusal was read out of peer source and out of a spec sentence, never executed here (D13: a source read decides what to build, never what is true)."
 
 # ── [sdk] — the operation inventory, and the one entry that is a security surface ───────
 # There is no conformance gate anywhere on the SDK face and per the operator that is correct:

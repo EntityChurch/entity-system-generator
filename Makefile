@@ -143,6 +143,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
         req-coverage req-coverage-control ext-checks ext-checks-control \
         expectation expectation-control diff-arms-control \
         citations citations-control toolchain toolchain-control \
+        spec-lists spec-lists-control routing routing-control \
         build-native test-native \
         conformance-native probe-native
 
@@ -366,7 +367,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage toolchain
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage spec-lists toolchain
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -476,6 +477,21 @@ citations-control:
 # lives in ANOTHER repo (arch's `spec inbound`), and nothing here had ever run it against
 # us. It could not route 11 of our 22 packets. An enforcement point you never execute is
 # a wish with a citation attached.
+# ── the spec-enumeration gate ───────────────────────────────────────────────────
+# D16's eighth instance, and the artifact is the PINNED SPEC SNAPSHOT -- which every
+# gate in this tree cites and no gate READ. Four of COMPUTE's declared deviations are
+# one amendment failing to reach a list somewhere else in the same document, and three
+# of the four are a set-membership disagreement, which is mechanically checkable.
+# `[[spec_lists]]` declares each enumeration; the gate holds the declaration to the
+# bytes, so a re-pin that moves a member fails instead of silently invalidating a
+# transcription. Its first run said §4.1's arm ladder omits the same three types A-10
+# was filed about -- a third site, in the switch that evaluates.
+spec-lists:
+	./tools/check-spec-lists.py
+
+spec-lists-control:
+	./tools/check-spec-lists.py --self-test
+
 routing:
 	./tools/check-routing.py
 

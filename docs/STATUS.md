@@ -6,6 +6,237 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**`typescript` × `COMPUTE` is BUILT, COMPOSED AND MEASURED: 125 PASS · 0 WARN · 3 FAIL of 128,
+from a bare arm of 0 of 128. 125 improvements, 0 core regressions across 777 core checks, 52 unit
+tests.** The largest extension in the corpus — 33 owned types against HISTORY's six, 128 oracle
+checks against 34 — and the first whose MUST surface is an interpreter rather than a handler.
+
+**§3.3's install audit and §7's reactive mode landed on 2026-09-10 and took the residue to three
+checks, none of them ours.** All fourteen moved: the six-step reactive spreadsheet, both D8
+walk-completeness rows including the `apply.args` discriminator, the dynamic-handler hot-swap, the
+two-subgraph cascade chain, and all three CP1 install-audit checks — **and the two WARNs went with
+them**, which matters because a WARN there was never partial credit, it was the check saying it
+could not run. What is left is `compute/apply` handler mode, which needs a local-dispatch seam the
+peer does not expose (see below).
+
+**COMPUTE now installs a SIXTH face, and it is the first emit consumer in this corpus that WRITES
+BACK.** HISTORY's records a transition and stops; §7.2's `on_tree_change` re-enters the evaluator
+and binds a result, which re-enters the bus. Two peer properties become load-bearing at that point
+and the spec pins neither — §9.4 leaves emit delivery implementation-defined. Delivery is
+**sync-inline**, so a `tree:put` has already produced the new result when it answers; and a write
+from inside a consumer re-enters the bus, which is what makes a cascade a cascade. **Measured, three
+arms: with §7.3's counter disabled the peer still freezes; with our re-entrancy backstop disabled it
+still freezes; with BOTH disabled it dies with `RangeError: Maximum call stack size exceeded`.** On
+this substrate §7.3's *"this cascade MUST be bounded"* is the difference between a frozen subgraph
+and a dead peer, and no wire oracle can see the difference between the first three.
+
+**The first port reached 100 of 128 with the §4.1 evaluator alone, and that is the number the
+compute track needed.** The pre-registered band was 40–80 and it missed high; the miss is kept, and
+it is a fact about the ORACLE. The band assumed four unimplemented sections — §3.3 install, §3.5
+builtins, §4.6 memoization, §7 reactive — would cost proportionally. They cost 26 checks between
+them, because the `compute` category is overwhelmingly **evaluation vectors**: literals, arithmetic,
+comparison, logic, control flow, closures, scope, budget, tail calls. **The §4.1 algorithm IS the
+category**, and the residue was four named bounded pieces of work rather than a long tail.
+
+**Then §3.5's builtins and two defects took it to 111, and §3.3 plus §7 took it to 125.** All
+thirteen §3.5 builtins run — the five inline-equivalent aliases (§10.2 SHOULD) sharing the inline
+code path, plus `map`/`filter`/`fold`, the four v3.24 primitives and `store`, which §10.1 makes
+MUST. The install audit runs four phases, **pre-flight then commit**, so a re-install whose audit
+fails leaves a frozen subgraph's metadata untouched — §3.3's atomicity clause, and the reason the
+operation refused to ship half-built: Phase 2b SEALS `authorized_data_hashes`, which §4.2 Tier 2
+then trusts without re-checking.
+
+**Two of the four "real bugs" were fiction, and the way they were fiction is the more useful
+finding.** `v319_n5_closure_field` and `v319_f11_filter_fn_arg` failed with
+`expected array, got entity.Entity` and were filed as a closure-typing bug in the LAMBDA branch.
+Both vectors dispatch `system/compute/builtins/filter`; the `entity.Entity` was **our own
+`compute/error`**, because §3.2's F10 makes an evaluated error a value at status 200. **So the
+oracle's message for "this port refused the expression" and its message for "this port mis-typed a
+value" are the same string** — a property of any check asserting on a value shape in a protocol
+where failure arrives as a well-formed value at the success status. Two worklist items with a
+plausible file and line named, and the fix for both was a section neither mentioned. Written up as
+AP-31; the generalisation is D12/L8 in a new costume — **an oracle's failure MESSAGE is an artifact,
+and before it becomes a worklist item, read the check that produced it.**
+
+**The two that were real were both a SPEC finding wearing a bug's clothes, and they share a cause
+with the two already routed.** §2.3's SA-1 MUSTs that a value-type entity evaluate to itself, and
+§4.1's `evaluate_inner` has no arm for any of the four — so a stored `compute/closure` answered
+`unknown_type` and `load_scope` was never reached. And §2.3's v3.19c option-α clause requires
+navigation to compose through an in-flight constructed entity, while §4.1's construct arm keeps no
+in-flight representation at all. **Four declared deviations now, one structure: an amendment reached
+the prose and the conformance corpus without reaching a list or an arm elsewhere in the same
+document — and three of the four missed §4.1, the section a port is actually written from.** None is
+catchable by the corpus, because `entity-core-go` carries the corrected form in all four cases.
+
+**So the spec snapshot is now read as DATA, by a gate.** `[[spec_lists]]` declares each of the
+spec's own enumerations by section, anchor and exact membership; `tools/check-spec-lists.py`
+(`make spec-lists`, in `make check`) re-parses them out of the pinned bytes and fails when parse and
+declaration disagree, so a re-pin that moves a member cannot silently invalidate a transcription.
+**Its first run strengthened a finding already routed**: §4.1's arm ladder has thirteen arms and
+omits `compute/index`, `compute/length` and `compute/numeric-cast` — the same three the two
+predicates omit, in the switch that evaluates rather than in a predicate that resolves. Three sites,
+one amendment, and the third had never been counted.
+
+**`compute/apply` handler mode is the one §10.1 MUST this port cannot reach, and it is a host
+gap rather than a decision.** §4.1's `ctx.dispatch_execute` needs a re-entrant dispatch to a LOCAL
+handler under the caller's capability. The peer exposes none: `PeerServices` carries no dispatcher,
+and `HandlerContext.outbound` is the §6.13(b) **outbound** seam — over the transport, to a URI, and
+`null` without a connection. H7's shape exactly, and routed the same way. It costs 3 of 128,
+including the check that reaches an entity-native handler body — which is the ceiling on the whole
+collapse argument, since an expression that cannot delegate cannot reach a native primitive.
+
+**And implementing a section made our coverage number go DOWN, which means the old one was
+lying.** Seven §3.5 requirement rows cited a single oracle check that asserts the args TYPE ENTITIES
+are published and never dispatches a builtin — so they read *fully measured* while the section was
+absent. Re-mapped against the vectors that actually exercise it: `MUST 44 oracle / 0 partial` became
+`MUST 37 oracle / 7 partial`, each `partial` naming its real gap (the four v3.24 primitives have no
+oracle vector at all, and the entire consumed/contained disposition table is unmeasured in every
+position). AP-32, and D14's asymmetry in a new column: **the number to distrust is the one that
+improved while nothing ran.**
+
+**Five more findings, and they are the previous mechanism in a SECOND HOME.** The §4.1 family said
+*"the section a port is written from is furthest from where the amendments are ruled."* §3.3 is the
+second such section, and three of the five below are its own listing disagreeing with prose in §3.3
+or one section over: its `audit_walk` descends only scalar fields where §7.1's descends containers
+under a v3.27 `[MUST]` — **and §3.3's walker is the one that builds the list Phase 2 capability-
+checks**, so a faithful transcription authorizes a top-level tree read and skips the same read one
+function-argument deep; §2.1's Q23 MUSTs install-time rejection and §3.3 has the neighbouring F5
+clause and not that one; and §3.3's own SA-11 prose exempts the pure builtins from handler-target
+authorization while its listing appends every one of them. The other two: **§9.1's fifteen-row error
+table names none of the five codes §3.2/§3.3/§3.4 raise**, one of which §10.1 MUSTs by name; and
+§5.2/§5.5 spell the compute resource limits as a field on the capability TOKEN while core §5 carries
+them on each GRANT ENTRY — so a literal transcription reads nothing, falls back to peer defaults,
+and produces the constraint escalation §5.5 exists to prevent.
+
+**Two of those five are invisible to the conformance corpus in principle, and that is stated rather
+than implied.** `validate-peer` launches its host with `--debug-open-grants`, so every install-time
+capability check passes whatever the audit collected — an under-authorizing audit scores identically
+to a correct one. The evidence is a diff of two listings plus our own tests, and it is filed that
+way.
+
+**A control that stayed GREEN with the code deleted, and it changed a discipline.** The test for
+§7.2's convergence check asserted the two things a consumer can see — the result hash did not move,
+no bind event fired — and passed with our implementation of the clause **removed**, because
+`EntityTree.put` emits only when the bound hash changed and `ContentStore.put` only when the hash is
+new. The instrument was fine; **the property was not ours.** Its prior in a different shape is AP-19
+(oracle checks passing in the bare arm), so D15 gains a sharpened clause: *the control is the
+absence of the SUBJECT, and a control that stays green is a finding about the PROPERTY.* Do not
+delete the assertion — the layer that owns it today is not the layer the spec addresses — add one
+only the subject can satisfy, and record which layer owns it.
+
+**And a claim of ours was wrong in the plainest possible way.** A contract in this tree said the
+peer exposed no path-scope capability predicate an extension could call, so §6.2 was satisfied at
+the dispatch boundary and a caller reaching `system/compute:eval` could read any tree path. **The
+predicate is public, and this repo is the seat that routed it — keystone H9, landed, recorded CLOSED
+on our own tracker.** One tree, two answers, and nothing joins a tracker row to an assumption block.
+The check is now per tree read on both capability-bearing paths, with its own negative control,
+because `--debug-open-grants` means the oracle cannot distinguish a real check from `return true`.
+
+**Three normative rules were got wrong and fixed by the oracle telling us, and they are the ones
+worth carrying to the next port.** §2.2 rules 8/10/11: `add`/`sub`/`mul` are **sign-agnostic**
+64-bit two's-complement, while **`div`/`mod`/`compare` are signed-default** — an operand whose
+magnitude is ≥ 2⁶³ reads as its negative counterpart — and rule 11's unsigned intent is a property
+of the **expression graph**, true only when a `numeric-cast → uint` is the *direct* operand entity.
+Any indirection drops it. We read operands at raw magnitude, so `div(2⁶⁴−2, 2)` answered 2⁶³−1
+where the spec says −1. Four checks caught it. Also: `length("hello")` is `type_mismatch` and we
+had invented string support; `cast(-1, uint)` is 2⁶⁴−1 and not `cast_out_of_range`, because an
+integer source is a bit pattern being reinterpreted while a float source is a value being converted.
+
+**The fifth face exists, and it is the first one in this repo.** `DESIGN-THE-SDK-LAYER` §1 names
+four — `types` · `handler` · `emit_consumer` · `sdk` — and D13's face amendment pins that
+vocabulary. COMPUTE installs a fifth: **the expression evaluator**, through
+`Peer.setExpressionEvaluator` (keystone's H7, which this repo routed on 2026-09-03 and which landed
+the same day). It qualifies by D13's own test rather than by analogy — `handler` and `evaluator`
+are two seams into the same dispatch path, every peer in the cohort hosts the first and
+`setExpressionEvaluator` exists on **one** of the 46, so folding them together would report
+`installed` for a peer that refused it. `tools/compose.py`'s `FACES` grew by one value and the
+refusal did not relax; the composition **reads the evaluator back off the peer** rather than
+trusting the setter, because keystone planted exactly that defect against their own H7 work.
+
+**And the error-code gate could not see COMPUTE's error surface at all.** `[error_surface].emit_pattern`
+was one regex for one mechanism — `errorResult(Status.X, "code")` — and §3.2's F10 rule makes an
+evaluated `compute/error` a **value at status 200**, so thirteen of the sixteen §9.1 codes never
+reach `errorResult`. The single pattern found **5 of 13 and reported the surface CLEAN**. That is
+D15's false-green and the second time a corpus assertion in this gate has bounded a pattern that
+matches the boring half rather than one that stops matching. `emit_pattern` is a **list** now, one
+planted self-test line per pattern, and `--self-test` refuses if the two lists differ in length.
+
+**Two findings in the normative body, and they correct what the first packet said.** The routed
+packet's §0 originally read *"none is in the normative body"*, on a close read of §§1–8 that found
+the algorithm, arithmetic, purity and determinism clauses sound. **That claim survived exactly as
+long as it took to start emitting the type layer.** §4.2's `is_compute_type` and §4.7's
+`is_compute_expression` each omit `compute/index`, `compute/length` and `compute/numeric-cast` —
+three types §2.2 defines and §10.1 MUSTs — and §4.2's omission makes a valid expression graph
+**unresolvable**, because Tier 1 is the only tier admitting an ordinary sub-expression. And
+`system/compute/subgraph` declares six fields at §2.5 while §3.3 writes seven, the seventh being
+`authorized_data_hashes`, which §4.2 reads, §1.1 names load-bearing and §10.1 MUSTs. Both have one
+cause: an amendment that reached the definition sections and the conformance list but not the
+predicate or the type block that also had to change. **Neither can be caught by the conformance
+corpus, because `entity-core-go` already carries the corrected form in both cases.**
+
+---
+
+**Build 3 opened here. `EXTENSION-COMPUTE` is pinned at v3.29, the bare arm is measured, and the
+first read found five things — every one of them in the machine-readable furniture.** The snapshot is `shared/spec-data/compute-v3.29/` (`d1de1942…`), with both
+companions byte-identical to `history-v1.10`'s.
+
+**`DESIGN-THE-COMPUTE-TRACK.md` was written against v3.27 and there had never been a snapshot**, so
+`AP-27` applied to a *reading* rather than to a copy and no pin mechanism could have noticed. Two
+versions had landed. **One of them closes that document's §6 item 6, by a bigger move than the row
+predicted**: the row said the builtins override guard becomes ours *if* `PROPOSAL-EXTENSION-HOST-INSTALL-SEAM`'s
+D1 narrows core §6.2's `system/*` reservation. `ENTITY-CORE-PROTOCOL` **0.8.2.13 withdrew the
+reservation outright**, and `EXTENSION-COMPUTE` v3.29 restates §4's override prohibition on its own
+basis — a cross-peer determinism MUST binding **every installation path**. There is no core rule left
+to delegate to. **The guard lands in port 1 rather than being discovered at port 26.**
+
+**The bare arm is the result worth quoting, and the number that matters is the zero.** Against a bare
+keystone `typescript` peer, `-category compute`: **128 checks, 0 passing, 0 skipped.** 101 are
+`blocked: depends on handler_present`. `content` bare passes **4 of 13** and `history` bare passes
+**1 of 34**, and in both cases those passes measure something other than the extension (AP-19).
+**Compute's category has no vacuous passes at all**, which makes it the cleanest differential
+instrument this repo has been handed — §3 of the compute-track doc claimed COMPUTE was the
+best-instrumented extension in the corpus from a roadmap tier, and it is now a measurement.
+
+**The contract landed with port 1, which is what the instrument said would happen.** `req-coverage.py` refuses an
+extension whose declared `oracle_category` is absent from the executed corpus, so the contract
+could not exist before a composed report did — and adding a `pending` state to get one in early
+would have been a suppression with no destination. `extension-contracts/compute/EXTENSION.toml` is
+in the tree now with 84 declared requirement rows, and **the join is by SECTION** because §10 has
+no §8.5a ids: 44 MUSTs measured by the oracle, 2 by our own tests, 7 by nothing and each of those
+carrying a sentence saying why.
+
+**Five findings routed** (`ROUTING-2026-09-09-d-arch-*`), and their *distribution* is the finding:
+we read §§1–8 closely enough to emit an evaluator and found nothing to route. CONTENT gave four
+body-level findings on the first read and HISTORY gave four; COMPUTE gave zero. What it gave instead
+is drift in the header, the constants tables and §10 — the surfaces whose only consumer is a tool.
+That is our own D16 arriving from the outside. The declaration header omits the emit pathway §7.2
+consumes and `SYSTEM-COMPOSITION` §2.2 puts at position 5; §10.1 MUSTs three behaviours of an
+operation §10.2 makes a conditional SHOULD, while the oracle hard-FAILs a manifest that omits it;
+§9.2's operations table omits `install`/`uninstall`, which is CONTENT §10.3's defect arch already
+fixed once **plus the sentence that fix added and this one lacks**; the §3.1 manifest spells the
+pattern `system/compute/*`, 2 of 18 corpus-wide and both outliers are the two specs we have read for
+generation; and `SPECIFICATION-FORMAT` v1.3 §8.5a stands at **1 of 26** a week after landing, which
+is GI-11's own resolution turned around — *a declared shape with no enforcement point*.
+
+**And one we withdrew before sending, which is worth more than the five.** The header's
+`Owned namespaces` names `system/compute/` and says nothing about the top-level `compute/*` namespace
+where all twenty IR types live. That reads as a serious omission until you read the guide clause it
+answers: §3.3 scopes the field to *"every `system/<ext>/… subtree"*. **The header is correct as
+written.** D12/L8 caught one step before it became a packet, by reading the canonical source instead
+of the plausible inference.
+
+**The re-read also caught a stale forcing claim of ours, in five live files, and it is AP-2's
+mechanism on a rule rather than on a number.** Both shipped contracts said `[install] model =
+"sdk-native"` was *"forced, not chosen"* by core §6.2, and that *"every extension owning a `system/*`
+pattern inherits this."* 0.8.2.13 withdrew that sentence. **The value does not move** — both peers we
+compose against still refuse, each quoting the withdrawn rule back to the caller — but the
+generalisation is dead, and what was a permanent property of the standard is now a deployment policy
+measured on 2 of 46 peers. It is a `[substrate.wire_install_refusal]` row now, reading `unknown` on
+the other 44 **and `unknown` by execution on all of them**, because no gate here has ever run a wire
+register at a `system/*` pattern.
+
+---
+
 **The outbox is machine-routable, and it had not been. `unaddressed 11 → 0`.** Cross-repo
 delivery here is: commit a document to your own tree and the other party reads it. The shape that
 makes that mechanical is pinned in `AGENTS-STANDARD.md` §*Routing packets* — a three-field
@@ -873,10 +1104,18 @@ the delta. **We are not nominating a second control from a source read** — the
   and not one of them is extension-aware. The build-driver count stays at 46 and never multiplies by
   the extension corpus.
 
-  **`sdk-native` is forced, not chosen, and it generalises.** The wire `register` op refuses
-  `system/*` patterns (core §6.2) on both peers, and CONTENT's pattern IS `system/content`. **Most of
-  the 26 inherit this**: a composition is a build-time artifact, and there is no remote-install story
-  for the standard corpus.
+  **`sdk-native` is measured, not forced — corrected 2026-09-09, and the correction is the
+  generalisation rather than the value.** This read *"forced, not chosen, and it generalises... most
+  of the 26 inherit this."* The rule it rested on — core §6.2's *"user-installed handlers MUST NOT
+  register at `system/*` paths"* — has been **withdrawn from the protocol** (0.8.2.13), together
+  with the dispatch-path-scoped variant that briefly replaced it. Install authorization at any path
+  is now the ordinary capability check on `resource`, and the Appendix says both answers are
+  conformant. The two peers we compose against still refuse, each quoting the withdrawn sentence
+  back to the caller, so **`sdk-native` is unchanged and no build moves.** What moves is what a new
+  extension may assume: nothing. Recorded per peer, `unknown` on 44 of 46, in
+  `extension-contracts/content/EXTENSION.toml [substrate.wire_install_refusal]` — and it is
+  `unknown` on all of them by execution, because no gate here has ever run a wire register at a
+  `system/*` pattern.
 
   **The composition resolver refuses before it emits.** `tools/compose.py` enforces I6 (pattern
   collision), I7 (namespace overlap) and I9 (unmet dependency) plus a pinned-snapshot check, and

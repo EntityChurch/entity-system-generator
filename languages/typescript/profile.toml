@@ -87,11 +87,29 @@ startup_ticks = 150
 # other two — and that is a value, not a procedure, so the shared gate holds one copy of
 # the protocol and each profile declares its own pattern.
 [error_surface]
-emit_pattern = '\berrorResult\(\s*Status\.\w+\s*,\s*"(?P<code>[a-z_]+)"'
+# A LIST, NOT A STRING, since 2026-09-09 — because an extension can emit its error
+# surface by more than one mechanism and the first COMPUTE run proved it. §3.2's F10 rule
+# makes an evaluated `compute/error` a VALUE at status 200, so thirteen of COMPUTE's
+# sixteen §9.1 codes never reach `errorResult`. The single pattern saw 5 of 13 and called
+# the surface clean.
+emit_pattern = [
+  # 1. the transport-status form — CONTENT and HISTORY use this for everything
+  '\berrorResult\(\s*Status\.\w+\s*,\s*"(?P<code>[a-z_]+)"',
+  # 2. the ERROR-AS-VALUE form, via the named code constants. COMPUTE's `[sdk_surface]`
+  #    requires the `CODE_*` names as cross-port contract, so the emit sites carry a
+  #    constant rather than a literal and pattern 1 is structurally blind to them.
+  '\bCODE_(?P<code>[A-Z_]+)\b',
+]
 # D15's control, as data. `--self-test` runs the pattern above against this line and
 # asserts it extracts `planted_bogus_code`. A pattern that silently stops matching reports
 # a clean surface, and a clean surface is this gate's most convincing wrong answer.
-self_test_line = 'return errorResult(Status.BadRequest, "planted_bogus_code", "x");'
+# ONE PLANTED LINE PER PATTERN, in the same order. `--self-test` refuses if the two
+# lists differ in length: a pattern with no line of its own is uncontrolled, and an
+# uncontrolled pattern is exactly the one that silently stops matching.
+self_test_line = [
+  'return errorResult(Status.BadRequest, "planted_bogus_code", "x");',
+  'return err(CODE_PLANTED_BOGUS_CODE, "x");',
+]
 
 # ── [sdk_surface] — the D16 gate's per-target facts ─────────────────────────────
 # D17: a per-target VALUE lives in the profile. `entry_point` was a literal in
