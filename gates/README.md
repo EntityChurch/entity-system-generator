@@ -18,7 +18,7 @@ assertion we wrote ourselves has nothing watching it.
 |---|---|---|---|---|
 | **`extension-conformance`** | **`entity-core-go`'s `validate-peer`** — the oracle, because it is not the thing under test. The 52 extension categories | `validate-peer -category <ext>` against a running composed peer | owed | not yet run |
 | **`core-regression`** | same oracle, `--profile core` — keystone's 16 | `validate-peer --profile core`, re-run after installing | owed | not yet run |
-| **`host-seam`** | `GUIDE-CONFORMANCE` §7d (arch, proposed) + the keystone peer host contract | `host-seam/probe-seam.mjs` (H1/H2/H6, model 2) · `host-seam/probe-entity-native.mjs` (**H7**, model 3) | owed | **1 peer measured, both probes** |
+| **`host-seam`** | `GUIDE-CONFORMANCE` §7d (arch, proposed) + the keystone peer host contract **H1–H7** | `host-seam/probe-seam.mjs` (H1/H2/H6, model 2) · `host-seam/probe-entity-native.mjs` (**H7**, model 3) | owed — keystone's, `go`/`rust`/`python` first | **1 peer measured, both probes; H1/H2/H6/H7 green there, 45 `unknown`** |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
 
@@ -57,6 +57,16 @@ Inherited from keystone's ratchet, each earned on one of their measured incident
 - **Delete derived state before measuring.** A gate that assumes a `node_modules/`, a `dist/`, or a
   `target/` is a gate on somebody's machine. Keystone found a peer whose gate died `rc=127` from
   clean while reporting green for weeks.
+- **A gate that imports a build artifact must check the artifact's age, and report `unknown` rather
+  than a verdict when it is stale.** Second shape of the row above and worth its own line, because it
+  fails in the opposite direction: not a gate that dies, a gate that **answers confidently about code
+  nobody built**. Keystone's own instrument reported H7 unsatisfied against source that satisfied it,
+  after a planted-defect run left a mutated `dist/` behind. Ours now compare `src/` and `dist/` mtimes
+  and exit 2. **Exit 2 is not a verdict.**
+- **Resolve the thing under test the way a consumer resolves it.** Read the manifest
+  (`package.json` `exports`, `Cargo.toml`, `pyproject.toml`), do not guess a path into the build
+  output. A path guess reaches around the packaging boundary, which is the boundary D13 is about, and
+  turns an H4 failure into a passing probe.
 - **Both controls or it measures nothing.** The positive must carry a witness the wrong
   implementation cannot produce; the negative must go RED.
 - **When the claim is that an installed thing gets consulted, "absent" is not the only alternative

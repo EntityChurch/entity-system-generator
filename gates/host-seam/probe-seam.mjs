@@ -25,25 +25,10 @@
  * Run:  node probe-seam.mjs [--dist <path to typescript/dist/src/index.js>]
  */
 
-import { createRequire } from "node:module";
-import { dirname, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadPeerUnderTest } from "./peer-under-test.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-const DEFAULT_DIST = resolvePath(
-  HERE,
-  "../../../entity-core-keystone/protocol-generator/typescript/dist/src/index.js",
-);
-
-function argValue(flag, fallback) {
-  const i = process.argv.indexOf(flag);
-  return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;
-}
-
-const distPath = resolvePath(argValue("--dist", DEFAULT_DIST));
-
-const { Peer, Entity, Ecf, HandlerResult, ResourceTarget } = await import(distPath);
+const { peer: peerPkg, entryPath, howResolved } = await loadPeerUnderTest();
+const { Peer, Entity, Ecf, HandlerResult, ResourceTarget } = peerPkg;
 
 /** Registration-time captured state — unreachable to an entity-native body. */
 const REGISTRATION_NONCE = "seam-witness-7f3a";
@@ -169,7 +154,8 @@ function inspectRegistrationWrites() {
   return { before, after };
 }
 
-console.log(`peer package: ${distPath}`);
+console.log(`peer package: ${entryPath}`);
+console.log(`resolved via: ${howResolved}`);
 console.log(`node: ${process.version}\n`);
 
 const writes = inspectRegistrationWrites();

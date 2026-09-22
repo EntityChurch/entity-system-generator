@@ -56,8 +56,8 @@ This is the fact that shapes everything else.
 
 **Surface 2 is built, not missing.** `emit` is the primitive — `SYSTEM-COMPOSITION` §1.1 — and the
 registration API around it is implementation-defined, which is exactly what §1.2 means by *"the peer
-builder/wiring code is responsible for registering consumers in the correct order."* Measured at
-`entity-core-go` `7262f17`: `core/store/notifying.go` wraps the location index and fires consumers on
+builder/wiring code is responsible for registering consumers in the correct order."* Measured in
+`entity-core-go`: `core/store/notifying.go` wraps the location index and fires consumers on
 every `Set`/`Remove`, with `AddNamedSyncHook` at `:105`, the pattern-filtered variant at `:115`,
 the content-event equivalent in `notifying_content.go:39`, cascade-halt on a non-200 consumer result,
 and `SetMaxCascadeDepth` / `SetEmitSuppressed`. The builder options are
@@ -118,8 +118,8 @@ specified — we implement it, we do not design it.**
 ### 3.1 The hand-written wiring already diverges, and nothing catches it
 
 The reference composition is `entity-core-go`'s `cmd/entity-peer/main.go:423–429` — a functional
-options list. Registration order is execution order (`core/store/notifying.go:275`, no sort
-anywhere), so the wired order at `7262f17` is:
+options list. Registration order is execution order (`core/store/notifying.go`, no sort anywhere),
+so the wired order is:
 
 | Wired | Hook | §2.2 says |
 |---|---|---|
@@ -168,9 +168,26 @@ all 26 (mandatory deps only; ENCRYPTION's tiered deps are optional and excluded)
 | `GROUP` | ATTESTATION, IDENTITY, QUORUM, ROLE | 4 |
 | `SIGNALING` | CONTINUATION, INBOX, NETWORK, SUBSCRIPTION | 4 |
 
-**The graph is shallow — 15 of 26 have no extension prerequisite at all.** So "which extension
-first" is not constrained much by dependencies, and the ordering below is derived from *seams*
-instead.
+**The graph is shallow — 14 of 26 name no other extension at all**, and a 15th (`ROLE`) names them
+only as optional. So "which extension first" is not constrained much by dependencies, and the
+ordering below is derived from *seams* instead.
+
+> **Corrected 2026-09-04. This read `15 of 26` and the number was never computed** (D14 / AP-1, third
+> instance — found by D14's own grep gate on its first run). Produced now by the command, which is
+> the point of the discipline:
+>
+> ```
+> grep -h '^\*\*Depends' specs/extensions/EXTENSION-*.md | grep -vc 'EXTENSION-'   # → 14
+> ```
+>
+> **And the off-by-one is the useful part, not the arithmetic.** *"No extension prerequisite"* has two
+> defensible readings — *names no extension* (14) and *requires no extension* (15, since `ROLE`'s
+> `EXTENSION-ATTESTATION` and `EXTENSION-IDENTITY` are explicitly *"optional, Tier B and above"* /
+> *"optional, Tier C only"*). The document silently picked one. **The resolver has to pick too, and
+> for it the choice is not cosmetic**: an optional dependency that the closure treats as mandatory
+> pulls ATTESTATION and IDENTITY into every composition containing ROLE. `EXTENSION.toml`'s dependency
+> block therefore records **required** and **optional** separately, and the S0′ resolver honours only
+> the first.
 
 ## 5. Any extension, on its own — modularity is the point
 
@@ -180,7 +197,7 @@ order and this document does not have an opinion about which one gets built firs
 made per build, not a property of the design.
 
 The only thing the design owes is that **a declared dependency is honoured**, and §4 is that table:
-15 of 26 have none at all, and the deepest closure is four. So the resolver's job is small — take the
+14 of 26 name no other extension, and the deepest closure is four. So the resolver's job is small — take the
 requested set, pull in whatever the `**Depends**:` lines mandate, and refuse a composition that
 cannot be satisfied.
 
@@ -195,7 +212,7 @@ Two facts a build should know going in, neither of them an ordering:
 
 ## 6. What is already built — measured, not assumed
 
-At `entity-core-keystone` `5a53b75`:
+Measured in `entity-core-keystone`:
 
 - **Peers are constructible in-process.** `go` exports `NewPeer(seed, opts...) (*Peer, error)`;
   `rust` has `pub struct Peer`; `typescript` `export class Peer`. `ruby`, `dart`, `elixir`, `swift`,

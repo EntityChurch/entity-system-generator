@@ -33,24 +33,10 @@
  * Run:  node probe-entity-native.mjs [--dist <path to typescript/dist/src/index.js>]
  */
 
-import { dirname, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
+import { loadPeerUnderTest } from "./peer-under-test.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-const DEFAULT_DIST = resolvePath(
-  HERE,
-  "../../../entity-core-keystone/protocol-generator/typescript/dist/src/index.js",
-);
-
-function argValue(flag, fallback) {
-  const i = process.argv.indexOf(flag);
-  return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;
-}
-
-const distPath = resolvePath(argValue("--dist", DEFAULT_DIST));
-
-const { Peer, Entity, Ecf, HandlerResult, ResourceTarget, TypeNames } = await import(distPath);
+const { peer: peerPkg, entryPath, howResolved } = await loadPeerUnderTest();
+const { Peer, Entity, Ecf, HandlerResult, ResourceTarget, TypeNames } = peerPkg;
 
 /** Non-reserved patterns: §6.2 forbids a wire-installed handler at `system/*`. */
 const LITERAL_PATTERN = "app/probe/en-literal";
@@ -100,6 +86,10 @@ function seedExpressions(peer) {
   peer.tree.put(abs(EXPR_TWO), two);
   peer.tree.put(abs(EXPR_THREE), three);
   peer.tree.put(abs(EXPR_ARITH), arith);
+
+  for (const e of [lit42, two, three, arith]) {
+    EXPR_BY_HASH.set(Buffer.from(e.contentHash).toString("hex"), e);
+  }
 }
 
 /** Wire `system/handler:register` with an `expression_path` — the model-3 install. */
@@ -149,12 +139,52 @@ function summarize(response) {
   return out;
 }
 
-async function scenario({ installEvaluator }) {
+/**
+ * A real evaluator installed through the H7 seam. It answers `compute/arithmetic` with
+ * an actually-computed sum — **derived from the expression graph in the tree**, not a
+ * constant — so a peer that routed to the evaluator and a peer that happened to answer
+ * `200` some other way are distinguishable. It declines everything else with `null`,
+ * which is the seam's documented compose semantics.
+ */
+function expressionEvaluator(peer, seen) {
+  return {
+    evaluate({ expression, expressionPath }) {
+      seen.push(`evaluate:${expression.type}`);
+      if (expression.type !== "compute/arithmetic") return null; // not mine — peer's 501 stands
+      const op = Ecf.asText(Ecf.require(expression.data, "op"));
+      const operand = (key) => {
+        const hash = Ecf.asBytes(Ecf.require(expression.data, key));
+        const hex = Buffer.from(hash).toString("hex");
+        const ent = peer.contentStore?.get(hash) ?? EXPR_BY_HASH.get(hex);
+        return Ecf.asUint(Ecf.require(ent.data, "value"));
+      };
+      if (op !== "add") return null;
+      const sum = operand("left") + operand("right");
+      const result = Entity.create(
+        "compute/result",
+        Ecf.map(["value", Ecf.uint(sum)], ["expression_path", Ecf.text(expressionPath)]),
+      );
+      return HandlerResult.ok(result, []);
+    },
+  };
+}
+
+/** Hash → expression entity, so the evaluator can resolve operands it was handed by hash. */
+const EXPR_BY_HASH = new Map();
+
+async function scenario({ installEvaluator, installSeam }) {
   const seen = [];
+  const seamSeen = [];
   const host = new Peer({ debugOpenGrants: true });
   seedExpressions(host);
   if (installEvaluator) {
     host.registerHandler(computeEvaluatorHandler(seen));
+  }
+  if (installSeam) {
+    if (typeof host.setExpressionEvaluator !== "function") {
+      throw new Error("peer has no setExpressionEvaluator — H7 seam absent, rerun without --seam");
+    }
+    host.setExpressionEvaluator(expressionEvaluator(host, seamSeen));
   }
   const port = await host.listen(0);
 
@@ -204,7 +234,7 @@ async function scenario({ installEvaluator }) {
 
   await client.dispose?.();
   await host.dispose?.();
-  return { reg, dispatch, direct, seen, seenViaDispatch };
+  return { reg, dispatch, direct, seen, seenViaDispatch, seamSeen };
 }
 
 function line(label, s) {
@@ -212,7 +242,8 @@ function line(label, s) {
   console.log(`  ${label.padEnd(46)} status=${String(s.status).padEnd(4)} ${detail}`);
 }
 
-console.log(`peer package: ${distPath}`);
+console.log(`peer package: ${entryPath}`);
+console.log(`resolved via: ${howResolved}`);
 console.log(`node: ${process.version}\n`);
 
 console.log("=== Scenario 1 — no evaluator installed ===");
@@ -232,27 +263,52 @@ line("D. system/compute:eval called directly", s2.direct);
 console.log(`  evaluator invoked BY DISPATCH (C):     ${s2.seenViaDispatch.length ? s2.seenViaDispatch.join(", ") : "(none — never asked)"}`);
 console.log(`  evaluator invoked in total (C + D):     ${s2.seen.length ? s2.seen.join(", ") : "(none)"}`);
 
+const seamPresent = typeof new Peer({ debugOpenGrants: true }).setExpressionEvaluator === "function";
+let s3 = null;
+if (seamPresent) {
+  console.log("\n=== Scenario 3 — an evaluator installed through the H7 seam ===");
+  s3 = await scenario({ installEvaluator: false, installSeam: true });
+  console.log(" dispatch:");
+  line("E. body = compute/arithmetic{add,2,3}", s3.dispatch.arith);
+  line("F. body = compute/literal{42} (floor)", s3.dispatch.literal);
+  console.log(`  evaluator invoked by dispatch:         ${s3.seamSeen.length ? s3.seamSeen.join(", ") : "(none — never asked)"}`);
+} else {
+  console.log("\n=== Scenario 3 — SKIPPED: this peer has no setExpressionEvaluator (H7 absent) ===");
+}
+
 const registerOk = s1.reg.literal.status === 200 && s1.reg.arith.status === 200;
 const literalWorks = s1.dispatch.literal.status === 200 && s1.dispatch.literal.value === "42";
 const arithWorks = s1.dispatch.arith.status === 200;
 const evaluatorLive = s2.direct?.status === 200 && s2.direct?.value === COMPUTE_WITNESS;
-const delegates = s2.dispatch.arith.status === 200 || s2.seenViaDispatch.length > 0;
+const delegatesToHandler = s2.dispatch.arith.status === 200 || s2.seenViaDispatch.length > 0;
+// The witness is the computed sum, which no constant-returning body and no
+// compute/literal floor can produce: 2 + 3 read out of the tree.
+const seamWorks = s3 !== null && s3.dispatch.arith.status === 200 && s3.dispatch.arith.value === "5";
+// The built-in floor must be UNAFFECTED by an installed evaluator — that ordering is
+// the whole reason installing one cannot move a conformance result.
+const floorIntact = s3 === null || (s3.dispatch.literal.status === 200 && s3.dispatch.literal.value === "42");
+const floorNotIntercepted = s3 === null || !s3.seamSeen.some((s) => s.endsWith("compute/literal"));
 
 console.log("\nVERDICT");
 console.log(`  register accepted an entity-native manifest:      ${registerOk ? "yes" : "NO — probe is vacuous"}`);
 console.log(`  model 3 reaches a compute/literal body:           ${literalWorks ? "MEASURED yes" : "no"}`);
-console.log(`  model 3 reaches a compute/arithmetic body:        ${arithWorks ? "MEASURED yes" : `NO — ${s1.dispatch.arith.status} ${s1.dispatch.arith.code}`}`);
-console.log(`  installed evaluator is live and reachable:        ${evaluatorLive ? "yes (control D)" : "NO — control C is not attributable"}`);
-console.log(`  dispatch DELEGATES to the installed evaluator:    ${delegates ? "yes" : "NO — the evaluator is never asked"}`);
+console.log(`  built-in floor alone reaches compute/arithmetic:  ${arithWorks ? "yes" : `NO — ${s1.dispatch.arith.status} ${s1.dispatch.arith.code} (expected)`}`);
+console.log(`  a handler at system/compute IS the seam:          ${delegatesToHandler ? "yes" : "NO — and it should not be; see E"}`);
+console.log(`    (that handler was live and directly callable:   ${evaluatorLive ? "yes, control D" : "NO — control C not attributable"})`);
+console.log(`  H7 — an evaluator installed through the seam:     ${!seamPresent ? "ABSENT — no setExpressionEvaluator" : seamWorks ? "MEASURED PASS — 200, value=5 computed from the tree" : `FAIL — ${s3.dispatch.arith.status} ${s3.dispatch.arith.code}`}`);
+console.log(`  the compute/literal floor is unaffected by it:    ${floorIntact && floorNotIntercepted ? "yes — answered first, evaluator never consulted" : "NO — an installed evaluator moved the floor"}`);
 console.log("");
 console.log(
-  !arithWorks && evaluatorLive && !delegates
-    ? "  => H7 MEASURED ON THIS PEER: the entity-native evaluator is not delegable.\n" +
-        "     Installing EXTENSION-COMPUTE does not widen the model-3 body language.\n" +
-        "     Model 3 on this peer means compute/literal and nothing else."
-    : "  => read the rows above; the H7 shape did not reproduce as stated.",
+  seamWorks && floorIntact && floorNotIntercepted
+    ? "  => H7 SATISFIED ON THIS PEER, BY EXECUTION. Model 3 is delegable: a body the\n" +
+        "     built-in path refuses is routed to an installed evaluator, and the floor the\n" +
+        "     cohort's register round-trip depends on is untouched. Extensions may now ship\n" +
+        "     their own compute semantics on this peer."
+    : seamPresent
+      ? "  => the H7 seam is present but did not behave as contracted; read the rows above."
+      : "  => H7 ABSENT on this peer: model 3 means compute/literal and nothing else.",
 );
 
-// Exit 0 when every control behaved (including the negatives) — the probe's own
-// integrity, not the peer's verdict. A vacuous run must not read as green.
-process.exit(registerOk && literalWorks && evaluatorLive ? 0 : 1);
+// Exit 0 when every control behaved — the probe's own integrity, not the peer's verdict.
+// Scenario 3 only gates the exit when the seam exists to measure.
+process.exit(registerOk && literalWorks && evaluatorLive && (!seamPresent || (seamWorks && floorIntact && floorNotIntercepted)) ? 0 : 1);

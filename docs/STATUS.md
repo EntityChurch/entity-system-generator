@@ -19,11 +19,20 @@ request field *and* registration-time state, so a peer that merely wrote the rig
 cannot pass. The negative control goes RED. **That peer's model-2 host obligations are green by
 execution; every other peer reads `unknown`, and will until something executes.**
 
-`gates/host-seam/probe-entity-native.mjs` measures the **other** execution model on the same peer,
-and the result is a limit rather than a capability: the entity-native path evaluates
-`compute/literal` and answers `501 unsupported_expression` to anything richer, **and an evaluator
-installed at `system/compute` is live, directly callable, and never consulted by dispatch.** Four
-controls. That is **H7**, and it retracts a claim of ours that had already been routed.
+`gates/host-seam/probe-entity-native.mjs` measures the **other** execution model on the same peer.
+It first measured a limit — the entity-native path evaluated `compute/literal` and answered `501` to
+anything richer, with an installed evaluator live, directly callable, and never consulted. That was
+**H7**, and it retracted a claim of ours that had already been routed. **Keystone closed it the same
+day**, and the re-measurement is the good half: an evaluator installed through the new seam answers a
+`compute/arithmetic` body **`200 value=5`, computed from operands read out of the tree**, while the
+`compute/literal` floor still answers first and the evaluator is never consulted for it. **H6 closed
+in the same round** — our *unmodified* `probe-seam.mjs` flipped `frame_budget_reachable` to `true`
+without our touching it, which is the strongest kind of corroboration available: their fix, our
+instrument, no coordination.
+
+**Both probes now resolve the peer through its `package.json` `exports` map and refuse to run against
+a stale `dist/`**, reporting `unknown` (exit 2) rather than a verdict — adopted from keystone, who
+caught their own instrument measuring a build nobody asked for. The guard has its own control.
 
 ## What is established
 
@@ -42,8 +51,11 @@ controls. That is **H7**, and it retracts a claim of ours that had already been 
   subscription, or subscribers see a change with no version entry). **We implement it; we do not
   design it.**
 - **The dependency graph is machine-readable and shallow.** Every extension declares a `**Depends**:`
-  line; parsed across all 26, **15 have no extension prerequisite at all**, and the deepest closure is
-  four. So the resolver's job is small: honour what is declared, refuse what cannot be satisfied.
+  line; parsed across all 26, **14 name no other extension at all** and a 15th names them only as
+  optional, with the deepest closure at four. So the resolver's job is small: honour what is declared,
+  refuse what cannot be satisfied — and **distinguish required from optional**, because `ROLE`'s
+  attestation and identity dependencies are explicitly tier-conditional and a closure that treats them
+  as mandatory pulls two extensions into every composition that contains ROLE.
 - **The two-generator split.** `entity-core-keystone` generates core peers from the three core spec
   files; this repo generates the layer above. The boundary is the input snapshot, and it is the
   correct seam rather than a limitation.
@@ -55,6 +67,10 @@ controls. That is **H7**, and it retracts a claim of ours that had already been 
   fourth — bind the *language-native* body — is missing because it is the only one a wire oracle can
   never drive: the existing body-binding check installs an entity-native `compute/literal`, and a
   `compute/literal` cannot be a CONTENT handler.
+- **The host contract is H1–H7, and it is keystone's document.** H1/H2/H6/H7 are satisfied on
+  `typescript` **by execution**, measured independently by both seats' instruments. The other 45 read
+  `unknown`. **A packaging fact is not a capability and a source read is not a measurement** — four
+  control nominations across this ecosystem were made from source and three were wrong.
 - **The conformance surface is the complement of keystone's**, not a blank page: 52 of
   `validate-peer`'s 68 categories are extension categories. **Our second failure mode is one keystone
   never has** — *the peer was right and we broke it* — so every run re-measures the core 16 too.
@@ -75,8 +91,12 @@ call site, inside the **wire** `register` operation (`go/src/peer/handlers.go:49
 program that constructs the peer and installs before listening is the bootstrap class. **H1 + H3 alone
 unblock it.** D1 still lands for the wire/remote install story; it gates nothing here.
 
-**Keystone has accepted H1–H5** (`HANDOFF-TO-GENERATOR-2026-09-02`, their tree) and is doing the H4
-survey, the `[host]` profile blocks, the roster column, and the `go`/`rust` exposure work.
+**The `typescript` peer can host everything build 1 needs, measured by execution:** a handler
+installed after construction and reached by dispatch, an emit consumer, the connection's frame budget
+readable from a body (`ctx.frameBudget()`), and a delegable expression evaluator
+(`Peer.setExpressionEvaluator`). **Every other peer reads `unknown`.**
+
+**Nothing on our critical path waits on anyone.** Build 1 and build 3 are unblocked.
 
 **The decision that was gating the first build is made, by measurement rather than by choice.** The
 bar is `SDK-OPERATIONS` §11.6, not a raw map write: dispatch resolves a pattern by walking the tree
@@ -132,27 +152,41 @@ the delta. **We are not nominating a second control from a source read** — the
   where we want a harder guarantee we set it ourselves, as a fixed per-extension operation inventory
   with spec citations that generation refuses to omit. What is still unmeasured by anything is
   **consumer ordering**: normative in `SYSTEM-COMPOSITION` §2.2, and no oracle category tests it.
-- ✅ **The compute track** — `DESIGN-THE-COMPUTE-TRACK.md`, and it **corrects a claim of ours that
-  had already been routed.** The operator's structural theory is that COMPUTE is ported per language
-  and then the other 25 extensions are written **once**, as compute expressions, collapsing
-  `26 × N` to `N + 25`. The theory's precondition was measured and is **not met**: on `typescript`,
-  the entity-native path evaluates `compute/literal` and answers `501` to everything else, **and a
-  live evaluator installed at `system/compute` is never consulted** — four controls,
-  `gates/host-seam/probe-entity-native.mjs`. `entity-core-go` has the seam as one nullable
-  `d.EvaluateExpression` field; the keystone peers have no equivalent. That is **H7**, routed. A
-  second bound is the expression language itself: `EXTENSION-COMPUTE` has **no bitwise operations**,
-  so any extension whose surface is a digest is model-3-infeasible — which is the real reason CONTENT
-  cannot be entity-native, and the FastCDC reason we published was wrong. What the theory gets
-  **right**: COMPUTE's bootstrap is forced by construction, model 3 is the only model that can ever
-  support *"pull the extensions into a peer you didn't build,"* and COMPUTE is the **best-instrumented
-  extension in the corpus** — Stage A / M5 / 🟢 stable at v3.27, a three-way byte-identical LOCK, a
-  portable §7c corpus whose own tooling refuses to treat its builder as the oracle, and a 4,755-line
-  `validate-peer` category. **COMPUTE moves up to build 3.**
-- **`typescript` × `CONTENT` — the first build.** Zero peer changes, and the seam is now measured
-  rather than inferred. **Scope includes the SDK face** — generating the handler alone ships half an
-  extension. **There is no second zero-change peer** — `csharp` was it and it is
-  retracted, so on this cycle a generator bug and a peer bug are *not* separable by cross-checking a
-  second runtime, and the compensating control is that the seam itself is measured.
+- ✅ **The compute track** — `DESIGN-THE-COMPUTE-TRACK.md`. The operator's structural theory is that
+  COMPUTE is ported per language and then the other 25 extensions are written **once**, as compute
+  expressions, collapsing `26 × N` to `N + 25`. **Its host precondition was measured, found missing,
+  routed, fixed by keystone the same day, and re-measured green** — that whole loop is the document.
+  **Two bounds remain, and they are different in kind.** *(1)* The expression language:
+  `EXTENSION-COMPUTE` has **no bitwise operations**, so any extension whose surface is a digest is
+  model-3-infeasible — the real reason CONTENT cannot be entity-native, and the FastCDC reason we
+  published was wrong. That is a specification fact and no implementation closes it. *(2)* Budget
+  admissibility under §5's step charging is **unmeasured**; nothing has run.
+  **The denominator is 26, not 46** — twenty peers have no `compute/literal` ladder to hang an
+  evaluator off, so the collapse ratio has to carry that number explicitly.
+  **What the theory gets right**: COMPUTE's bootstrap is forced by construction, and model 3 is the
+  only one of the three that can ever support *"pull the extensions into a peer you didn't build."*
+  COMPUTE is also the **best-instrumented extension in the corpus** — Stage A / M5 / 🟢 stable at
+  v3.27, a portable §7c corpus whose own tooling refuses to treat its builder as the oracle, and a
+  4,755-line `validate-peer` category. **That instrument claim was overstated once and is corrected in
+  place**: the "three-way byte-identical LOCK" figure we cited is the pin `EXTENSION-COMPUTE`'s own
+  header marks *historical*; the corpus is now at 362 vectors and locks **go-on-go only**, with the
+  three-way bless owed. **A conformance claim cites the MANIFEST beside the bytes, never a spec
+  header** — their rule, and we broke it. **COMPUTE moves up to build 3.**
+- **`typescript` × `CONTENT` — the first build, and it is now clear to start.** Zero peer changes, the
+  seam measured rather than inferred, and **the one MUST the build could not satisfy is gone**: H6
+  landed, so `ctx.frameBudget()` gives a generated CONTENT handler the connection's budget that
+  `CONTENT` v3.6 Am. 1 §6.2 requires it to consult. **Scope includes the SDK face** — generating the
+  handler alone ships half an extension. **There is no second zero-change peer** — `csharp` was it and
+  it is retracted, so on this cycle a generator bug and a peer bug are *not* separable by
+  cross-checking a second runtime, and the compensating control is that the seam itself is measured.
+
+  **The build-1 accounting, restated because one of its two causes closed.** The honest target is
+  **7 wire checks measuring us, 1 declared skip, 4 excluded as inattributable** — not `12P·0F`. The
+  skip is `content/frame-limit-respected`, and it previously had **two independent causes with two
+  owners**. One is closed: a handler body can now read the frame budget. **The other is that the check
+  seeds its oversized response through a `local/files` root and skips without one** — so it is
+  unreachable for a composition that installs CONTENT and nothing else, which is exactly what we build
+  first. **Report it as one declared skip with that cause named.** Not as fixed, not as two.
 - **The S0′ resolver** — dependency closure, consumer-position assignment, ordering-constraint
   validation. The graph is already machine-readable in the corpus.
 
@@ -162,6 +196,8 @@ where the resolver, the isolation invariants, §2.2 ordering and the emit questi
 3. **`COMPUTE`** — moved up from later, and it displaces `SUBSTITUTE`/`REVISION`: it is the only
 extension with an instrument that is neither ours nor keystone's, it is the precondition for every
 model-3 question, and the collapse argument turns on a per-language port cost nobody has measured.
+**It now has a destination as well as a gate** — H7 means a generated evaluator installs into a real
+peer, so build 3 ends with an entity-native body running rather than with an argument.
 4. A second language, after there is something whose port is worth measuring.
 
 ### What the first read-for-generation found, before a line was generated
