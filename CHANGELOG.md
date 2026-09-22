@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-09-22
+
 First publication. Nothing in this project has been released before, so everything below is
 new rather than changed.
 

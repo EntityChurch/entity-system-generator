@@ -1,0 +1,19 @@
+# .release-removals — paths this repository used to publish and deliberately no longer does.
+#
+# If a file you could once fetch from here has gone, the reason belongs in this file: what
+# moved, and where to look for it now. A removal is not forbidden; an unexplained one is,
+# because from outside there is no way to tell a deliberate withdrawal from a mistake.
+#
+# One path or path-prefix per line. Blank lines and `#` comments are ignored.
+
+# ── The repository placeholder ────────────────────────────────────────────────
+# `temp.txt` was the single empty-repository placeholder that existed only so this
+# repository had a branch before its first release was prepared. It never carried content,
+# nothing referenced it, and this release replaces it with the actual tree. It is listed
+# here because it WAS on the published branch, and a vanished path cannot be told apart
+# from a mistake by anyone outside — which is what this file exists to prevent.
+temp.txt
+
+# Nothing else is listed, and that is a measurement rather than an oversight: apart from
+# the placeholder above, no released version of this repository has been published, so
+# there is no earlier public tree for anything to have disappeared from.
