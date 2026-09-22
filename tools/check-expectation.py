@@ -39,10 +39,43 @@ are now two blocks, and only one of them is a gate input.
 
 WHAT IT ASSERTS, PER (composition x report stem)
 ------------------------------------------------
-    total       the oracle's declared check count for that stem
-    composed    the composed arm's severity tally
-    bare        the bare arm's severity tally
-    improved    THE NAMED SET of checks that move bare -> composed
+    total        the oracle's declared check count for that stem
+    composed     the composed arm's severity tally
+    bare         the bare arm's severity tally
+    improved     THE NAMED SET of checks that move bare -> composed
+    requirement  THE OBLIGATION each of those names carries  [§5b, 2026-09-16]
+
+REQUIREMENT-KEYING (§5b) — WHY A RENAME IS NOT A LOST CAPABILITY
+-----------------------------------------------------------------
+`PROPOSAL-CONFORMANCE-ORACLE-CONTRACT` §5b `[MUST]`: a baseline outside an oracle's own
+tree identifies an obligation by its requirement id, never by an oracle's check name. The
+clause predicts that without it *"a re-pin that renames a check silently invalidates a
+baseline."*
+
+**Measured here before anything was built, and the word that is wrong is `silently`.** One
+check renamed with its obligation and verdict unchanged — the thing a `validate-peer`
+re-pin does — and this gate failed LOUDLY and TWICE, with both messages wrong:
+
+    1 declared improvement(s) NO LONGER IMPROVE: content.type_blob    <- false
+    1 UNDECLARED improvement(s): content.type_blob_entity             <- true, unjoined
+
+Nothing connected the two halves of one event, and the remedy the first message offers is
+the damaging one: *"re-bless WITH A REASON"* writes a re-pin into the permanent record as
+a capability change, in the artifact whose only job is remembering capabilities over time.
+At scale it is §5b's real argument — N renames produce 2N failures across nine
+compositions, all reading like regressions, and **the reasonable response to a false red
+across a whole tree is to delete the baselines.**
+
+So `[gate.baseline.<stem>.requirement]` maps obligation -> the names currently carrying it,
+grouped so a SPLIT joins an existing line. It is **emitted by `--bless` and never typed**:
+every value is read out of the report by `requirement_keys()`, because a hand-kept copy of
+another seat's map is what D20 exists to prevent and would be wrong at the first re-pin.
+
+⚠ **This is not full §5b compliance and must not be cited as it.** The key is the oracle's
+`spec_ref` — a SECTION CITATION, not a `SPECIFICATION-FORMAT` §8.5a `<PREFIX>-R<n>` id.
+Those ids do not exist yet: core §9 has 98 obligations and 0 addressable, and the extension
+sweep stands at 1 of 26. Both are arch's and both are on their board. What this buys with
+no id scheme at all is §5b's consequence 1, which is the one that pays today.
 
 `improved` is a set of NAMES and not a count, and that is D14 applied: a count that shrinks
 by one understates a capability, and nothing re-checks in that direction. A name that
@@ -80,6 +113,7 @@ USAGE
     ./tools/check-expectation.py --require languages/rust/compositions/content
     ./tools/check-expectation.py --bless          # print the TOML for what is measured NOW
     ./tools/check-expectation.py --self-test      # the control
+    ./tools/check-expectation.py --key-census     # do the reports carry obligation keys? (§5b)
 """
 
 from __future__ import annotations
@@ -144,6 +178,53 @@ def arm_state(paths: list[Path]) -> dict[str, list[str]]:
         raise Refusal(str(e)) from None
 
 
+def requirement_keys(paths: list[Path]) -> dict[str, str]:
+    """`category.check -> the OBLIGATION the oracle says the check is about`.
+
+    THE §5b SEAM, and the whole reason this function is separate from `arm_state`.
+
+    `PROPOSAL-CONFORMANCE-ORACLE-CONTRACT` §5b `[MUST]`: *a document, gate or baseline
+    outside an oracle's own tree identifies a conformance obligation by its requirement id,
+    never by an oracle's check name; each oracle publishes its own check -> requirement
+    map, and that map is the only place an oracle's internal names appear outside it.*
+
+    **We do not maintain that map, and this function is the reason we do not have to.**
+    `entity-core-go` publishes it per check, in the report, as `spec_ref` — measured across
+    every report in this tree: **32,584 of 32,584 checks carry one, 100%, over 104 reports**
+    (`./tools/check-expectation.py --key-census`, which prints exactly that line; the
+    carve-out sentinels a `--profile core` run emits are dropped and not counted).
+    ⚠ **An earlier draft of this sentence said 8,146, from a scope the cited command does not
+    have** — the composed arm of round 1 only — which is AP-1's shape inside a docstring: a
+    number not computed by the thing cited beside it. The flag was written afterwards to make
+    the claim reproducible, and the first thing it did was disagree with the sentence that
+    cited it. Reading the key here rather than declaring it
+    in `SYSTEM.toml` is D20's rule applied to a map instead of to code: the copy that could
+    drift is the one we would keep.
+
+    ⚠ **HONEST SCOPE, because this is not yet full §5b compliance and must not be cited as
+    it.** `spec_ref` is a SECTION CITATION (`CONTENT §2.1 / §11.1 MUST`), not a
+    `SPECIFICATION-FORMAT` §8.5a `<PREFIX>-R<n>` requirement id. Arch's own §5b note says
+    *"the core half is unblocked: core requirements are cited by the checks themselves"* —
+    this citation is what that sentence refers to. Full compliance needs ids that do not
+    exist yet: core §9 has 98 obligations and **0 addressable**, and the extension sweep
+    stands at 1 of 26 conformance inventories. Both are arch's and both are on the board.
+    What this buys today is the property §5b's consequence 1 names — **a re-pin that
+    renames a check no longer reads as a lost capability** — and it buys it with no id
+    scheme at all.
+    """
+    out: dict[str, str] = {}
+    for p in paths:
+        try:
+            doc = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        for c in doc.get("checks", []) or []:
+            ref = c.get("spec_ref")
+            if ref:
+                out[f"{c.get('category', '?')}.{c.get('name', '?')}"] = ref
+    return out
+
+
 def tally(arm: dict[str, list[str]]) -> dict[str, int]:
     """The STABLE severity tally: a check that moved between rounds is counted under the
     severity it reported in round 1, because the total has to add up to the check count and
@@ -204,7 +285,8 @@ def measure(bare: dict[str, list[str]], composed: dict[str, list[str]],
 
 # ── the gate rule ───────────────────────────────────────────────────────────────────────
 
-def evaluate(stem: str, declared: dict, measured: dict, straddles: dict | None = None) -> list[str]:
+def evaluate(stem: str, declared: dict, measured: dict, straddles: dict | None = None,
+             measured_keys: dict[str, str] | None = None) -> list[str]:
     """Every failure this gate can produce, in one function.
 
     Returns a list of failure messages; empty means the baseline holds. Both set directions
@@ -267,6 +349,78 @@ def evaluate(stem: str, declared: dict, measured: dict, straddles: dict | None =
 
     lost = sorted(want_i - got_i)
     gained = sorted(got_i - want_i)
+
+    # ── §5b — A RENAME IS NOT A LOST CAPABILITY, AND THIS IS WHERE THE TWO GET SEPARATED ────
+    #
+    # Measured before this existed, by planting the thing a `validate-peer` re-pin does — one
+    # check renamed, same obligation, same severity, `content.type_blob` ->
+    # `content.type_blob_entity`. The gate was NOT silent, which is worth saying because the
+    # clause that asks for this predicts that it is. It failed TWICE, and both messages were
+    # wrong:
+    #
+    #     1 declared improvement(s) NO LONGER IMPROVE: content.type_blob   <- false
+    #     1 UNDECLARED improvement(s): content.type_blob_entity            <- true but unjoined
+    #
+    # Nothing connected the two halves of one event. The first message says the composition
+    # stopped doing something it used to do; it did not. **And the remedy that message offers is
+    # the damaging one** -- "re-bless WITH A REASON" launders a re-pin into the permanent record
+    # as a capability change, in the one artifact whose whole job is to remember capabilities
+    # over time.
+    #
+    # At scale it is worse and it is §5b's actual argument: a re-pin renaming N checks produces
+    # 2N failures across nine compositions, every one of them reading like a regression. **The
+    # reasonable response to a false red across an entire tree is to delete the baselines**, so
+    # the failure mode is not a bad migration -- it is the instrument being discarded and the
+    # coverage with it (AP-4, at tree scale).
+    #
+    # The join is the obligation the oracle itself names. A lost name whose declared requirement
+    # key is carried by a gained name is one check under a new spelling: still a failure, because
+    # the baseline has to be updated, but NAMED CORRECTLY and without the capability framing.
+    measured_keys = measured_keys or {}
+    declared_key = {n: k for k, names in (declared.get("requirement") or {}).items()
+                    for n in names}
+    renamed: list[tuple[str, str, str]] = []
+    if declared_key:
+        for l in list(lost):
+            k = declared_key.get(l)
+            if k is None:
+                continue
+            for g in list(gained):
+                if measured_keys.get(g) == k:
+                    renamed.append((l, g, k))
+                    lost.remove(l)
+                    gained.remove(g)
+                    break
+    elif want_i:
+        # D16's shape, not a nicety: an undeclared thing is a failure, because the failure mode
+        # is a baseline arriving without anyone deciding what obligation it is about. A block
+        # that reaches this branch is one whose findings CANNOT be joined, and it says so
+        # whether or not today's run happens to have a pair to join.
+        out.append(
+            f"{where}: [gate.baseline.{stem}.requirement] is missing, so a LOST name and a "
+            f"GAINED name cannot be told apart from one RENAMED check (§5b). `--bless` emits "
+            f"the block."
+            + (" Both findings below are unjoined." if lost and gained else "")
+        )
+    if declared_key:
+        # A PARTIAL map is the quiet version of a missing one: the names it omits fall back to
+        # the pre-§5b behaviour with nothing saying which ones did. Cheap to assert, and it is
+        # the assertion that keeps the map honest as `improved` grows.
+        unkeyed = sorted(want_i - set(declared_key))
+        if unkeyed:
+            out.append(
+                f"{where}: {len(unkeyed)} declared improvement(s) carry no obligation in "
+                f"[gate.baseline.{stem}.requirement]: {', '.join(unkeyed)}. A partial map joins "
+                f"some findings and silently does not join the rest; re-bless."
+            )
+
+    if renamed:
+        out.append(
+            f"{where}: {len(renamed)} check(s) RENAMED by the oracle, NOT lost -- "
+            + "; ".join(f"`{l}` -> `{g}` (both are `{k}`)" for l, g, k in renamed)
+            + ". The obligation is unchanged and the composition still satisfies it. Re-bless "
+            "to take the new spelling; do NOT record this as a capability change."
+        )
     if lost:
         out.append(
             f"{where}: {len(lost)} declared improvement(s) NO LONGER IMPROVE: "
@@ -313,21 +467,44 @@ def stems_of(system: dict) -> list[str]:
     return list(dict.fromkeys(list(gate.get("categories", [])) + list(gate.get("profiles", []))))
 
 
-def check_one(path: Path) -> tuple[list[str], list[str], dict]:
-    """(failures, refusals, measured-by-stem) for one composition. No reports at all is
-    neither: it is `{}`, counted by the caller and reported."""
+def check_one(path: Path) -> tuple[list[str], list[str], dict, list[str]]:
+    """(failures, refusals, measured-by-stem, UNMEASURED stems) for one composition. No
+    reports at all is none of them: it is `{}`, counted by the caller and reported.
+
+    THE FOURTH ELEMENT EXISTS BECAUSE `stems_of()`'s docstring, two functions up, ALREADY
+    CLAIMED IT — *"a stem that stopped being produced has to be visible as a refusal, and a
+    glob over what exists can only ever report what exists"* — and the loop below said
+    `continue`. The requirement was written down and not implemented, in adjacent functions,
+    by the same author, on the same day.
+
+    What it costs, found 2026-09-16 by running `--bless` for the first time since it changed:
+    a composition measured for 2 of its 3 declared stems printed two measurement lines and
+    nothing about the third. That is AP-19's shape — a line that reads like a measurement over
+    a state that produced none — in the file whose own docstring cites AP-19. **And through
+    `--bless` it is worse than cosmetic:** blessing a partially-measured composition emits a
+    partial paste block, and pasting it DELETES the baseline for the unmeasured stem. The
+    artifact whose whole job is remembering a capability over time, removed by the command
+    meant to maintain it.
+    """
     system = tomllib.loads(path.read_text(encoding="utf-8"))
     reports = path.parent.parent.parent / "output" / path.parent.name / "reports"
     baseline = system.get("gate", {}).get("baseline", {})
     straddles = diff_arms.declared_straddles(str(path))
     failures: list[str] = []
     refusals: list[str] = []
+    unmeasured: list[str] = []
     out: dict[str, dict] = {}
     comp = _rel(path.parent)
 
     for stem in stems_of(system):
         bare_p, composed_p = rounds_for(reports, "bare", stem), rounds_for(reports, "composed", stem)
         if not bare_p and not composed_p:
+            # NOT a failure and NOT a refusal: running one category (`make conformance
+            # CATEGORIES=content`) is ordinary, and failing on it would be a false red on a
+            # normal workflow, which is how a gate gets switched off (AP-4). It is RECORDED,
+            # so the caller can print it beside the stems that WERE measured and `--bless`
+            # can refuse to emit a partial paste block.
+            unmeasured.append(stem)
             continue
         if not bare_p or not composed_p:
             refusals.append(
@@ -350,6 +527,11 @@ def check_one(path: Path) -> tuple[list[str], list[str], dict]:
             continue
         m["rounds"] = min(len(bare_p), len(composed_p))
         m["timestamp"] = diff_arms.stamps([str(composed_p[0])])[0]
+        # Carried on the measurement rather than re-read at bless time: `--bless` must emit
+        # the keys from the SAME reports the verdict was computed over, not from whatever is
+        # on disk when the emitter runs (D19 -- an instrument does not read a quantity a
+        # later step could have rewritten).
+        m["keys"] = requirement_keys(composed_p)
         out[stem] = m
 
         declared = baseline.get(stem)
@@ -361,21 +543,30 @@ def check_one(path: Path) -> tuple[list[str], list[str], dict]:
                 f"without anyone deciding what it should say. `--bless` prints the block."
             )
             continue
-        failures += [f"{comp}: {f}" for f in evaluate(stem, declared, m, straddles)]
+        failures += [f"{comp}: {f}" for f in
+                     evaluate(stem, declared, m, straddles, m["keys"])]
 
     for stem in sorted(set(baseline) - set(stems_of(system))):
         failures.append(f"{comp}: [gate.baseline.{stem}] declares a stem [gate] does not "
                         f"list. A baseline for something nothing runs is never checked.")
-    return failures, refusals, out
+    return failures, refusals, out, unmeasured
 
 
 def _inline(counts: dict[str, int]) -> str:
     return "{ " + ", ".join(f"{k} = {counts[k]}" for k in SEVERITIES if counts.get(k)) + " }"
 
 
-def bless(comp: str, stem: str, m: dict) -> str:
+def _toml_str(s: str) -> str:
+    """A TOML basic string. Hand-quoting these is how a `spec_ref` carrying a quote or a
+    backslash silently produces a file that parses to something else — and the oracle's own
+    refs run to free prose (`V7 §6.2 — handler MUST NOT grant scope exceeding caller's
+    authorization`)."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def bless(comp: str, stem: str, m: dict, keys: dict[str, str] | None = None) -> str:
     names = "\n".join('  "%s",' % k for k in m["improved"])
-    return (
+    block = (
         f"# ── {comp}\n"
         f"[gate.baseline.{stem}]\n"
         f'measured = "{m["timestamp"][:10]}"   # {m["rounds"]} round(s)\n'
@@ -384,6 +575,31 @@ def bless(comp: str, stem: str, m: dict) -> str:
         f"bare     = {_inline(m['bare'])}\n"
         f"improved = [\n{names}\n]\n"
     )
+    # §5b — the requirement key each improved check carries, GROUPED BY OBLIGATION.
+    #
+    # Grouped rather than one line per check for a reason that is not formatting: the
+    # inverted form is the oracle's check -> requirement map with the arrow the way a reader
+    # needs it, and it is what makes a SPLIT legible. When a re-pin turns one check into two
+    # under the same obligation, the new spelling joins an existing line instead of adding a
+    # row nobody can place. Measured across this tree: 777 improved names collapse to 297
+    # obligation lines.
+    #
+    # Emitted, never typed. Every value here is read out of the report by
+    # `requirement_keys()`; a hand-maintained copy of another seat's map is the thing D20
+    # exists to prevent, and it would be wrong the first time the oracle re-pinned.
+    if keys is not None:
+        grouped: dict[str, list[str]] = {}
+        for n in m["improved"]:
+            k = keys.get(n)
+            if k is None:
+                continue
+            grouped.setdefault(k, []).append(n)
+        if grouped:
+            block += f"\n[gate.baseline.{stem}.requirement]\n"
+            for k in sorted(grouped):
+                members = ", ".join(f'"{n}"' for n in sorted(grouped[k]))
+                block += f"{_toml_str(k)} = [{members}]\n"
+    return block
 
 
 def main() -> int:
@@ -392,10 +608,37 @@ def main() -> int:
                     help="a composition path that MUST have reports (no silent caps)")
     ap.add_argument("--bless", action="store_true", help="print the TOML for what is measured now")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--key-census", action="store_true",
+                    help="how many checks in the reports on disk carry an obligation key (§5b)")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+
+    if args.key_census:
+        # The command the §5b docstring cites for its 100% claim. D14: a number cites the thing
+        # that produced it, and a citation to a flag that does not exist is AP-2 one level worse
+        # -- the citation outliving the thing it names (D18). This flag exists because that
+        # sentence was written before it did.
+        total = keyed = 0
+        for r in sorted(ROOT.glob("languages/*/output/*/reports/*.json")):
+            try:
+                doc = json.loads(r.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            for c in doc.get("checks", []) or []:
+                if c.get("name") == "skipped" and not c.get("spec_ref"):
+                    continue           # the --profile core carve-out sentinel, no information
+                total += 1
+                if c.get("spec_ref"):
+                    keyed += 1
+        if not total:
+            print("REFUSING: no reports on disk, so `every check carries a key` would be a "
+                  "claim over an empty set. Run `make conformance` first.", file=sys.stderr)
+            return 3
+        print(f"obligation keys (`spec_ref`): {keyed} of {total} checks "
+              f"({100 * keyed // total}%), over {len(list(ROOT.glob('languages/*/output/*/reports/*.json')))} report(s)")
+        return 0 if keyed == total else 1
 
     comps = compositions()
     if not comps:
@@ -407,12 +650,15 @@ def main() -> int:
     refusals: list[str] = []
     measured_comps: list[str] = []
     blessed: list[str] = []
+    partial: list[tuple[str, list[str]]] = []
 
     for path in comps:
         comp = _rel(path.parent)
-        f, r, out = check_one(path)
+        f, r, out, unmeasured = check_one(path)
         failures += f
         refusals += r
+        if unmeasured:
+            partial.append((comp, unmeasured))
         if not out:
             # `refused` and `no reports` are two different states and printing one for the
             # other is this repo's own AP-19 shape: a line that reads like a measurement.
@@ -430,10 +676,30 @@ def main() -> int:
                 print(f"      excluded from the baseline as DECLARED STRADDLES (AP-23): "
                       f"{', '.join(m['excluded'])}")
             if args.bless:
-                blessed.append(bless(comp, stem, m))
+                blessed.append(bless(comp, stem, m, m.get("keys")))
+        # Beside the stems that WERE measured, and never instead of them: a composition that
+        # measured 2 of its 3 declared stems used to print two measurement lines and nothing
+        # about the third.
+        for c, stems in partial:
+            if c == comp:
+                print(f"      NOT MEASURED, declared in [gate]: {', '.join(stems)} "
+                      f"(no reports on disk -- `make conformance` has not run this stem)")
 
     # THE SCOPE OF EVERY CLAIM BELOW, printed before the verdict.
     print(f"\nmeasured: {len(measured_comps)} of {len(comps)} compositions")
+
+    if args.bless and partial:
+        # A PARTIAL PASTE BLOCK DELETES A BASELINE. Emitting blocks for the stems that ran and
+        # nothing for the ones that did not looks complete; pasting it removes the temporal
+        # reference for every stem missing from the output. So `--bless` refuses rather than
+        # emits, and names what to run first. This is the refusal D15's sharpened clause asks
+        # for -- the instrument saying "I did not measure everything you are about to replace".
+        print("\nREFUSING to bless: "
+              + "; ".join(f"{c} has no reports for {', '.join(s)}" for c, s in partial)
+              + ". A paste block covering only the stems that ran would DELETE the baseline "
+                "for the ones that did not. Run `make conformance` for the missing stem(s), "
+                "or bless one composition at a time.", file=sys.stderr)
+        return 3
 
     if args.bless:
         print("\n# ── paste into the composition's SYSTEM.toml, under [gate]. A CHANGED\n"
@@ -492,10 +758,25 @@ def self_test() -> int:
     before = {"history.w6_caller_cap_absent": "PASS", "history.type_config": "PASS"}
     after = {"history.w6_caller_cap_absent": "FAIL", "history.type_config": "PASS"}
 
+    # The obligations these two checks carry, as the oracle states them in the report. Defined
+    # here rather than beside the §5b cases below because every fixture in this self-test needs
+    # them: after §5b a baseline with a non-empty `improved` and no obligation map is itself a
+    # failure, so a fixture without one is not a valid baseline to test anything else against.
+    KEY_W6 = "HISTORY §9.1 w6"
+    KEY_CFG = "HISTORY §6.1"
+    KEYS = {"history.w6_caller_cap_absent": KEY_W6, "history.type_config": KEY_CFG}
+
     m_before = measure(*arms(bare, before))
     declared = {"total": 2, "composed": m_before["composed"], "bare": m_before["bare"],
-                "improved": m_before["improved"]}
-    expect("the baseline it was blessed from holds", evaluate("history", declared, m_before) == [])
+                "improved": m_before["improved"],
+                "requirement": {KEY_W6: ["history.w6_caller_cap_absent"],
+                                KEY_CFG: ["history.type_config"]}}
+    # The pre-§5b shape, kept on purpose: it is the input the "you have no obligation map"
+    # rule must fire on, and building it by DELETION from the real fixture means it cannot
+    # drift away from what a real unmigrated baseline looks like.
+    unkeyed = {k: v for k, v in declared.items() if k != "requirement"}
+    expect("the baseline it was blessed from holds",
+           evaluate("history", declared, m_before, None, KEYS) == [])
 
     m_after = measure(*arms(bare, after))
     fails = evaluate("history", declared, m_after)
@@ -513,6 +794,124 @@ def self_test() -> int:
     d3 = dict(declared, total=3, bare=m_more["bare"], composed=m_more["composed"])
     expect("an UNDECLARED improvement fails",
            any("UNDECLARED" in f for f in evaluate("history", d3, m_more)))
+
+    # ── §5b: A RENAME IS NOT A LOSS, and the controls that matter are the ones proving the
+    # ── classifier does not SWALLOW a real one.
+    #
+    # Five cases. Case 1 is the behaviour being added; cases 2–5 are the price of adding it,
+    # because a joiner that pairs things too eagerly converts AP-18 — the failure this whole
+    # file exists for — into a reassuring "renamed" line. That is the false-GREEN direction and
+    # it costs a missed defect, so it gets three of the five.
+    keyed = declared
+
+    # 1. THE RENAME. Same obligation, new spelling, same verdict — exactly what a re-pin does.
+    renamed_bare = {"history.w6_renamed": "FAIL", "history.type_config": "FAIL"}
+    renamed_comp = {"history.w6_renamed": "PASS", "history.type_config": "PASS"}
+    m_ren = measure(*arms(renamed_bare, renamed_comp))
+    f_ren = evaluate("history", dict(keyed, composed=m_ren["composed"], bare=m_ren["bare"]),
+                     m_ren, None, {"history.w6_renamed": KEY_W6,
+                                   "history.type_config": KEY_CFG})
+    expect("§5b: a rename is reported as RENAMED",
+           any("RENAMED" in f and "w6_renamed" in f for f in f_ren))
+    expect("§5b: ...and NOT as a lost capability",
+           not any("NO LONGER IMPROVE" in f for f in f_ren))
+    expect("§5b: ...and NOT as an undeclared gain either -- one event, one finding",
+           not any("UNDECLARED" in f for f in f_ren))
+
+    # 2. A REAL LOSS still fails, with the requirement block present. The classifier has a key
+    #    for `w6` and there is no gained check carrying it, so nothing pairs.
+    f_lost = evaluate("history", keyed, m_after, None,
+                      {"history.w6_caller_cap_absent": KEY_W6, "history.type_config": KEY_CFG})
+    expect("§5b: a REAL loss is still AP-18 when the block is present",
+           any("NO LONGER IMPROVE" in f and "w6_caller_cap_absent" in f for f in f_lost))
+    expect("§5b: ...and is not mislabelled a rename", not any("RENAMED" in f for f in f_lost))
+
+    # 3. A LOSS AND A GAIN UNDER DIFFERENT OBLIGATIONS ARE NOT PAIRED. This is the case a
+    #    joiner keyed on "one went, one came" gets wrong, and it is the likeliest real shape:
+    #    a re-pin that drops one check and adds an unrelated one in the same category.
+    unrel_bare = {"history.type_config": "FAIL", "history.type_transition": "FAIL"}
+    unrel_comp = {"history.type_config": "PASS", "history.type_transition": "PASS"}
+    m_unrel = measure(*arms(unrel_bare, unrel_comp))
+    f_unrel = evaluate("history", dict(keyed, composed=m_unrel["composed"], bare=m_unrel["bare"]),
+                       m_unrel, None, {"history.type_config": KEY_CFG,
+                                       "history.type_transition": "HISTORY §2.2"})
+    expect("§5b: a loss and a gain under DIFFERENT obligations stay two findings",
+           any("NO LONGER IMPROVE" in f for f in f_unrel)
+           and any("UNDECLARED" in f for f in f_unrel)
+           and not any("RENAMED" in f for f in f_unrel))
+
+    # 4. A GAINED CHECK WITH NO KEY IN THE REPORT pairs with nothing. `measured_keys` is read
+    #    from the report and a check could arrive without a `spec_ref`; absent must mean
+    #    "cannot join", never "joins to whatever is missing".
+    f_nokey = evaluate("history", dict(keyed, composed=m_ren["composed"], bare=m_ren["bare"]),
+                       m_ren, None, {"history.type_config": KEY_CFG})
+    expect("§5b: a gained check carrying no obligation key is never paired",
+           any("NO LONGER IMPROVE" in f for f in f_nokey)
+           and not any("RENAMED" in f for f in f_nokey))
+
+    # 5. WITHOUT the requirement block the two findings are unjoinable, and the gate SAYS SO
+    #    rather than quietly behaving as it did before (D15's refusal clause: an instrument
+    #    that cannot answer says which answer it could not give).
+    f_noblock = evaluate("history", dict(unkeyed, composed=m_ren["composed"],
+                                         bare=m_ren["bare"]), m_ren, None,
+                         {"history.w6_renamed": KEY_W6, "history.type_config": KEY_CFG})
+    expect("§5b: with no [.requirement] block the gate says the findings are UNJOINED",
+           any("cannot be told apart" in f for f in f_noblock))
+    expect("§5b: ...and it says so even on a run with nothing to join (D16: undeclared fails)",
+           any("cannot be told apart" in f for f in evaluate("history", unkeyed, m_before)))
+    # ...but NOT for a block whose `improved` is legitimately empty. An empty set has no
+    # obligations to map, and demanding the block there would put a §5b failure in front of
+    # every `not-installable` face in the tree -- a false red on a correct declaration, which
+    # is how a gate stops being believed (AP-4). Same scoping lesson D23 learned on its own
+    # first draft, one rule over.
+    m_none = measure(*arms({"c.k": "FAIL"}, {"c.k": "FAIL"}))
+    expect("§5b: ...but NOT for a block whose `improved` is legitimately empty",
+           not any("cannot be told apart" in f for f in evaluate(
+               "c", {"total": 1, "composed": m_none["composed"], "bare": m_none["bare"],
+                     "improved": [], "why_nothing_moved": "x"}, m_none)))
+
+    # 6. A PARTIAL map is the quiet version of a missing one.
+    expect("§5b: an improvement missing from the obligation map fails by name",
+           any("carry no obligation" in f and "type_config" in f for f in evaluate(
+               "history", dict(declared, requirement={KEY_W6: ["history.w6_caller_cap_absent"]}),
+               m_before, None, {"history.w6_caller_cap_absent": KEY_W6,
+                                "history.type_config": KEY_CFG})))
+
+    # ── A DECLARED STEM WITH NO REPORTS IS REPORTED, NOT SKIPPED.
+    #
+    # Driven through `check_one` on a fixture tree rather than through the pure functions,
+    # because the defect was in the WALK and not in any comparison: the loop said `continue`
+    # while `stems_of()`'s own docstring, two functions up, said a stem that stopped being
+    # produced "has to be visible as a refusal". A control over `evaluate()` could not have
+    # seen it, which is why this one builds a directory.
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        lang = Path(td) / "languages" / "x"
+        cdir = lang / "compositions" / "c"
+        rdir = lang / "output" / "c" / "reports"
+        cdir.mkdir(parents=True); rdir.mkdir(parents=True)
+        (cdir / "SYSTEM.toml").write_text(
+            '[gate]\ncategories = ["ran", "never_ran"]\n\n'
+            '[gate.baseline.ran]\ntotal = 1\ncomposed = { PASS = 1 }\n'
+            'bare = { FAIL = 1 }\nimproved = ["ran.k"]\n\n'
+            '[gate.baseline.ran.requirement]\n"SPEC §1" = ["ran.k"]\n\n'
+            '[gate.baseline.never_ran]\ntotal = 1\ncomposed = { PASS = 1 }\n'
+            'bare = { FAIL = 1 }\nimproved = ["never_ran.k"]\n\n'
+            '[gate.baseline.never_ran.requirement]\n"SPEC §2" = ["never_ran.k"]\n',
+            encoding="utf-8")
+        for r in (1, 2):
+            for arm, sev in (("bare", "FAIL"), ("composed", "PASS")):
+                (rdir / f"{arm}-ran-{r}.json").write_text(json.dumps(
+                    {"timestamp": f"2026-09-16T0{r}:00:00Z",
+                     "checks": [{"category": "ran", "name": "k", "severity": sev,
+                                 "spec_ref": "SPEC §1"}]}))
+        f_fix, r_fix, out_fix, unmeasured = check_one(cdir / "SYSTEM.toml")
+        expect("a declared stem with NO reports is RECORDED, not silently skipped",
+               unmeasured == ["never_ran"])
+        expect("...and the stem that DID run is still measured beside it",
+               list(out_fix) == ["ran"])
+        expect("...and it is neither a failure nor a refusal (one-category runs are ordinary)",
+               f_fix == [] and r_fix == [])
 
     # ── a real regression: bare PASS, composed not. Never declarable.
     m_reg = measure(*arms({"c.k": "PASS"}, {"c.k": "FAIL"}))

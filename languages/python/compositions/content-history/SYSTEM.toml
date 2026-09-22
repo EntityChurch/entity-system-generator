@@ -193,6 +193,21 @@ improved = [
   "content.type_descriptor",
 ]
 
+
+[gate.baseline.content.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"CONTENT §2.1 / §11.1 MUST" = ["content.type_blob"]
+"CONTENT §2.2 / §11.1 MUST" = ["content.type_chunk"]
+"CONTENT §2.4 (v3.5 A1)" = ["content.type_descriptor"]
+"CONTENT §6.1" = ["content.handler_manifest"]
+"CONTENT §6.2 / §11.3" = ["content.handler_op_get"]
+"CONTENT §6.2 MUST (v3.4 → v3.5 reversal)" = ["content.get_path_required"]
+"CONTENT §6.3 / §11.3" = ["content.handler_op_ingest"]
+"CONTENT §6.3 MUST (v3.4 → v3.5 reversal)" = ["content.ingest_path_required"]
+
 # `history.w6_caller_cap_absent` IS DELIBERATELY ABSENT from `improved` below, and this
 # comment is the reason a re-bless needs. It PASSED at 13:05 and FAILED at 17:41 on
 # 2026-09-07 (AP-18) — our `build_context` selects between `caller_capability` and
@@ -247,6 +262,22 @@ improved = [
   "history.type_transition",
 ]
 
+
+[gate.baseline.history.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"HISTORY v1.5 §2 (F7)" = ["history.transition_clock_structured"]
+"HISTORY §2.1" = ["history.chain_latest_event_updated", "history.chain_latest_hash", "history.chain_previous_hash", "history.context_author_present", "history.context_capability_present", "history.context_handler_present", "history.context_operation_present", "history.first_transition_no_previous", "history.transition_event_created", "history.transition_hash_matches"]
+"HISTORY §3.1" = ["history.chain_linked", "history.chain_two_transitions", "history.head_pointer_set"]
+"HISTORY §4.1" = ["history.handler_manifest_decode", "history.handler_manifest_present", "history.handler_op_query", "history.handler_op_rollback"]
+"HISTORY §4.3.1" = ["history.event_filter_only_created", "history.limit_has_more", "history.limit_returns_1"]
+"HISTORY §4.3.2" = ["history.rollback_new_transition", "history.rollback_restored_hash", "history.rollback_verify_binding"]
+"HISTORY §5.1" = ["history.transition_recorded"]
+"HISTORY §9.1" = ["history.transition_has_timestamp"]
+"HISTORY §9.2" = ["history.type_config", "history.type_query_params", "history.type_query_result", "history.type_rollback_params", "history.type_rollback_result", "history.type_transition"]
+
 # PRIOR re-bless, earlier the same day, and its 776 is superseded by the note below.
 # WAS: THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
 # profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
@@ -275,3 +306,12 @@ improved = [
   "type_system.type_system_content_descriptor_fetch",
   "type_system.type_system_content_descriptor_match",
 ]
+
+
+[gate.baseline.core.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"Types §11.2" = ["type_system.type_system_content_blob_fetch", "type_system.type_system_content_chunk_fetch", "type_system.type_system_content_descriptor_fetch"]
+"Types §12.3" = ["type_system.type_system_content_blob_match", "type_system.type_system_content_chunk_match", "type_system.type_system_content_descriptor_match"]

@@ -679,6 +679,37 @@ oracle_category = "content"
 
 # ── §11.1 MUST ──────────────────────────────────────────────────────────────────────────
 
+# ── §5b — the oracle's own check -> obligation map, for the pinned names ────────────────
+#
+# EMITTED, NEVER TYPED: `./tools/req-coverage.py --bless-obligations`. Every value is the
+# `spec_ref` `entity-core-go` publishes for that check in the reports we already hold, which
+# is the map `PROPOSAL-CONFORMANCE-ORACLE-CONTRACT` §5b requires an oracle to publish — so
+# this is a cached read of their artifact and not a second copy of their taxonomy (D20).
+#
+# It exists so that a re-pin which RENAMES a check reads as a rename: rule 3 joins a missing
+# pin through its obligation and says RE-PINNED when something still carries it, MEASUREMENT
+# LOST only when nothing does. Rule 6 fails when a name keeps its spelling and the oracle
+# changes what it is about, which is the direction nothing watched.
+#
+# ⚠ NOT full §5b compliance and not to be cited as it: `spec_ref` is a SECTION CITATION, not
+# a `SPECIFICATION-FORMAT` §8.5a `<PREFIX>-R<n>` id. Those do not exist yet (W-23, arch's A-1
+# and A-5). When they land, this block is re-blessed and nothing else changes.
+[conformance.obligation]
+"content/frame-limit-respected"                          = "CONTENT v3.6 Amendment 1 §6.2 MUST — frame-budget response chunking"
+"content/get_path_required"                              = "CONTENT §6.2 MUST (v3.4 → v3.5 reversal)"
+"content/handler_manifest"                               = "CONTENT §6.1"
+"content/handler_op_get"                                 = "CONTENT §6.2 / §11.3"
+"content/handler_op_ingest"                              = "CONTENT §6.3 / §11.3"
+"content/ingest_path_required"                           = "CONTENT §6.3 MUST (v3.4 → v3.5 reversal)"
+"content/inline_include_above_threshold"                 = "CONTENT §4.3 — no inline-include at total_size = 65,537"
+"content/inline_include_at_threshold"                    = "CONTENT §4.3 — inline-include at total_size = 65,536"
+"content/type_blob"                                      = "CONTENT §2.1 / §11.1 MUST"
+"content/type_chunk"                                     = "CONTENT §2.2 / §11.1 MUST"
+"type_system/type_system_content_blob_fetch"             = "Types §11.2"
+"type_system/type_system_content_blob_match"             = "Types §12.3"
+"type_system/type_system_content_chunk_fetch"            = "Types §11.2"
+"type_system/type_system_content_chunk_match"            = "Types §12.3"
+
 [[conformance.requirement]]
 id     = "C-R1"
 text   = "Content blob type (`system/content/blob`) — creation and parsing (§2.1)"

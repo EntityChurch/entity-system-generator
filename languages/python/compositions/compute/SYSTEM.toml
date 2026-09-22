@@ -352,6 +352,75 @@ improved = [
   "compute.v38_tco_sum_2000",
 ]
 
+
+[gate.baseline.compute.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"COMPUTE F10 (v3.19) — strict status-200 pin for evaluated compute/error" = ["compute.v319_f10_error_at_200"]
+"COMPUTE F11 (v3.19) — filter-args lambda key renamed predicate → fn" = ["compute.v319_f11_filter_fn_arg"]
+"COMPUTE N.5 (v3.19)" = ["compute.v319_n5_compute_compose", "compute.v319_n5_nested_field"]
+"COMPUTE N.5 (v3.19) — closure-captured-param navigation; tracks F9-B-residual (scope-binding identity spec fork)" = ["compute.v319_n5_closure_field"]
+"COMPUTE N.5 (v3.19) — record whose keys happen to be {type, data, name} navigates as a record, NOT envelope-peeled; cross-impl disambiguation gate (Python heuristic vs Go flat-read)" = ["compute.v319_n5_disambiguation"]
+"COMPUTE v3.19b N2 — captures a fixed-content scope and prints the resulting compute/scope content_hash; cross-impl hashes must agree bit-for-bit (the N2 ratification gate)" = ["compute.v319b_scope_hash_agreement"]
+"COMPUTE v3.19b §2.3 N1+N3+N4 — kind-tagged scope binding round-trip; entity captured into scope survives capture/load + field-navigates .data" = ["compute.v319b_scope_entity_round_trip"]
+"COMPUTE v3.19b §2.3 N8 + F10 — a kind:entity binding whose hash doesn't resolve yields compute/error{scope_unreachable} at status 200" = ["compute.v319b_scope_unreachable"]
+"COMPUTE v3.19c Part A R3 + N3 (arch 6e73d3d read-back ruling) — cross-impl regression detector. Read-back nav of a system/hash field on a *materialized* (stored / hand-built) entity MUST return the bare hash bytes, NOT auto-resolve to the referenced entity. The caller follows the ref via explicit compute/lookup/hash. No shape-sniffing, no 'N-byte = entity ref' heuristic (N3 forbids it; per V7 §1.2 the hash length itself isn't an invariant — system/hash is variable-length with an extensible LEB128 format-code). An auto-resolved Entity result means a heuristic snuck back in." = ["compute.v319c_readback_navigation_returns_hash"]
+"COMPUTE v3.19c Part A R3 — M1 hash-gate: a compute/construct with an entity-valued field MUST produce a content_hash byte-identical to entity.NewEntity-built form (per V7 §1.4 bare system/hash refs). Cross-impl three-way agreement on the materialized form is the ratification gate." = ["compute.v319c_construct_entity_valued_field"]
+"COMPUTE v3.19c Part A R3 — adopted from Rust's catch: build the same construct two ways (inline compute/construct expression AND system/compute/builtins/construct handler-form alias). Materialized content_hashes MUST match. Catches the duplicate-path bug class Rust hit; Go's single path (builtins.go::builtinConstruct delegates to inline evalConstruct) passes trivially." = ["compute.v319c_inline_vs_builtin_construct_hash_agreement"]
+"COMPUTE v3.19c Part A R3 — in-flight navigation composes through constructed entities. field(field(construct(app/wrapper,{inner:construct(app/user,{name:'alice'})}),'inner'),'name') → 'alice'. The whole chain evaluates within a single compute eval (typed in-flight values, no boundary materialization between hops)." = ["compute.v319c_construct_navigation_chain"]
+"COMPUTE §2.1" = ["compute.eval_if_short_circuit", "compute.eval_lookup_scope", "compute.eval_lookup_tree_evaluates_expr", "compute.eval_lookup_tree_non_expr", "compute.types_expression"]
+"COMPUTE §2.1 D6" = ["compute.v37_lookup_hash_type_registered"]
+"COMPUTE §2.1 Q23 / §3.3 (arch 67708b1) — install-time reject: static-literal builtin-path apply carrying capability+resource MUST fail install (invalid_expression)" = ["compute.q23_install_builtin_apply_capability_resource"]
+"COMPUTE §2.1 Q23 / §3.3 (arch 67708b1) — install-time reject: static-literal builtin-path apply carrying resource alone MUST fail install (invalid_expression)" = ["compute.q23_install_builtin_apply_resource_only"]
+"COMPUTE §2.1 R1/R2" = ["compute.v38_relative_lookup_tree"]
+"COMPUTE §2.1, §8.1" = ["compute.eval_if_false_branch", "compute.eval_if_true_branch", "compute.eval_lambda_apply"]
+"COMPUTE §2.1, §8.2" = ["compute.eval_let_sequential"]
+"COMPUTE §2.2" = ["compute.eval_construct_field_extract", "compute.types_inline"]
+"COMPUTE §2.2 A1" = ["compute.v36_add_mixed_float"]
+"COMPUTE §2.2 A2" = ["compute.v36_eq_cross_type", "compute.v36_eq_incompatible", "compute.v36_lt_string", "compute.v36_lt_type_mismatch"]
+"COMPUTE §2.2 A3" = ["compute.v36_div_negative", "compute.v36_div_repeating"]
+"COMPUTE §2.2 A4" = ["compute.v36_mod_both_neg", "compute.v36_mod_neg_dividend", "compute.v36_mod_neg_divisor"]
+"COMPUTE §2.2 N.1" = ["compute.v314_index_basic", "compute.v314_index_negative", "compute.v314_index_past_end", "compute.v314_index_type_mismatch", "compute.v314_length_empty", "compute.v314_length_nonempty", "compute.v314_length_type_mismatch"]
+"COMPUTE §2.2 N.4" = ["compute.v314_cast_float_truncate", "compute.v314_cast_int_to_uint_negative", "compute.v314_cast_to_invalid_type"]
+"COMPUTE §2.2 rule 10 (v3.16 A.5)" = ["compute.v316_signed_canonical_encoding"]
+"COMPUTE §2.2 rule 10 + SA-7 (v3.16, realization confirm)" = ["compute.v316_uint_round_trip"]
+"COMPUTE §2.2 rule 11 (v3.16 A.6)" = ["compute.v316_eager_cast_not_through_let", "compute.v316_eager_cast_unsigned_div"]
+"COMPUTE §2.2 rule 11 (v3.17 SA-AMD3-1)" = ["compute.v317_cast_through_closure_arg", "compute.v317_cast_through_if_branch", "compute.v317_cast_through_lookup_scope"]
+"COMPUTE §2.2 rule 8 (v3.16)" = ["compute.v316_int_wraparound_add", "compute.v316_sign_agnostic_add", "compute.v316_uint_wraparound_add"]
+"COMPUTE §2.2, §8.1" = ["compute.eval_arithmetic_add", "compute.eval_arithmetic_div_exact", "compute.eval_arithmetic_div_float", "compute.eval_arithmetic_mod", "compute.eval_arithmetic_mul", "compute.eval_arithmetic_sub", "compute.eval_compare_eq_false", "compute.eval_compare_eq_true", "compute.eval_compare_lt", "compute.eval_compare_neq", "compute.eval_logic_and", "compute.eval_logic_not", "compute.eval_logic_or"]
+"COMPUTE §2.2, §8.2" = ["compute.eval_construct_deterministic"]
+"COMPUTE §2.3" = ["compute.types_value"]
+"COMPUTE §2.4" = ["compute.types_result_error"]
+"COMPUTE §2.5" = ["compute.types_subgraph"]
+"COMPUTE §3.1" = ["compute.handler_manifest_decode", "compute.handler_op_eval", "compute.handler_op_install", "compute.handler_op_uninstall", "compute.handler_present"]
+"COMPUTE §3.3 F5" = ["compute.v310_f5_install_capability_without_resource"]
+"COMPUTE §3.3, §7.1" = ["compute.reactive_install"]
+"COMPUTE §3.5 N.2" = ["compute.v314_args_types_registered", "compute.v314_builtin_arithmetic_alias"]
+"COMPUTE §3.5 §6.3 + V7 §6.6" = ["compute.v314_builtin_store_roundtrip"]
+"COMPUTE §3.5 §962 N.2" = ["compute.v314_builtin_filter", "compute.v314_builtin_fold", "compute.v314_builtin_fold_empty", "compute.v314_builtin_map"]
+"COMPUTE §4.1" = ["compute.eval_literal_bool", "compute.eval_literal_int", "compute.eval_literal_string"]
+"COMPUTE §4.1 D6" = ["compute.v37_lookup_hash_eval", "compute.v37_lookup_hash_field_extract"]
+"COMPUTE §4.1 F5" = ["compute.v310_f5_eval_capability_without_resource"]
+"COMPUTE §4.1 T2/T3" = ["compute.v38_newton_sqrt", "compute.v38_tco_if_chain", "compute.v38_tco_let_chain", "compute.v38_tco_sum_2000"]
+"COMPUTE §4.1, §8.1" = ["compute.algo_fibonacci_10", "compute.algo_fibonacci_5"]
+"COMPUTE §4.2 D2" = ["compute.v36_resolve_rejects_non_compute"]
+"COMPUTE §4.4" = ["compute.eval_closure_captures_scope"]
+"COMPUTE §4.7" = ["compute.eval_error_non_expression"]
+"COMPUTE §5.4" = ["compute.eval_depth_limit"]
+"COMPUTE §5.4 T3" = ["compute.v38_depth_non_tail"]
+"COMPUTE §7.1 D8 (row a) — a lookup/tree inside let.bindings[].value is registered → dep change re-fires eval" = ["compute.d8_reeval_dep_in_let_binding"]
+"COMPUTE §7.1 D8 (row b, DISCRIMINATOR) — a lookup/tree inside apply.args is registered → dep change re-fires eval" = ["compute.d8_reeval_dep_in_apply_arg"]
+"COMPUTE §7.2" = ["compute.eval_error_propagation", "compute.reactive_converged_result", "compute.reactive_final_result", "compute.reactive_initial_result", "compute.reactive_second_update", "compute.reactive_update_dependency"]
+"COMPUTE §7.2, §4.1" = ["compute.v38_dynamic_handler", "compute.v38_dynamic_handler_swap"]
+"COMPUTE §7.2, §7.3" = ["compute.v38_cascade_chain"]
+"COMPUTE §9.1" = ["compute.eval_division_by_zero", "compute.eval_error_not_found"]
+"COMPUTE §9.1 cast_out_of_range" = ["compute.v314_cast_inf_to_int", "compute.v314_cast_nan_to_int", "compute.v314_cast_neg_float_to_uint"]
+"EXTENSION-COMPUTE §3.3 (install-audit) + §11.1 MUST" = ["compute.cp1_install_static_literal_self_issued_accepted"]
+"EXTENSION-COMPUTE §3.3 (install-audit) — 403 embedded_cap_unauthorized" = ["compute.cp1_install_static_literal_adversary_rejected"]
+"EXTENSION-COMPUTE §3.3 — dynamic-capability deferral" = ["compute.cp1_install_dynamic_capability_deferred"]
+
 [gate.baseline.core]
 measured = "2026-09-13"   # 2 round(s)
 total    = 778
@@ -423,6 +492,15 @@ improved = [
   "type_system.type_system_compute_subgraph_match",
 ]
 
+
+[gate.baseline.core.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"Types §11.2" = ["type_system.type_compute_apply_fetch", "type_system.type_compute_arithmetic_fetch", "type_system.type_compute_closure_fetch", "type_system.type_compute_compare_fetch", "type_system.type_compute_construct_fetch", "type_system.type_compute_error_fetch", "type_system.type_compute_field_fetch", "type_system.type_compute_if_fetch", "type_system.type_compute_index_fetch", "type_system.type_compute_lambda_fetch", "type_system.type_compute_length_fetch", "type_system.type_compute_let_fetch", "type_system.type_compute_literal_fetch", "type_system.type_compute_logic_fetch", "type_system.type_compute_lookup_hash_fetch", "type_system.type_compute_lookup_scope_fetch", "type_system.type_compute_lookup_tree_fetch", "type_system.type_compute_numeric_cast_fetch", "type_system.type_compute_result_fetch", "type_system.type_compute_scope_fetch", "type_system.type_system_compute_assoc_args_fetch", "type_system.type_system_compute_concat_args_fetch", "type_system.type_system_compute_filter_args_fetch", "type_system.type_system_compute_fold_args_fetch", "type_system.type_system_compute_group_by_args_fetch", "type_system.type_system_compute_install_request_fetch", "type_system.type_system_compute_install_result_fetch", "type_system.type_system_compute_map_args_fetch", "type_system.type_system_compute_range_args_fetch", "type_system.type_system_compute_scope_binding_fetch", "type_system.type_system_compute_store_args_fetch", "type_system.type_system_compute_subgraph_fetch"]
+"Types §12.3" = ["type_system.type_compute_apply_match", "type_system.type_compute_arithmetic_match", "type_system.type_compute_closure_match", "type_system.type_compute_compare_match", "type_system.type_compute_construct_match", "type_system.type_compute_field_match", "type_system.type_compute_if_match", "type_system.type_compute_index_match", "type_system.type_compute_lambda_match", "type_system.type_compute_length_match", "type_system.type_compute_let_match", "type_system.type_compute_literal_match", "type_system.type_compute_logic_match", "type_system.type_compute_lookup_hash_match", "type_system.type_compute_lookup_scope_match", "type_system.type_compute_lookup_tree_match", "type_system.type_compute_numeric_cast_match", "type_system.type_compute_result_match", "type_system.type_compute_scope_match", "type_system.type_system_compute_assoc_args_match", "type_system.type_system_compute_concat_args_match", "type_system.type_system_compute_filter_args_match", "type_system.type_system_compute_fold_args_match", "type_system.type_system_compute_group_by_args_match", "type_system.type_system_compute_install_request_match", "type_system.type_system_compute_install_result_match", "type_system.type_system_compute_map_args_match", "type_system.type_system_compute_range_args_match", "type_system.type_system_compute_scope_binding_match", "type_system.type_system_compute_store_args_match", "type_system.type_system_compute_subgraph_match"]
+
 # ── RE-BLESSED 2026-09-14: 3 -> 9 PASS, and the empty list above was the FINDING ─────────────
 #
 # The previous bless read `composed = bare = {PASS 3, FAIL 10}` with `improved = []`: on this
@@ -473,3 +551,14 @@ improved = [
   "entity_native.scope_operation",
   "entity_native.scope_params",
 ]
+
+
+[gate.baseline.entity_native.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"PROPOSAL §2 (E1)" = ["entity_native.multiple_operations", "entity_native.scope_operation", "entity_native.scope_params"]
+"PROPOSAL §3.1" = ["entity_native.lookup_tree_within_scope"]
+"PROPOSAL §3.2" = ["entity_native.dual_check_both_pass"]
+"PROPOSAL §7.2" = ["entity_native.lookup_tree_outside_scope"]

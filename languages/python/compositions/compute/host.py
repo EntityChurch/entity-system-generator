@@ -30,47 +30,49 @@ from entity_core.peer import run_host
 
 from entity_compute import install_compute
 
-#: Captured in ``configure``, read after ``run_host`` returns.
-INSTALLED = None
-
-
-def configure(peer) -> None:
-    """Install the composition. Runs before anything listens."""
-    global INSTALLED
-
-    # -- The composition. PLAN.json install_order = ["COMPUTE"]. -------------------
-    #
-    # `sdk-native`: in-process against a live Peer. NOTE the reason has changed and the
-    # value has not -- core §6.2's `system/*` reservation, which every earlier wiring
-    # program in this tree cites here, was WITHDRAWN by `ENTITY-CORE-PROTOCOL` 0.8.2.13.
-    # This peer still refuses a wire register at a `system/*` pattern, so `sdk-native` is
-    # still the only route that works; it is now a measured property of this peer rather
-    # than a rule anything inherits. See
-    # `extension-contracts/content/EXTENSION.toml [substrate.wire_install_refusal]`.
-    #
-    # On this peer `install_compute` performs every §11.6.1 write itself; there is no
-    # registration surface to call. That is the single largest difference between this
-    # wiring program and the typescript one, and it is entirely inside the extension.
-    compute = install_compute(peer)
-    INSTALLED = compute
-
-    # THE FIFTH FACE IS REPORTED HERE AND NOWHERE ELSE -- the one fact about this
-    # composition that no other composition in the tree can produce. It is OBSERVED:
-    # `install_compute` asks the peer for the seam rather than asserting its absence, so
-    # when keystone landed H7 on this peer the line changed by itself (D13's Read layer;
-    # keystone planted exactly that defect against their own H7 work).
-    sys.stderr.write(
-        f"COMPOSED extensions=COMPUTE pattern={compute.pattern} "
-        f"types={len(compute.type_paths)} "
-        f"handler_writes={len(compute.handler_paths)} "
-        f"consumers=1 "
-        f"evaluator={compute.evaluator_face} "
-        f"rebuilt={compute.rebuilt}\n"
-    )
-    sys.stderr.flush()
-
 
 def main(argv: list[str]) -> int:
+    # Written by `configure` below, read after `run_host` returns. A local closed over
+    # rather than a module global: this file is the specimen a wiring-program template gets
+    # derived from (`DESIGN-THE-SYSTEM-STRUCTURE` §2), and module state that one function
+    # writes and another reads is the shape that survives templating worst.
+    installed = None
+
+    def configure(peer) -> None:
+        """Install the composition. Runs before anything listens."""
+        nonlocal installed
+
+        # -- The composition. PLAN.json install_order = ["COMPUTE"]. ----------------
+        #
+        # `sdk-native`: in-process against a live Peer. NOTE the reason has changed and the
+        # value has not -- core §6.2's `system/*` reservation, which every earlier wiring
+        # program in this tree cites here, was WITHDRAWN by `ENTITY-CORE-PROTOCOL`
+        # 0.8.2.13. This peer still refuses a wire register at a `system/*` pattern, so
+        # `sdk-native` is still the only route that works; it is now a measured property of
+        # this peer rather than a rule anything inherits. See
+        # `extension-contracts/content/EXTENSION.toml [substrate.wire_install_refusal]`.
+        #
+        # On this peer `install_compute` performs every §11.6.1 write itself; there is no
+        # registration surface to call. That is the single largest difference between this
+        # wiring program and the typescript one, and it is entirely inside the extension.
+        compute = install_compute(peer)
+        installed = compute
+
+        # THE FIFTH FACE IS REPORTED HERE AND NOWHERE ELSE -- the one fact about this
+        # composition that no other composition in the tree can produce. It is OBSERVED:
+        # `install_compute` asks the peer for the seam rather than asserting its absence,
+        # so when keystone landed H7 on this peer the line changed by itself (D13's Read
+        # layer; keystone planted exactly that defect against their own H7 work).
+        sys.stderr.write(
+            f"COMPOSED extensions=COMPUTE pattern={compute.pattern} "
+            f"types={len(compute.type_paths)} "
+            f"handler_writes={len(compute.handler_paths)} "
+            f"consumers=1 "
+            f"evaluator={compute.evaluator_face} "
+            f"rebuilt={compute.rebuilt}\n"
+        )
+        sys.stderr.flush()
+
     code = run_host(argv, configure)
 
     # THE POST-TRAFFIC OBSERVATION, and the reason it is here rather than beside the
@@ -79,10 +81,10 @@ def main(argv: list[str]) -> int:
     # on -- did the oracle's installs actually register dependencies, and did any subgraph
     # FREEZE -- can only be answered after the traffic. `tools/host-launch` reaps the host
     # before surfacing its stderr, so this needs no new harness.
-    if INSTALLED is not None:
-        engine = INSTALLED.engine
+    if installed is not None:
+        engine = installed.engine
         sys.stderr.write(
-            f"COMPOSED-FINAL evaluator={INSTALLED.evaluator_face} "
+            f"COMPOSED-FINAL evaluator={installed.evaluator_face} "
             f"dependencies={engine.registered_dependencies} "
             f"watched={len(engine.watched_paths)}\n"
         )

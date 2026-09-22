@@ -25,16 +25,21 @@ import { runHost } from "entity-core-protocol-typescript";
 import { installContent } from "@entity-core/extension-content";
 import { configPath, historyConfig, installHistory } from "@entity-core/extension-history";
 
-/**
- * Captured in `configure`, read after `runHost` resolves. The TYPE is
- * `ReturnType<typeof installHistory>` and never a hand-written shape: the first draft of
- * this file restated the recorder's fields here and got `contextAvailable()` wrong — it
- * returns `"yes" | "not-observed" | "unknown"`, not a boolean — which `tsc` caught on the
- * first build. A second copy of a type is a second place for it to drift.
- */
-let installed: ReturnType<typeof installHistory> | null = null;
+async function main(): Promise<number> {
+  /**
+   * Written by `configure`, read after `runHost` resolves. A local closed over rather than
+   * module state, because this file is the specimen a wiring-program template gets derived
+   * from (`DESIGN-THE-SYSTEM-STRUCTURE` §2) and module state one function writes and
+   * another reads is the shape that survives templating worst.
+   *
+   * The TYPE is `ReturnType<typeof installHistory>` and never a hand-written shape: the
+   * first draft of this file restated the recorder's fields and got `contextAvailable()`
+   * wrong — it returns `"yes" | "not-observed" | "unknown"`, not a boolean — which `tsc`
+   * caught on the first build. A second copy of a type is a second place for it to drift.
+   */
+  let installed: ReturnType<typeof installHistory> | null = null;
 
-runHost(process.argv.slice(2), (peer) => {
+  const code = await runHost(process.argv.slice(2), (peer) => {
   // ── The composition. PLAN.json install_order = ["CONTENT", "HISTORY"]. ───────
   //
   // `sdk-native` for both: this peer refuses a wire register at a `system/*` pattern and
@@ -90,25 +95,30 @@ runHost(process.argv.slice(2), (peer) => {
       `fallbacks=${stats.fallbackContexts} ` +
       `recorded=${stats.recorded}\n`,
   );
-}).then(
-  (code) => {
-    // THE POST-TRAFFIC OBSERVATION. The COMPOSED line above is printed before the peer has
-    // served anything, so its `context_available` necessarily reflects only the peer's own
-    // bootstrap. The question §9.1 turns on — does a WIRE-DRIVEN write carry the caller's
-    // context — can only be answered after the traffic. `tools/host-launch` reaps the host
-    // before surfacing its stderr, so this line is captured.
-    if (installed !== null) {
-      const s = installed.recorder.stats;
-      process.stderr.write(
-        `COMPOSED-FINAL context_available=${installed.contextAvailable()} ` +
-          `contexts=${s.contextContexts} ` +
-          `fallbacks=${s.fallbackContexts} ` +
-          `observed=${s.observed} ` +
-          `recorded=${s.recorded}\n`,
-      );
-    }
-    process.exit(code);
-  },
+  });
+
+  // THE POST-TRAFFIC OBSERVATION. The COMPOSED line above is printed before the peer has
+  // served anything, so its `context_available` necessarily reflects only the peer's own
+  // bootstrap. The question §9.1 turns on — does a WIRE-DRIVEN write carry the caller's
+  // context — can only be answered after the traffic. `runHost` resolves strictly after its
+  // stop promise, so this runs strictly after the traffic; `tools/host-launch` reaps the
+  // host before surfacing its stderr, so the line is captured.
+  const done = installed as ReturnType<typeof installHistory> | null;
+  if (done !== null) {
+    const s = done.recorder.stats;
+    process.stderr.write(
+      `COMPOSED-FINAL context_available=${done.contextAvailable()} ` +
+        `contexts=${s.contextContexts} ` +
+        `fallbacks=${s.fallbackContexts} ` +
+        `observed=${s.observed} ` +
+        `recorded=${s.recorded}\n`,
+    );
+  }
+  return code;
+}
+
+main().then(
+  (code) => process.exit(code),
   (err: unknown) => {
     process.stderr.write(
       `fatal: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,

@@ -988,6 +988,33 @@ oracle_category = "history"
 # second encoding of a fact each row already states, and after the re-key two of the three
 # were sitting above rows of a different level.
 
+# ── §5b — the oracle's own check -> obligation map, for the pinned names ────────────────
+#
+# EMITTED, NEVER TYPED: `./tools/req-coverage.py --bless-obligations`. Every value is the
+# `spec_ref` `entity-core-go` publishes for that check in the reports we already hold, which
+# is the map `PROPOSAL-CONFORMANCE-ORACLE-CONTRACT` §5b requires an oracle to publish — so
+# this is a cached read of their artifact and not a second copy of their taxonomy (D20).
+#
+# It exists so that a re-pin which RENAMES a check reads as a rename: rule 3 joins a missing
+# pin through its obligation and says RE-PINNED when something still carries it, MEASUREMENT
+# LOST only when nothing does. Rule 6 fails when a name keeps its spelling and the oracle
+# changes what it is about, which is the direction nothing watched.
+#
+# ⚠ NOT full §5b compliance and not to be cited as it: `spec_ref` is a SECTION CITATION, not
+# a `SPECIFICATION-FORMAT` §8.5a `<PREFIX>-R<n>` id. Those do not exist yet (W-23, arch's A-1
+# and A-5). When they land, this block is re-blessed and nothing else changes.
+[conformance.obligation]
+"history/context_author_present"                         = "HISTORY §2.1"
+"history/context_capability_present"                     = "HISTORY §2.1"
+"history/context_handler_present"                        = "HISTORY §2.1"
+"history/context_operation_present"                      = "HISTORY §2.1"
+"history/head_pointer_set"                               = "HISTORY §3.1"
+"history/rollback_invalid_hash_rejected"                 = "HISTORY §7.5"
+"history/transition_has_timestamp"                       = "HISTORY §9.1"
+"history/transition_hash_matches"                        = "HISTORY §2.1"
+"history/transition_recorded"                            = "HISTORY §5.1"
+"history/w6_caller_cap_absent"                           = "HISTORY §2.1 W6"
+
 [[conformance.requirement]]
 id     = "HIST-R1"
 text   = "Store transition entities in the content store"

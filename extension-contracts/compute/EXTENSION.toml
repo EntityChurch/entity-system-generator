@@ -1738,6 +1738,96 @@ oracle_category = "compute"
 # and the executed report; re-running it after a re-pin is how a changed row gets noticed,
 # and `tools/req-coverage.py` fails on an undeclared or stale row either way.
 
+# ── §5b — the oracle's own check -> obligation map, for the pinned names ────────────────
+#
+# EMITTED, NEVER TYPED: `./tools/req-coverage.py --bless-obligations`. Every value is the
+# `spec_ref` `entity-core-go` publishes for that check in the reports we already hold, which
+# is the map `PROPOSAL-CONFORMANCE-ORACLE-CONTRACT` §5b requires an oracle to publish — so
+# this is a cached read of their artifact and not a second copy of their taxonomy (D20).
+#
+# It exists so that a re-pin which RENAMES a check reads as a rename: rule 3 joins a missing
+# pin through its obligation and says RE-PINNED when something still carries it, MEASUREMENT
+# LOST only when nothing does. Rule 6 fails when a name keeps its spelling and the oracle
+# changes what it is about, which is the direction nothing watched.
+#
+# ⚠ NOT full §5b compliance and not to be cited as it: `spec_ref` is a SECTION CITATION, not
+# a `SPECIFICATION-FORMAT` §8.5a `<PREFIX>-R<n>` id. Those do not exist yet (W-23, arch's A-1
+# and A-5). When they land, this block is re-blessed and nothing else changes.
+[conformance.obligation]
+"compute/algo_fibonacci_10"                              = "COMPUTE §4.1, §8.1"
+"compute/algo_fibonacci_5"                               = "COMPUTE §4.1, §8.1"
+"compute/cp1_install_dynamic_capability_deferred"        = "EXTENSION-COMPUTE §3.3 — dynamic-capability deferral"
+"compute/cp1_install_static_literal_adversary_rejected"  = "EXTENSION-COMPUTE §3.3 (install-audit) — 403 embedded_cap_unauthorized"
+"compute/cp1_install_static_literal_self_issued_accepted" = "EXTENSION-COMPUTE §3.3 (install-audit) + §11.1 MUST"
+"compute/d8_reeval_dep_in_apply_arg"                     = "COMPUTE §7.1 D8 (row b, DISCRIMINATOR) — a lookup/tree inside apply.args is registered → dep change re-fires eval"
+"compute/d8_reeval_dep_in_let_binding"                   = "COMPUTE §7.1 D8 (row a) — a lookup/tree inside let.bindings[].value is registered → dep change re-fires eval"
+"compute/eval_arithmetic_add"                            = "COMPUTE §2.2, §8.1"
+"compute/eval_arithmetic_div_exact"                      = "COMPUTE §2.2, §8.1"
+"compute/eval_arithmetic_div_float"                      = "COMPUTE §2.2, §8.1"
+"compute/eval_arithmetic_mod"                            = "COMPUTE §2.2, §8.1"
+"compute/eval_arithmetic_mul"                            = "COMPUTE §2.2, §8.1"
+"compute/eval_arithmetic_sub"                            = "COMPUTE §2.2, §8.1"
+"compute/eval_closure_captures_scope"                    = "COMPUTE §4.4"
+"compute/eval_compare_eq_false"                          = "COMPUTE §2.2, §8.1"
+"compute/eval_compare_eq_true"                           = "COMPUTE §2.2, §8.1"
+"compute/eval_construct_deterministic"                   = "COMPUTE §2.2, §8.2"
+"compute/eval_depth_limit"                               = "COMPUTE §5.4"
+"compute/eval_division_by_zero"                          = "COMPUTE §9.1"
+"compute/eval_error_not_found"                           = "COMPUTE §9.1"
+"compute/eval_error_propagation"                         = "COMPUTE §7.2"
+"compute/eval_if_false_branch"                           = "COMPUTE §2.1, §8.1"
+"compute/eval_if_short_circuit"                          = "COMPUTE §2.1"
+"compute/eval_if_true_branch"                            = "COMPUTE §2.1, §8.1"
+"compute/eval_lambda_apply"                              = "COMPUTE §2.1, §8.1"
+"compute/eval_let_sequential"                            = "COMPUTE §2.1, §8.2"
+"compute/eval_literal_bool"                              = "COMPUTE §4.1"
+"compute/eval_literal_int"                               = "COMPUTE §4.1"
+"compute/eval_literal_string"                            = "COMPUTE §4.1"
+"compute/eval_lookup_scope"                              = "COMPUTE §2.1"
+"compute/eval_lookup_tree_evaluates_expr"                = "COMPUTE §2.1"
+"compute/eval_lookup_tree_non_expr"                      = "COMPUTE §2.1"
+"compute/handler_manifest_decode"                        = "COMPUTE §3.1"
+"compute/handler_op_eval"                                = "COMPUTE §3.1"
+"compute/handler_op_install"                             = "COMPUTE §3.1"
+"compute/handler_op_uninstall"                           = "COMPUTE §3.1"
+"compute/handler_present"                                = "COMPUTE §3.1"
+"compute/q23_install_builtin_apply_capability_resource"  = "COMPUTE §2.1 Q23 / §3.3 (arch 67708b1) — install-time reject: static-literal builtin-path apply carrying capability+resource MUST fail install (invalid_expression)"
+"compute/q23_install_builtin_apply_resource_only"        = "COMPUTE §2.1 Q23 / §3.3 (arch 67708b1) — install-time reject: static-literal builtin-path apply carrying resource alone MUST fail install (invalid_expression)"
+"compute/reactive_converged_result"                      = "COMPUTE §7.2"
+"compute/reactive_final_result"                          = "COMPUTE §7.2"
+"compute/reactive_initial_result"                        = "COMPUTE §7.2"
+"compute/reactive_install"                               = "COMPUTE §3.3, §7.1"
+"compute/types_result_error"                             = "COMPUTE §2.4"
+"compute/types_subgraph"                                 = "COMPUTE §2.5"
+"compute/types_value"                                    = "COMPUTE §2.3"
+"compute/v310_f5_eval_capability_without_resource"       = "COMPUTE §4.1 F5"
+"compute/v310_f5_install_capability_without_resource"    = "COMPUTE §3.3 F5"
+"compute/v314_args_types_registered"                     = "COMPUTE §3.5 N.2"
+"compute/v314_builtin_arithmetic_alias"                  = "COMPUTE §3.5 N.2"
+"compute/v314_builtin_filter"                            = "COMPUTE §3.5 §962 N.2"
+"compute/v314_builtin_fold"                              = "COMPUTE §3.5 §962 N.2"
+"compute/v314_builtin_fold_empty"                        = "COMPUTE §3.5 §962 N.2"
+"compute/v314_builtin_map"                               = "COMPUTE §3.5 §962 N.2"
+"compute/v314_builtin_store_roundtrip"                   = "COMPUTE §3.5 §6.3 + V7 §6.6"
+"compute/v314_cast_inf_to_int"                           = "COMPUTE §9.1 cast_out_of_range"
+"compute/v314_cast_nan_to_int"                           = "COMPUTE §9.1 cast_out_of_range"
+"compute/v314_cast_neg_float_to_uint"                    = "COMPUTE §9.1 cast_out_of_range"
+"compute/v319_f10_error_at_200"                          = "COMPUTE F10 (v3.19) — strict status-200 pin for evaluated compute/error"
+"compute/v319_f11_filter_fn_arg"                         = "COMPUTE F11 (v3.19) — filter-args lambda key renamed predicate → fn"
+"compute/v319_n5_closure_field"                          = "COMPUTE N.5 (v3.19) — closure-captured-param navigation; tracks F9-B-residual (scope-binding identity spec fork)"
+"compute/v319b_scope_entity_round_trip"                  = "COMPUTE v3.19b §2.3 N1+N3+N4 — kind-tagged scope binding round-trip; entity captured into scope survives capture/load + field-navigates .data"
+"compute/v319c_inline_vs_builtin_construct_hash_agreement" = "COMPUTE v3.19c Part A R3 — adopted from Rust's catch: build the same construct two ways (inline compute/construct expression AND system/compute/builtins/construct handler-form alias). Materialized content_hashes MUST match. Catches the duplicate-path bug class Rust hit; Go's single path (builtins.go::builtinConstruct delegates to inline evalConstruct) passes trivially."
+"compute/v36_resolve_rejects_non_compute"                = "COMPUTE §4.2 D2"
+"compute/v37_lookup_hash_eval"                           = "COMPUTE §4.1 D6"
+"compute/v37_lookup_hash_field_extract"                  = "COMPUTE §4.1 D6"
+"compute/v38_cascade_chain"                              = "COMPUTE §7.2, §7.3"
+"compute/v38_depth_non_tail"                             = "COMPUTE §5.4 T3"
+"compute/v38_dynamic_handler"                            = "COMPUTE §7.2, §4.1"
+"compute/v38_dynamic_handler_swap"                       = "COMPUTE §7.2, §4.1"
+"entity_native/multiple_operations"                      = "PROPOSAL §2 (E1)"
+"entity_native/scope_operation"                          = "PROPOSAL §2 (E1)"
+"entity_native/scope_params"                             = "PROPOSAL §2 (E1)"
+
 [[conformance.requirement]]
 text   = "All eight core expression types (§2.1): literal, lookup/scope, lookup/tree, lookup/hash, apply, if, let, lambda"
 oracle = ["compute/eval_if_false_branch", "compute/eval_if_short_circuit", "compute/eval_if_true_branch", "compute/eval_lambda_apply", "compute/eval_let_sequential", "compute/eval_lookup_scope", "compute/eval_lookup_tree_evaluates_expr", "compute/eval_lookup_tree_non_expr"]

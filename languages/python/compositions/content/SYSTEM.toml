@@ -78,6 +78,21 @@ improved = [
   "content.type_descriptor",
 ]
 
+
+[gate.baseline.content.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"CONTENT §2.1 / §11.1 MUST" = ["content.type_blob"]
+"CONTENT §2.2 / §11.1 MUST" = ["content.type_chunk"]
+"CONTENT §2.4 (v3.5 A1)" = ["content.type_descriptor"]
+"CONTENT §6.1" = ["content.handler_manifest"]
+"CONTENT §6.2 / §11.3" = ["content.handler_op_get"]
+"CONTENT §6.2 MUST (v3.4 → v3.5 reversal)" = ["content.get_path_required"]
+"CONTENT §6.3 / §11.3" = ["content.handler_op_ingest"]
+"CONTENT §6.3 MUST (v3.4 → v3.5 reversal)" = ["content.ingest_path_required"]
+
 # PRIOR re-bless, earlier the same day, and its 776 is superseded by the note below.
 # WAS: THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
 # profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
@@ -106,3 +121,12 @@ improved = [
   "type_system.type_system_content_descriptor_fetch",
   "type_system.type_system_content_descriptor_match",
 ]
+
+
+[gate.baseline.core.requirement]
+# §5b -- the OBLIGATION each improved check carries, as the oracle itself
+# states it in the report (`spec_ref`). EMITTED, never typed. This is what
+# `check-expectation.py` joins on, so a re-pin that renames a check reads as
+# a rename and not as a lost capability.
+"Types §11.2" = ["type_system.type_system_content_blob_fetch", "type_system.type_system_content_chunk_fetch", "type_system.type_system_content_descriptor_fetch"]
+"Types §12.3" = ["type_system.type_system_content_blob_match", "type_system.type_system_content_chunk_match", "type_system.type_system_content_descriptor_match"]

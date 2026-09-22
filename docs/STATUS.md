@@ -6,6 +6,34 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**EVERY COMPOSED HOST IS NOW THE PEER'S OWN HOST PLUS AN INSTALL.** Nine wiring programs across
+three languages — `typescript`, `python`, `rust` — used to carry a hand copy of the peer's startup
+path: a flag parser, an on-disk keypair reader, the peer construction, the readiness line and the
+signal wait. All nine now call the peer package's own `run_host(argv, configure)` and install their
+extensions in the callback it provides. **994 lines became 502**, and what remains is the install
+calls and the reasoning behind them.
+
+**The number that matters is the one that did not move: 0 of 20,280.** Every per-check verdict was
+recorded before the change and compared after it — six compositions, both arms, two rounds, matched
+by name — and not one severity moved. Conformance is unchanged across the matrix.
+
+**And the check the comparison could not make is the one worth describing.** Each host prints a
+post-traffic observation at shutdown, which is the only way to answer whether a request-driven write
+carried its caller's authorization context. That line moves no verdict and fails no gate, so losing
+it in the port would have been invisible. It was re-hooked and then **verified by running each host
+and reading the line**, rather than assumed.
+
+**A composition's baseline now names the OBLIGATION each measurement is about, not the test's
+name.** Conformance suites rename their checks; a baseline pinned to those names cannot tell a
+rename from a lost capability, and reports the second — which writes a renamed test into the record
+as a regression that never happened. The obligation each check cites is read from the suite's own
+report and never restated here, so the two can disagree only when something real has changed.
+**777 pinned names became 297 obligations.**
+
+---
+
+### The previous entry
+
 **ALL NINE COMPOSITIONS RUN ON A CERTIFIED PEER, AND THE FIFTH FACE IS LIVE ON ALL THREE TARGETS.**
 Three extensions — CONTENT, HISTORY, COMPUTE — across `typescript`, `python` and `rust`. Every one
 builds, unit-tests and passes a two-round conformance differential with **0 regressions
