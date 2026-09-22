@@ -392,7 +392,10 @@ the useful reason on its first run.
 
 ### 4.6 An inherited environment variable beat our own default, and only one driver noticed
 
-`languages/rust/{build,test,host-launch}` each wrote
+`languages/rust/{build,test,host-entry}` each wrote
+<!-- Written when the third driver was still a per-target `host-launch`; the 2026-09-06 mass
+     audit factored the shared half into `tools/host-launch` and left `host-entry` as the hook.
+     The incident is unchanged; the path is the current one. -->
 `export CARGO_HOME="${CARGO_HOME:-$ROOT/output/.cargo-home}"`. The toolchain image declares
 `ENV CARGO_HOME=/cargo`, so the `:-` default **never fired** and every driver used the
 image's path.

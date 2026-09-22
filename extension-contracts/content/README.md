@@ -9,15 +9,33 @@ never closed by a local decision and never worked around in generated output.
 
 ## Layout
 
+**THE LAYOUT IS TARGET-MAJOR** (2026-09-06). What is here is the language-NEUTRAL half; the
+cells live under the target that compiles them, because the people who consume this arrive by
+language and should be able to read one directory.
+
 ```
-EXTENSION.toml          the machine-readable contract; [contract] is TRANSCRIBED from the spec header
-arch/AUTHORING-NOTES.md readings taken, ambiguities logged, assumptions carried  ← read this second
-<lang>/                 the cell: source only. handler · types · chunking · sdk · index · internal/
-<lang>/test/            per-cell unit tests   (`rust`: `tests/`, which sees only `pub`)
+extension-contracts/content/
+  EXTENSION.toml            the machine-readable contract; [contract] is TRANSCRIBED from the header
+  arch/AUTHORING-NOTES.md   readings, ambiguities, assumptions   ← read this second
+  README.md                 this file
+
+languages/<target>/extensions/content/
+                            the cell: source only. handler · types · chunking · sdk · index
+                            the module-private half and the tests are spelled per ecosystem:
+                              typescript  internal/    test/
+                              python      _internal/   test/
+                              rust        src/internal/  tests/   ← sees only `pub`
 ```
 
-The toolchain is **not** here. It is in `languages/<lang>/`, one copy shared by every extension —
-a build driver in the cell position would be 26 × 46 = 1,196 copies of one script.
+**This block described the OLD layout until 2026-09-07** — `<lang>/` and `<lang>/test/` as
+subdirectories of this one, which is where they were before the restructure and have not been
+since. `tools/check-citations.py` could not see it: the paths were relative and
+placeholder-rooted, so nothing in them anchors on a directory the extractor knows. That is a
+stated limit of the gate (D18) and not a hole it missed.
+
+The toolchain is **not** in the cell either. It is `languages/<target>/profile.toml` plus
+`languages/<target>/{build,test,host-entry}`, one copy shared by every extension — a build driver in the cell position would be
+26 × 46 = 1,196 copies of one script.
 
 ## What is implemented
 
@@ -46,7 +64,8 @@ See `EXTENSION.toml [assumptions].topology`.
 callable from third-party / SDK / external consumer code without an explicit capability-checking
 wrapper."*
 
-So the algorithm is module-private (`<lang>/internal/`), absent from the public entry point, and
+So the algorithm is module-private (the `internal/` half of the cell, spelled three ways
+above), absent from the public entry point, and
 the only public route is `reassembleUnderCapability(ctx, blobHash)` — which takes a handler context
 a consumer cannot manufacture, because the dispatcher builds one only after `check_permission`
 returned ALLOW.

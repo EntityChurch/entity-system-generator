@@ -1,0 +1,25 @@
+#!/bin/sh
+# The type-parity arm for this target. ONE UNIFORM ENTRY POINT PER (gate x target).
+#
+#   gates/type-parity/run <extension>   -> the arm's JSON on stdout
+#
+# Unlike its twins this arm does not consume a staged build: on an AOT substrate the
+# packaging boundary IS the crate boundary, so depending on the cell by path across a
+# separate crate is the same discipline the other two get by importing the staged package
+# by name. The stage check is still made, because a cell that does not currently build
+# into a composition is one whose entities nobody is shipping.
+set -eu
+EXT="${1:?usage: run <extension>}"
+COMPOSITION="${COMPOSITION:-content-history}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+STAGE="$TARGET_DIR/output/$COMPOSITION/build"
+[ -d "$STAGE" ] || { echo "REFUSING: no staged build at $STAGE -- run: make build TARGET=$(basename "$TARGET_DIR") COMPOSITION=$COMPOSITION" >&2; exit 2; }
+
+# Set unconditionally, never `${CARGO_HOME:-...}`: the toolchain image declares its own
+# ENV CARGO_HOME, so a `:-` default never fires and the arm would silently use the
+# image's path (AP-6).
+export CARGO_HOME="$TARGET_DIR/output/.cargo-home"
+export CARGO_TARGET_DIR="$TARGET_DIR/output/.type-parity-target"
+cd "$HERE"
+exec cargo run --offline --quiet -- "$EXT"

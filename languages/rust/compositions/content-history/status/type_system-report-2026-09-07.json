@@ -1,0 +1,3602 @@
+{
+  "peer_addr": "127.0.0.1:7777",
+  "peer_id": "2KHoAk7A5JmhygZJAdBua8iRD1CnBoJRfUBHgZeXNRTeFg",
+  "timestamp": "2026-09-07T12:33:01Z",
+  "summary": {
+    "total": 446,
+    "passed": 118,
+    "warned": 11,
+    "failed": 317,
+    "skipped": 0,
+    "elapsed_ms": 3596,
+    "self_checks": 0
+  },
+  "checks": [
+    {
+      "category": "type_system",
+      "name": "types_listing_available",
+      "severity": "PASS",
+      "message": "system/type/ listing returned 4 entries",
+      "spec_ref": "Types §11.4",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_apply_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/apply: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_apply_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_apply_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_arithmetic_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/arithmetic: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_arithmetic_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_arithmetic_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_closure_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/closure: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_closure_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_closure_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_compare_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/compare: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_compare_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_compare_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_construct_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/construct: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_construct_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_construct_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_error_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/error: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_error_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_error_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_field_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/field: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_field_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_field_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_if_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/if: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_if_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_if_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_index_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/index: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_index_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_index_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lambda_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/lambda: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lambda_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_lambda_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_length_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/length: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_length_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_length_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_let_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/let: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_let_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_let_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_literal_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/literal: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_literal_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_literal_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_logic_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/logic: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_logic_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_logic_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_hash_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/lookup/hash: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_hash_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_lookup_hash_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_scope_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/lookup/scope: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_scope_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_lookup_scope_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_tree_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/lookup/tree: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_lookup_tree_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_lookup_tree_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_numeric_cast_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/numeric-cast: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_numeric_cast_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_numeric_cast_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_scope_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/compute/scope: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_compute_scope_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_compute_scope_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_core_entity_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/core/entity",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_core_entity_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_core_envelope_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/core/envelope",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_core_envelope_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_entity_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/entity",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_entity_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_any_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/any",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_any_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_bool_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/bool",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_bool_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_bytes_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/bytes",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_bytes_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_float_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/float",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_float_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_int_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/int",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_int_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_null_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/null",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_null_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_string_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/string",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_string_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_uint_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/primitive/uint",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_primitive_uint_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_bounds_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/bounds",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_bounds_match",
+      "severity": "WARN",
+      "message": "hash mismatch with 1 structural difference(s) (open-type-tolerable): [field \"chain_depth\": optional locally, missing remotely (spec: primitive/uint?)] (local: ecf-sha256:af53b40263acc7eb6ec66237cc7bfc3a82da24ba18e11443e1a43fba836af05e, remote: ecf-sha256:cd0b0a87f5ce9ad61852eec0c842de30e55ffdf4fd472936827a4f3bb90e422d)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_delegate_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/delegate-request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_delegate_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_delegation_caveats_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/delegation-caveats",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_delegation_caveats_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_grant_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/grant",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_grant_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_grant_entry_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/grant-entry",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_grant_entry_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_id_scope_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/id-scope",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_id_scope_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_multi_granter_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/multi-granter",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_multi_granter_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_path_scope_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/path-scope",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_path_scope_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_policy_entry_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/policy-entry",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_policy_entry_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_revocation_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/revocation",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_revocation_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_revoke_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/revoke-request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_revoke_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_token_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/capability/token",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_capability_token_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_compare_params_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/compare-params: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_compare_params_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_compare_params_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_compare_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/compare-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_compare_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_compare_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_hlc_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/hlc: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_hlc_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_hlc_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_logical_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/logical: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_logical_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_logical_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_state_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/state: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_state_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_state_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_tick_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/tick: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_tick_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_tick_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_timestamp_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/timestamp: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_timestamp_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_timestamp_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_vector_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/clock/vector: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_clock_vector_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_clock_vector_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_assoc_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/assoc-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_assoc_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_assoc_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_concat_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/concat-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_concat_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_concat_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_filter_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/filter-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_filter_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_filter_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_fold_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/fold-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_fold_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_fold_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_group_by_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/group-by-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_group_by_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_group_by_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_install_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/install-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_install_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_install_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_install_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/install-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_install_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_install_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_map_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/map-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_map_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_map_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_range_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/range-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_range_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_range_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_scope_binding_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/scope-binding: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_scope_binding_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_scope_binding_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_store_args_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/store-args: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_store_args_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_store_args_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_subgraph_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/compute/subgraph: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_compute_subgraph_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_compute_subgraph_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_connection_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/connection: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_connection_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_connection_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_blob_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/content/blob",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_blob_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_chunk_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/content/chunk",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_chunk_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_descriptor_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/content/descriptor",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_content_descriptor_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_abandon_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/abandon-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_abandon_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_abandon_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_advance_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/advance-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_advance_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_advance_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_install_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/install-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_install_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_install_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_join_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/join: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_join_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_join_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_resume_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/resume-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_resume_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_resume_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_suspended_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/suspended: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_suspended_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_suspended_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_transform_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/transform: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_transform_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_transform_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_transform_op_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/continuation/transform-op: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_continuation_transform_op_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_continuation_transform_op_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_deletion_marker_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/deletion-marker",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_deletion_marker_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_delivery_spec_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/delivery-spec",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_delivery_spec_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_announce_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/announce-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_announce_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_announce_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_announce_stop_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/announce-stop-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_announce_stop_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_announce_stop_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_candidate_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/candidate: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_candidate_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_candidate_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_decision_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/decision: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_decision_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_decision_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_identity_claim_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/identity-claim: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_identity_claim_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_identity_claim_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_scan_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/scan-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_scan_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_scan_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_scan_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/discovery/scan-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_discovery_scan_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_discovery_scan_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_advertisement_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/durability-advertisement: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_advertisement_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_durability_advertisement_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/durability-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_durability_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/durability-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_durability_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_durability_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encrypted_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encrypted: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encrypted_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encrypted_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_pubkey_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption-pubkey: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_pubkey_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_pubkey_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_handoff_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption/handoff: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_handoff_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_handoff_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_kdf_params_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption/kdf-params: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_kdf_params_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_kdf_params_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_key_backup_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption/key-backup: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_key_backup_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_key_backup_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_revocation_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption/revocation: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_revocation_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_revocation_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_wrapped_key_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/encryption/wrapped-key: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_encryption_wrapped_key_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_encryption_wrapped_key_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_envelope_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/envelope",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_envelope_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_interface_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler/interface",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_interface_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_manifest_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler/manifest",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_manifest_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_operation_spec_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler/operation-spec",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_operation_spec_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_register_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler/register-request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_register_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_register_result_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/handler/register-result",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_handler_register_result_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_hash_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/hash",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_hash_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_inbox_delivery_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/inbox/delivery: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_inbox_delivery_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_inbox_delivery_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_backoff_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/backoff-config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_backoff_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_backoff_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_candidate_fetch",
+      "severity": "PASS",
+      "message": "system/network/candidate absent — EXTENSION-NETWORK §6.7 (reachability facts) is OPTIONAL as a whole (§12.3) and a peer that declines the section does not owe its types (ruled 2026-08-07, arch c78b3dc, MUST: a type is owed by the surface that uses it). NOT OWED — conformant, and not a warning, because nothing is outstanding. NOTE the limit: this check cannot see whether the peer actually OFFERS §6.7; a peer shipping the operations while omitting their types is under-reported here, and the `reachability` category is where that surfaces",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_candidate_match",
+      "severity": "PASS",
+      "message": "remote type definition not available — §6.7 is OPTIONAL as a whole and the peer does not owe its types; nothing to compare, nothing outstanding",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_check_reachability_result_fetch",
+      "severity": "PASS",
+      "message": "system/network/check-reachability-result absent — EXTENSION-NETWORK §6.7 (reachability facts) is OPTIONAL as a whole (§12.3) and a peer that declines the section does not owe its types (ruled 2026-08-07, arch c78b3dc, MUST: a type is owed by the surface that uses it). NOT OWED — conformant, and not a warning, because nothing is outstanding. NOTE the limit: this check cannot see whether the peer actually OFFERS §6.7; a peer shipping the operations while omitting their types is under-reported here, and the `reachability` category is where that surfaces",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_check_reachability_result_match",
+      "severity": "PASS",
+      "message": "remote type definition not available — §6.7 is OPTIONAL as a whole and the peer does not owe its types; nothing to compare, nothing outstanding",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_close_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/close-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_close_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_close_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_keepalive_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/keepalive-config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_keepalive_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_keepalive_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_maintain_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/maintain-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_maintain_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_maintain_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_maintain_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/maintain-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_maintain_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_maintain_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_observe_address_result_fetch",
+      "severity": "PASS",
+      "message": "system/network/observe-address-result absent — EXTENSION-NETWORK §6.7 (reachability facts) is OPTIONAL as a whole (§12.3) and a peer that declines the section does not owe its types (ruled 2026-08-07, arch c78b3dc, MUST: a type is owed by the surface that uses it). NOT OWED — conformant, and not a warning, because nothing is outstanding. NOTE the limit: this check cannot see whether the peer actually OFFERS §6.7; a peer shipping the operations while omitting their types is under-reported here, and the `reachability` category is where that surfaces",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_observe_address_result_match",
+      "severity": "PASS",
+      "message": "remote type definition not available — §6.7 is OPTIONAL as a whole and the peer does not owe its types; nothing to compare, nothing outstanding",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_peer_summary_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/peer-summary: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_peer_summary_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_peer_summary_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_ping_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/ping: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_ping_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_ping_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_pong_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/pong: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_pong_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_pong_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_release_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/release-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_release_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_release_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_release_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/release-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_release_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_release_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_status_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/network/status: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_network_status_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_network_status_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_note_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/note: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_note_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_note_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/peer",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_id_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/peer-id",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_id_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_inbox_relay_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/peer/inbox-relay: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_inbox_relay_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_peer_inbox_relay_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_inbox_relay_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/peer/inbox-relay-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_inbox_relay_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_peer_inbox_relay_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_published_root_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/peer/published-root: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_published_root_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_peer_published_root_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_status_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/peer/status: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_status_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_peer_status_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_transport_http_poll_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/peer/transport/http-poll: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_peer_transport_http_poll_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_peer_transport_http_poll_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_connect_authenticate_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/connect/authenticate",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_connect_authenticate_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_connect_hello_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/connect/hello",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_connect_hello_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_envelope_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/envelope",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_envelope_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_error_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/error",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_error_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_execute_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/execute",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_execute_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_execute_response_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/execute/response",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_execute_response_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_resource_target_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/protocol/resource-target",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_protocol_resource_target_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_allowances_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/allowances: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_allowances_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_allowances_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_constraints_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/constraints: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_constraints_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_constraints_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_expression_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/expression: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_expression_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_expression_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_field_predicate_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/field-predicate: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_field_predicate_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_field_predicate_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_index_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/index-config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_index_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_index_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_match_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/match: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_match_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_match_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/query/result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_query_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_query_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_binding_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/binding: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_binding_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_binding_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_binding_manifest_fetch",
+      "severity": "WARN",
+      "message": "system/registry/binding-manifest absent — the surface is OPTIONAL and its implementation explicitly deferred by the spec that pins the format (EXTENSION-REGISTRY §6a.7, the analog of SUBSTITUTE §2.4) — the format is pinned so no implementation invents its own, NOT so every implementation must ship it. Absence is conformant. Go leads here; this is downstream feedback, not a gap owed",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_binding_manifest_match",
+      "severity": "WARN",
+      "message": "remote type definition not available — provisional (proposal-stage, not ratified-core floor per R1)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_dispatch_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/dispatch-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 17
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_dispatch_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_dispatch_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_invalidate_cache_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/invalidate-cache-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_invalidate_cache_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_invalidate_cache_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_issuer_policy_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/issuer-policy: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_issuer_policy_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_issuer_policy_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name-config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_bind_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/bind-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_bind_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_bind_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_bind_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/bind-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_bind_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_bind_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/list-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_list_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/list-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_list_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/list-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_list_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_list_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_unbind_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/unbind-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_unbind_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_unbind_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_update_transports_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/local-name/update-transports-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_local_name_update_transports_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_local_name_update_transports_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_pending_binding_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/pending-binding: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_pending_binding_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_pending_binding_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_pinned_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/pinned-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_pinned_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_pinned_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_register_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/register-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_register_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_register_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_renew_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/renew-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_renew_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_renew_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolution_log_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/resolution-log: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolution_log_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_resolution_log_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolution_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/resolution-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolution_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_resolution_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolve_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/resolve-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolve_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_resolve_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolver_chain_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/resolver-chain-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolver_chain_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_resolver_chain_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolver_config_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/resolver-config: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_resolver_config_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_resolver_config_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_revocation_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/revocation: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_revocation_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_revocation_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_revoke_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/revoke-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_revoke_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_revoke_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_set_resolver_config_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/registry/set-resolver-config-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_registry_set_resolver_config_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_registry_set_resolver_config_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_advertise_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/advertise: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_advertise_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_advertise_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_advertise_limits_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/advertise-limits: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_advertise_limits_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_advertise_limits_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_forward_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/forward-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_forward_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_forward_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_forward_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/forward-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_forward_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_forward_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_poll_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/poll-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 16
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_poll_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_poll_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_poll_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/poll-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_poll_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_poll_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_put_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/put-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_put_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_put_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_store_entry_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/relay/store-entry: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_relay_store_entry_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_relay_store_entry_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_resource_limits_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/resource-limits",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_resource_limits_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_route_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/route: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_route_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_route_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_signature_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/signature",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_signature_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_cancel_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription/cancel: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_cancel_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_cancel_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_limits_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription/limits: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_limits_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_limits_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_notification_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription/notification: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_notification_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_notification_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_redirect_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription/redirect: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_redirect_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_redirect_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/subscription/request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_subscription_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_subscription_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_endpoint_fetch",
+      "severity": "WARN",
+      "message": "system/substitute/endpoint absent — provisional (proposal-stage) type — conformant; not part of ratified-core floor (R1)",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_endpoint_match",
+      "severity": "WARN",
+      "message": "remote type definition not available — provisional (proposal-stage, not ratified-core floor per R1)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_snapshot_manifest_fetch",
+      "severity": "WARN",
+      "message": "system/substitute/snapshot-manifest absent — provisional (proposal-stage) type — conformant; not part of ratified-core floor (R1)",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_snapshot_manifest_match",
+      "severity": "WARN",
+      "message": "remote type definition not available — provisional (proposal-stage, not ratified-core floor per R1)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_source_fetch",
+      "severity": "WARN",
+      "message": "system/substitute/source absent — provisional (proposal-stage) type — conformant; not part of ratified-core floor (R1)",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_source_match",
+      "severity": "WARN",
+      "message": "remote type definition not available — provisional (proposal-stage, not ratified-core floor per R1)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_try_request_fetch",
+      "severity": "WARN",
+      "message": "system/substitute/try-request absent — provisional (proposal-stage) type — conformant; not part of ratified-core floor (R1)",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_substitute_try_request_match",
+      "severity": "WARN",
+      "message": "remote type definition not available — provisional (proposal-stage, not ratified-core floor per R1)",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_get_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/tree/get-request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_get_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_listing_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/tree/listing",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_listing_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_listing_entry_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/tree/listing-entry",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_listing_entry_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_path_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/tree/path",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_path_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_put_request_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/tree/put-request",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 19
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_tree_put_request_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/type",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_adopt_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/adopt-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_adopt_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_adopt_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compare_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/compare-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compare_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_compare_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compare_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/compare-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compare_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_compare_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compatibility_report_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/compatibility-report: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compatibility_report_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_compatibility_report_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compatible_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/compatible-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 18
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_compatible_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_compatible_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_format_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/format: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_format_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_format_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/max: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_max_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_count_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/max-count: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 15
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_count_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_max_count_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_length_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/max-length: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_max_length_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_max_length_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/min: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_min_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_count_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/min-count: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_count_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_min_count_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_length_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/min-length: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_min_length_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_min_length_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_not_one_of_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/not-one-of: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_not_one_of_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_not_one_of_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_one_of_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/one-of: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_one_of_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_one_of_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_pattern_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/pattern: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_pattern_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_pattern_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_type_pattern_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/type-pattern: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_type_pattern_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_type_pattern_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_validate_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/validate-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_validate_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_validate_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_validate_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/constraint/validate-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_constraint_validate_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_constraint_validate_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_converge_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/converge-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_converge_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_converge_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_comparison_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/field-comparison: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_comparison_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_field_comparison_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_incompatibility_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/field-incompatibility: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_incompatibility_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_field_incompatibility_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_spec_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/type/field-spec",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_field_spec_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_name_fetch",
+      "severity": "PASS",
+      "message": "fetched system/type/system/type/name",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_name_match",
+      "severity": "PASS",
+      "message": "content hash match",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_reconcile_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/reconcile-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_reconcile_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_reconcile_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_reconcile_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/reconcile-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_reconcile_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_reconcile_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_validate_request_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/validate-request: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_validate_request_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_validate_request_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_validate_result_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/validate-result: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 14
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_validate_result_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_validate_result_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_violation_fetch",
+      "severity": "FAIL",
+      "message": "failed to fetch system/type/system/type/violation: tree get status 404",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 13
+    },
+    {
+      "category": "type_system",
+      "name": "type_system_type_violation_match",
+      "severity": "FAIL",
+      "message": "blocked: depends on type_system_type_violation_fetch",
+      "spec_ref": "Types §12.3",
+      "elapsed_ms": 0
+    },
+    {
+      "category": "type_system",
+      "name": "types_all_present",
+      "severity": "FAIL",
+      "message": "158 ratified-core types missing from remote: [compute/apply compute/arithmetic compute/closure compute/compare compute/construct compute/error compute/field compute/if compute/index compute/lambda compute/length compute/let compute/literal compute/logic compute/lookup/hash compute/lookup/scope compute/lookup/tree compute/numeric-cast compute/result compute/scope system/clock/compare-params system/clock/compare-result system/clock/config system/clock/hlc system/clock/logical system/clock/state system/clock/tick system/clock/timestamp system/clock/vector system/compute/assoc-args system/compute/concat-args system/compute/filter-args system/compute/fold-args system/compute/group-by-args system/compute/install-request system/compute/install-result system/compute/map-args system/compute/range-args system/compute/scope-binding system/compute/store-args system/compute/subgraph system/connection system/continuation system/continuation/abandon-request system/continuation/advance-request system/continuation/install-result system/continuation/join system/continuation/resume-request system/continuation/suspended system/continuation/transform system/continuation/transform-op system/discovery/announce-request system/discovery/announce-stop-request system/discovery/candidate system/discovery/decision system/discovery/identity-claim system/discovery/scan-request system/discovery/scan-result system/durability-advertisement system/durability-request system/durability-result system/encrypted system/encryption-pubkey system/encryption/handoff system/encryption/kdf-params system/encryption/key-backup system/encryption/revocation system/encryption/wrapped-key system/inbox/delivery system/network/backoff-config system/network/close-request system/network/keepalive-config system/network/maintain-request system/network/maintain-result system/network/peer-summary system/network/ping system/network/pong system/network/release-request system/network/release-result system/network/status system/note system/peer/inbox-relay system/peer/inbox-relay-entry system/peer/published-root system/peer/status system/peer/transport/http-poll system/query/allowances system/query/constraints system/query/expression system/query/field-predicate system/query/index-config system/query/match system/query/result system/registry/binding system/registry/dispatch-entry system/registry/invalidate-cache-request system/registry/issuer-policy system/registry/local-name-config system/registry/local-name/bind-request system/registry/local-name/bind-result system/registry/local-name/list-entry system/registry/local-name/list-request system/registry/local-name/list-result system/registry/local-name/unbind-request system/registry/local-name/update-transports-request system/registry/pending-binding system/registry/pinned-entry system/registry/register-request system/registry/renew-request system/registry/resolution-log system/registry/resolution-result system/registry/resolve-request system/registry/resolver-chain-entry system/registry/resolver-config system/registry/revocation system/registry/revoke-request system/registry/set-resolver-config-request system/relay/advertise system/relay/advertise-limits system/relay/forward-request system/relay/forward-result system/relay/poll-request system/relay/poll-result system/relay/put-result system/relay/store-entry system/route system/subscription system/subscription/cancel system/subscription/limits system/subscription/notification system/subscription/redirect system/subscription/request system/type/adopt-request system/type/compare-request system/type/compare-result system/type/compatibility-report system/type/compatible-request system/type/constraint/format system/type/constraint/max system/type/constraint/max-count system/type/constraint/max-length system/type/constraint/min system/type/constraint/min-count system/type/constraint/min-length system/type/constraint/not-one-of system/type/constraint/one-of system/type/constraint/pattern system/type/constraint/type-pattern system/type/constraint/validate-request system/type/constraint/validate-result system/type/converge-request system/type/field-comparison system/type/field-incompatibility system/type/reconcile-request system/type/reconcile-result system/type/validate-request system/type/validate-result system/type/violation] (+5 provisional/proposal-stage types absent, not counted: [system/registry/binding-manifest system/substitute/endpoint system/substitute/snapshot-manifest system/substitute/source system/substitute/try-request]) (+3 NOT-OWED types absent — optional sections the peer declines, conformant and not warned: [system/network/candidate system/network/check-reachability-result system/network/observe-address-result])",
+      "spec_ref": "Types §11.2",
+      "elapsed_ms": 0
+    }
+  ],
+  "declared_exclusions": [
+    {
+      "vector_id": "NET-LIVENESS-NO-ESCALATION-WITHOUT-EPISODE-1",
+      "spec_ref": "EXTENSION-NETWORK §5.4a — the negative half of the escalation-survives-eviction pair",
+      "why": "The state the vector requires — a peer UNBOUND yet still `connected` — is reachable only from the two paths §A1's scope deliberately excludes from demoting (the §10.2 dispatch-fallback and the RELAY terminal hop), and both need a store-and-forward deployment. In this peer the §10.2 seam is nil-gated (`p.dispatchFallback != nil`, core/peer/remote.go), so no conformance client can construct it over the wire. The scope pin and the obstacle have one cause.",
+      "satisfied_by": "in-process: TestLivenessNoEscalationWithoutFailureEpisode (core/peer/peer_status_liveness_test.go) — evicts the pooled binding directly, writing no status, and asserts the keepalive teardown never writes `disconnected`.",
+      "mutation": "EXECUTED, not described: TestLivenessNoEscalationMutationHasTeeth (core/peer) sets suspectScopeGuardDisabled, runs the same scenario, and asserts the escalation DOES fire — so it fails if the scope guard is not what makes the exclusion's test pass. Runs in the unit suite on every commit. §5.2b.1 as sharpened 2026-08-12 (d) takes core-py's stronger form for a reason worth repeating: their §5.5a control and its mutation both ran against a malformed probe, so neither could have failed. A mutation nobody runs is a claim.",
+      "voids": "This exclusion is void for any peer with an evict-without-demote path installed (RELAY deployed) — §5.4a requires the negative half be WIRE-driven there. It is not a standing exemption, and the obvious substitute is explicitly rejected by §5.4a: a live idle counterpart stays BOUND, so a proxy exercises a timer-driven escalation and never the scope-pin defect, reading as coverage while missing the case."
+    },
+    {
+      "vector_id": "TV-SS-CORE-1..7 / TV-SS-COMP-1..4 / TV-SS-BARE-1..2 / TV-SS-DISP-1..3",
+      "spec_ref": "EXTENSION-SUBSTITUTE §9 — the §3 chain-consultation vectors (chain order; hash-mismatch discard+advance; unsigned-entry reject; cap-denied abort; exhausted→404+meta; expires_at; supersedes; the CONTENT pending/miss composition; bare-hash no-consult; convention dispatch)",
+      "why": "The §3 chain fires only for a caller that supplies `claimed_source_peer_id`, which the storage-substitute cross-impl Ruling 4 makes LOCAL DISPATCHER CONTEXT and explicitly NOT a wire field on `system/content:get-request`. No production path populates it in ANY of the three implementations, read live 2026-08-13: rust `1152d35` binds `let claimed_source: Option\u003cHash\u003e = None;` at the miss-hook call site (extensions/content/src/handler.rs:164) under a comment saying CONTENT-level gets do not trigger consult; py `d6cfbda` states the same at entity_handlers/content/handler.py:201 (\"this handler does NOT auto-invoke it\"); go's `WithClaimedSource` has exactly one caller in the whole repo and it is a test. So no conformance client can enter the chain over the wire — the deferral is cohort-convergent and deliberate, not a go gap. **This is an honest zero, and it is the reason this extension had no checks at all until 2026-08-13** — what IS reachable (the §7 convention handler) is now driven by the `substitute` category.",
+      "satisfied_by": "in-process: ext/storagesubstitutesources/orchestrator_test.go — 15 tests covering priority ordering, advance-on-not-found, advance-on-hash-mismatch, abort-on-cap-denied, disabled/expired/wrong-source skipping, rejected-signature skipping, and the four §8 cap-scoping refusals; plus integration_test.go's end-to-end miss→fetch and the no-claimed-source bypass.",
+      "mutation": "EXECUTED, not described: TestConsultFailClosedMutationHasTeeth (ext/storagesubstitutesources/mutation_test.go) sets consultGateDisabled, replays TestConsult_FailClosed_NoCallerCapability's exact setup, and asserts the chain DOES consult and DOES dispatch — so it fails if the §8 gate is not what makes the fail-closed test pass. Runs in the unit suite on every commit.",
+      "voids": "This exclusion is void the moment any production caller populates the claimed source — the SDK closure-fetch and the Phase-2 dispatcher tree-walk that rust and py both name as the intended driver. At that point the chain becomes wire-reachable and these vectors MUST be driven, starting with the fail-closed cap gate: the surface it protects is an arbitrary-caller-triggered outbound fetch followed by a forced ingestion (§8), which is the highest-consequence hole in this extension and the one an in-process test is least able to speak for."
+    }
+  ]
+}

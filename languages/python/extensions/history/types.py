@@ -5,12 +5,21 @@ builders (``_type_def``, ``_fref``, ``_opt``, ``_farray`` in ``entity_core.peer.
 are all leading-underscore, and an underscore is that peer's statement about its own
 boundary. So these field maps are hand-built.
 
-**The exposure is smaller here than it was for CONTENT, and that is worth naming.** A
-wrong field map in CONTENT changes a blob's entity hash and silently breaks dedup with
-every other implementation. A wrong field map here changes a *type entity's* hash, which
-the oracle's ``type_*`` checks compare directly (`history.go`, six of them) — so the
-failure is loud on the first run rather than silent forever. The two extensions sit on
-opposite sides of that line and the difference is the type's role, not the language's.
+**THE EXPOSURE IS THE SAME AS CONTENT'S, AND THIS DOCSTRING SAID OTHERWISE FOR A DAY.**
+
+It claimed the oracle's six ``type_*`` checks "compare directly", so that a wrong field map
+would fail loudly on the first run. **They do not compare anything.** ``history.go:120-129``
+is ``client.TreeGet(path)`` and a pass/fail on the error — six checks asserting that six
+paths RESOLVE. The check that compares content hashes against `entity-core-go`'s own
+independent transcription is ``type_system_content_*_match``, and it exists for CONTENT's
+three §11.1 types and has no HISTORY analogue.
+
+So a subtly wrong field map here produces a well-formed entity that hashes differently from
+`typescript`'s and `rust`'s, dedup stops for that type, all six checks stay green, and
+nothing anywhere says so — which is exactly CONTENT's silent failure mode, not the opposite
+of it. Corrected 2026-09-07 while writing the `rust` equivalent, which is the port that had
+to go looking for the check and could not find it. Routed to `entity-core-go` as G-3; the
+consistency half is ours (D16) and does not have a gate yet.
 """
 
 from __future__ import annotations

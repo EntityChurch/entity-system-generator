@@ -1,0 +1,43 @@
+# languages/rust/extensions/history — HISTORY v1.7 for the `rust` keystone peer.
+#
+# THE THIRD PORT OF THE SECOND EXTENSION, and the first cell in this repo where the
+# faces genuinely disagree about whether they installed. CONTENT on this peer installs
+# one face of four; HISTORY installs TWO — types and the emit consumer — and the emit
+# consumer is the face this extension exists to exercise.
+#
+# NO DEPENDENCIES BEYOND THE PEER, and here that is not a stance, it is the whole
+# dependency list: HISTORY has no chunking, so unlike `../content` there is no `sha2`
+# and therefore no version to keep unified with the peer's. `languages/rust/build`'s
+# sha2 pin check is written to skip a cell that pins none rather than to require one —
+# which is why this manifest does not have to declare a dependency it does not use in
+# order to pass a gate.
+#
+# Staged out of the tree and compiled with no workspace above it, so nothing here is
+# `.workspace = true`.
+
+[package]
+name    = "entity-history"
+version = "1.7.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "entity_history"
+path = "src/lib.rs"
+
+[dependencies]
+# The peer, consumed ACROSS THE CRATE BOUNDARY — which in this language is the
+# packaging boundary (D13 Access). Rewritten to an absolute path at stage time by
+# `languages/rust/build`, which REFUSES if it does not match exactly once.
+entity-core-protocol-rust = { path = "../../../../../entity-core-keystone/protocol-generator/rust" }
+
+[features]
+# Never enabled by a normal build. `languages/rust/test` enables it for exactly one
+# invocation, to require that the invocation FAILS. See src/bin/deep_import.rs.
+compile-fail-fixture = []
+
+[[bin]]
+name = "deep_import"
+path = "src/bin/deep_import.rs"
+required-features = ["compile-fail-fixture"]

@@ -1,0 +1,22 @@
+#!/bin/sh
+# The type-parity arm for this target. ONE UNIFORM ENTRY POINT PER (gate x target).
+#
+#   gates/type-parity/run <extension>   -> the arm's JSON on stdout
+#
+# The arm imports the staged package BY NAME rather than off a path into the source tree,
+# so what it measures is what the packaging boundary actually publishes.
+set -eu
+EXT="${1:?usage: run <extension>}"
+COMPOSITION="${COMPOSITION:-content-history}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+
+# The stage, validated: present AND not older than the cell it was built from. One copy,
+# in tools/, because "is this artifact current" is protocol rather than polish.
+CELL_SRC="$TARGET_DIR/extensions/$EXT"
+. "$ROOT/tools/gate-stage"
+
+cd "$ROOT"
+PYTHONPATH="$STAGE" PYTHONDONTWRITEBYTECODE=1 \
+  exec python3 "$HERE/probe.py" "$EXT"

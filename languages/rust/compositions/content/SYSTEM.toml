@@ -25,8 +25,11 @@ path      = "../entity-core-keystone/protocol-generator/rust"
 # ── [system.faces] — WHICH OF THE EXTENSION'S FACES THIS COMPOSITION INSTALLS ───────
 #
 # NEW IN THIS COMPOSITION, and it is a substrate fact rather than a choice. Measured by
-# `gates/host-seam/rust/`: half by a running program over real loopback TCP, half by
-# rustc, because on an AOT substrate "is the symbol there" is not a runtime question.
+# `languages/rust/gates/host-seam/`: half by a running program over real loopback TCP,
+# half by rustc, because on an AOT substrate "is the symbol there" is not a runtime
+# question. (The path was `gates/host-seam/rust/` (dead) until the 2026-09-06 target-major
+# restructure moved it; the prose kept the old spelling until `tools/check-citations.py`
+# ran, which is D18's third incident.)
 #
 #   handler  A. nothing bound at system/content       404  handler_not_found
 #            B. all four §11.6.1 tree writes bound    501  no_handler_body

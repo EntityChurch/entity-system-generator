@@ -31,7 +31,27 @@ members  = ["extensions/*", "gates/*"]
 # this directory and is NOT a member: the composition host is generated per build, depends
 # on the cells by an absolute rewritten path, and must resolve as its own standalone crate.
 # Without this line cargo would try to adopt it and fail on a manifest it does not own.
-exclude  = ["output"]
+#
+# ── AND `gates/sdk-surface`, WHICH BROKE AN ASSUMPTION THE GLOB WAS MAKING (2026-09-07) ──
+#
+# `members = ["gates/*"]` quietly assumed **every gate arm on this target is written in
+# this target's language**. That was true for three arms and stopped being true for the
+# fourth: `gates/sdk-surface` reads this port's public surface by parsing `src/lib.rs` as
+# TEXT, which needs no rustc and is a Python script. It has no `Cargo.toml`, so cargo
+# refused the whole workspace -- `failed to load manifest for workspace member` -- and every
+# cargo verb on this target died at once, including two gates that have nothing to do with
+# it.
+#
+# The assumption was reasonable and is now wrong, and the shape worth keeping is that a
+# **gate arm's implementation language is incidental to which target it belongs to**. The
+# arm's contract is its `run`; what is behind it is that arm's business. A target directory
+# holds a target's *concerns*, not only a target's *syntax*.
+#
+# This is a list and the file argues against lists. The argument it makes is against a
+# maintained COHORT list -- "which peers have a script" -- where an omission is silent and
+# drops a member out of a measurement. An omission here is a hard build failure on the next
+# cargo verb, which is the loud direction, so the trade is acceptable rather than ideal.
+exclude  = ["output", "gates/sdk-surface"]
 
 # ── WHY THERE IS NO [workspace.dependencies] ────────────────────────────────────────
 #

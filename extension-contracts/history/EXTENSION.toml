@@ -196,8 +196,38 @@ typescript = "FIELD PRESENT, NEVER POPULATED"
 python     = "NO CONTEXT FIELD"      # `TreeEvent` is (event_type, path, new_hash, previous_hash).
                                      # The dataclass is frozen+slots; there is no slot to fill.
 rust       = "NO CONTEXT FIELD"      # `TreeChangeEvent` is (event_type, path, new_hash,
-                                     # previous_hash). Same shape as python.
-probe      = "languages/<t>/gates/emit-context/probe-*.{mjs,py,sh}"
+                                     # previous_hash) -- peer/store.rs:34-39, all four fields
+                                     # `pub`, and there is no fifth. PORTED 2026-09-07 and the
+                                     # row is unchanged by it: the fallback fires on every write,
+                                     # and tests/recorder.rs's
+                                     # `every_transition_uses_the_autonomous_fallback_and_says_so`
+                                     # asserts that it DOES -- so the day a context arrives, that
+                                     # test fails and says so.
+probe      = "NONE, AND THAT IS THIS ROW'S OWN FINDING"
+probe_note = """
+**THIS FIELD CITED `languages/<t>/gates/emit-context/probe-*` (dead) FOR A DAY AND THERE HAS
+NEVER BEEN A `gates/emit-context` (dead).** The claim was true and was measured; what it cited was a gate somebody
+intended to write. D18's first incident, found 2026-09-07 by `tools/check-citations.py` on its
+first run -- not by anyone re-reading the block.
+
+WHAT ACTUALLY MEASURED IT, per port, and none of it is a probe:
+
+  typescript  a TYPE-level read, which is the stronger form here: `EmitContext` is declared and
+              CONSTRUCTED AT ZERO SITES -- six occurrences, no constructor, no object literal, no
+              caller; `put`/`remove` default it to null and `compareAndPut` hardcodes null.
+  python      the event dataclass has four fields and is frozen+slots -- there is no slot.
+  rust        the event struct has four pub fields and there is no fifth.
+
+**A PROBE IS THE WRONG INSTRUMENT FOR AN ABSENCE AT THE TYPE LEVEL**, which is why none was
+written and why claiming one was the error. D13 asks for an executed probe where the claim is that
+an installed thing IS consulted; here the claim is that a field does not exist, and on all three
+peers the type settles it more strongly than a running program could. What a probe DOES settle on
+this axis is the positive half -- that the consumer is reached at all, so a context WOULD have
+arrived if there were one -- and that is
+`languages/rust/gates/host-seam/src/bin/probe.rs` scenario 4, arms H/I: a wire PUT reaches the
+installed consumer with a witness carrying both a request field and registration-time state, and
+an identical peer without the consumer answers the follow-up GET 404.
+"""
 consequence = """
 THE FOUR ORACLE CHECKS THAT READ THESE FIELDS CANNOT PASS FROM EVENT DATA ON ANY OF THE THREE:
 `context_author_present`, `context_capability_present`, `context_handler_present`,
@@ -245,7 +275,37 @@ python     = "REBUILT FROM check_permission"
                                      # `check_permission` with `system/tree` as the pattern.
                                      # Never signed, never dispatched -- an argument shaped
                                      # the way the peer's predicate expects.
-rust       = "unknown"               # no port yet
+rust       = "REBUILT FROM check_permission"
+                                     # PORTED 2026-09-07. Same answer as `python`, and the
+                                     # agreement is the finding: THERE IS NO
+                                     # `check_path_permission` ON TWO OF THE THREE PEERS.
+                                     # `peer::capability` exposes `check_permission(local,
+                                     # granter, exec, token, handler_pattern) -> Verdict`,
+                                     # which is `pub`; the scope helpers it uses
+                                     # (`grants_of_token`, `matches_scope`, `covered`,
+                                     # `check_resource_scope`) carry no `pub` at all, so
+                                     # here the boundary is rustc rather than a convention.
+                                     #
+                                     # The port SYNTHESISES an EXECUTE describing the TARGET
+                                     # access -- operation get/put, uri and resource.targets
+                                     # = the target path -- and calls `check_permission`
+                                     # with `system/tree` as the pattern. Never signed,
+                                     # never dispatched.
+                                     #
+                                     # ONE DIFFERENCE FROM `python`, DECLARED: the granter
+                                     # frame. `python` resolves it with
+                                     # `resolve_granter_peer_id(cap_resolve(included, ...))`
+                                     # from the request's included map; here the probe is
+                                     # synthetic and there is no Envelope to give
+                                     # `capability::granter_frame`, so §PR-8's frame
+                                     # degrades to the LOCAL peer. Correct for a
+                                     # self-issued or locally-granted token, and a stated
+                                     # limit for a delegated one whose parent chain rides
+                                     # in the request envelope. It is not exercised either
+                                     # way on this peer -- the handler cannot be dispatched
+                                     # -- so `tests/handler.rs` drives both verdicts
+                                     # directly, with the ALLOW arm as the control that
+                                     # `python`'s first draft did not have.
 note = """
 THE FIRST DRAFT HAND-WALKED THE GRANTS and it is worth recording why that was wrong twice
 over. It denied every request the oracle made -- 23 of 34 checks failed on one root cause --
@@ -259,6 +319,85 @@ that answers the question; it just did not have the one §4.2 names.
 **AND THIS IS A ROUTING ITEM, NOT A COMPLAINT.** §4.2 names `check_path_permission` as core
 §6.3's function. One peer exports it and one does not, so an extension author following §4.2
 literally can implement it on one substrate and not the other. Routed to keystone.
+"""
+
+# ── [substrate.handler_grant] — the row the THIRD port added ────────────────────────
+#
+# §2.1's autonomous case names TWO values and the second one has no referent on this peer.
+[substrate.handler_grant]
+must = "§2.1 -- `capability` is non-optional, and for autonomous operations it is THE HANDLER GRANT. §9.1 MUSTs recording it."
+typescript = "READ BACK FROM THE TREE"
+                                     # `installHistory` performs §11.6.1's writes, then reads
+                                     # `system/capability/grants/system/history` back out of
+                                     # the tree -- so it is the same bytes the peer published,
+                                     # not a reconstruction. Falls back to the identity hash if
+                                     # unreadable, which is a distinct condition the
+                                     # composition reports rather than passes off as a grant.
+python     = "THE MINTED TOKEN"      # `peer.mint_token(...)` is public; `install_history`
+                                     # keeps the token it just minted and uses `token.hash`.
+rust       = "NONE. THERE IS NO GRANT AND NO MINT."
+                                     # `Peer` exposes exactly two public methods -- `create`
+                                     # and `dispatch`. `mint_token`, `grant_val` and
+                                     # `owner_grants` are all private. And there is nothing to
+                                     # grant FOR: the handler face is not-installable, so no
+                                     # `system/history` grant would be honoured by anything
+                                     # even if one could be minted.
+consequence = """
+THE HOST PASSES THE LOCAL IDENTITY HASH FOR BOTH `author` AND `capability`, SO THEY ARE THE SAME
+BYTES ON EVERY TRANSITION THIS PEER RECORDS.
+
+That is one step weaker than the other two ports' fallback, which is already a fabrication: there,
+`capability` is a real grant that really was minted for `system/history`, and it is merely the
+WRONG grant for a write that arrived over the wire. Here it is not a grant at all.
+
+**The oracle's `context_capability_present` checks `!t.Capability.IsZero()` and would pass on
+it** -- which is moot, because on this peer that check cannot run: it Requires
+`transition_recorded`, which needs the query op. So the row is recorded for the reader rather than
+for the gate, which is the only place it could be recorded.
+
+Declared at the seam: `HistoryRecorderInstallation.handler_grant_available` is `false`, the
+composition's `COMPOSED` line prints `handler_grant=false`, and
+`languages/rust/compositions/content-history/SYSTEM.toml` `[history.provenance]` says so. A reader
+deciding whether to trust the audit trail needs both this and `context_available`, and the other
+two ports only ever had to report one.
+"""
+
+# ── [substrate.oracle_read_path] — the row the THIRD port added, and the sharper one ──
+#
+# NOT A SUBSTRATE LIMIT ON THE EXTENSION. A limit on what can be MEASURED about it, which is a
+# different kind of fact and is why this block is separate from the others.
+[substrate.oracle_read_path]
+must = "nothing. §4.3's read operations are the extension's own, and the oracle's `history` category reaches transitions ONLY through `system/history:query` -- six call sites through one helper (entity-core-go cmd/internal/validate/history.go)."
+typescript = "the handler installs, so the category measures the recorder THROUGH it"
+python     = "same"
+rust       = "THE WRITE FACE INSTALLS AND THE READ FACE CANNOT"
+consequence = """
+**THIS IS THE FINDING OF THE THIRD PORT AND IT IS SHARPER THAN CYCLE 1'S.**
+
+`rust x CONTENT` established D13's amendment -- an extension's four faces do not get one answer on
+one peer -- with a composition where the un-installable handler meant the extension did nothing at
+runtime. HISTORY is not like that. Its emit consumer installs and RUNS: from the moment the
+composed peer serves, every tree write it accepts is recorded as a §2.1 transition, and the chain
+at `system/history/head/*` is real, correct and content-addressed. Measured over the wire, with
+both controls: `languages/rust/gates/host-seam/src/bin/probe.rs` scenario 4, arms H/I.
+
+Nothing can READ it over the wire, because every §4.3 read path is an operation on the handler
+that cannot exist. So:
+
+  history category, rust x content-history:  4 SKIP · 23 FAIL · 7 PASS of 34
+  and the recorder is working perfectly.
+
+**A CATEGORY SCORE IS A STATEMENT ABOUT THE ORACLE'S ACCESS PATH, NOT ABOUT THE EXTENSION**, and
+on the other two ports the two are the same sentence. Writing the expectation before the run is
+what makes the difference legible -- the composition's `[gate.expectation.history]` predicted all
+four numbers and the split, and the run matched exactly.
+
+AND THE ONE CHECK THAT PASSES ON A BARE PEER. `rollback_invalid_hash_rejected` (§7.5) asserts
+`resp.Status != 200`; a peer with no history handler answers `404 handler_not_found`, so §7.5's
+refusal -- the clause that stops rollback being an unrestricted write primitive -- is satisfied by
+the operation not existing. Measured, not predicted: the BARE arm of the `history` category is
+29 FAIL · 1 PASS · 4 SKIP on all three targets, and that 1 PASS is this check. Routed to
+`entity-core-go`.
 """
 
 [substrate.accessed_event]
@@ -398,14 +537,12 @@ required = [
   "fn:history_entity",
   "fn:history_type_defs",
   "fn:history_type_entities",
-  "fn:install_history",
   "fn:pattern_matches",
   "fn:pattern_specificity",
   "fn:publish_history_types",
   "fn:resolve_config",
   "type:history_config",
   "type:history_handler",
-  "type:history_installation",
   "type:history_recorder",
   "type:recorded_transition",
   "type:recorder_identity",
@@ -415,9 +552,64 @@ required = [
 ]
 
 # Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate forces it.
+# Exporting one of these from a port NOT listed is a failure: if the substrate does not
+# force it, it is not substrate-conditional, it is drift with an excuse.
 [sdk_surface.substrate."type:history_handler_options"]
 ports  = ["typescript"]
-reason = "the options-object constructor idiom. `python` takes `max_walk` as a keyword argument, which is the same configuration with no type to name. Not a choice either port can make differently without stopping being idiomatic."
+reason = "the options-object constructor idiom. `python` takes `max_walk` as a keyword argument and `rust` has a `HistoryHandler::with_max_walk` constructor — the same configuration with no type to name. Not a choice a port can make differently without stopping being idiomatic."
+
+# ── THE THIRD PORT, 2026-09-07. `install_history` did not survive it. ────────────────
+#
+# `fn:install_history` and `type:history_installation` were `required` for two ports and
+# are now substrate-conditional, for the reason CONTENT's `install_content` already is:
+# the function installs the HANDLER face, and on `entity-core-protocol-rust` that face has
+# no install path at any visibility. Measured, both arms, `languages/rust/gates/host-seam`.
+#
+# **The `rust` names are DIFFERENT names, not a narrower version of the same one**, and
+# that is the rule CONTENT set: a caller must not be able to write one call that means
+# "installed" on two peers and "partly installed" on a third. What is new here is that
+# HISTORY installs TWO faces on this peer rather than CONTENT's one, so there are two
+# functions and each is named for the face it installs.
+
+[sdk_surface.substrate."fn:install_history"]
+ports  = ["typescript", "python"]
+reason = "installs the handler face (§11.6.1 writes + the executable body) alongside types and the consumer. `rust` cannot: 501 no_handler_body with all four tree writes bound, 404 with none, and register_handler/Peer::handlers/Outcome are all private (error[E0624]/[E0609]/[E0603]). languages/rust/gates/host-seam."
+
+[sdk_surface.substrate."type:history_installation"]
+ports  = ["typescript", "python"]
+reason = "the return of install_history; same cause."
+
+[sdk_surface.substrate."fn:install_history_types"]
+ports  = ["rust"]
+reason = "one of the TWO install faces that work on that peer. Store::bind is public; the handler container is not."
+
+[sdk_surface.substrate."type:history_type_installation"]
+ports  = ["rust"]
+reason = "the return of install_history_types; same cause."
+
+[sdk_surface.substrate."fn:install_history_recorder"]
+ports  = ["rust"]
+reason = "the OTHER install face that works there — Store::register_tree_consumer is public and live (host-seam arms D-I). On the other two ports the consumer is registered inside install_history, so there is no separate name. It takes `&Arc<Peer>` and holds a Weak: a closure capturing Arc<Peer> would be owned by that peer's own store, which is a reference cycle a process-lifetime host would never notice."
+
+[sdk_surface.substrate."type:history_recorder_installation"]
+ports  = ["rust"]
+reason = "the return of install_history_recorder. Carries `context_available` AND `handler_grant_available`; the other two ports' HistoryInstallation carries only the first, because only on this peer is §2.1's 'handler grant' without a referent."
+
+[sdk_surface.substrate."type:carried_context"]
+ports  = ["rust"]
+reason = "SYSTEM-COMPOSITION §1.4's inventory as a named shape. `typescript` reads `ev.context`, whose type the PEER declares (EmitContext); `python`'s event has no context field and its build_context takes a dict. Here there is neither a peer type to name nor a structural one to pass, so the shape a peer would have to deliver is declared by us. Nothing on any peer constructs one."
+
+[sdk_surface.substrate."type:config_lookup"]
+ports  = ["rust"]
+reason = "the return of resolve_config. `typescript` returns an inline object literal and `python` a tuple; neither needs a nominal type. This is the same (structural vs nominal) axis as CONTENT's type:frame_budget row."
+
+[sdk_surface.substrate."type:handler_request"]
+ports  = ["rust"]
+reason = "there is no dispatch context type to receive. The peer passes (&mut Conn, &Envelope) to private code, so the shape a §11.6.1 body would need is ours to declare. Identical to CONTENT's row of the same name, in a second extension — which is the second incident in the same shape, and makes it a peer fact rather than one extension's workaround."
+
+[sdk_surface.substrate."type:history_outcome"]
+ports  = ["rust"]
+reason = "the peer's own `Outcome` is a bare struct with no `pub` — error[E0603]. The cell cannot name it, construct it, or return it, so it defines its own. D13's Export layer as a compile error rather than a review finding. CONTENT's `type:content_outcome` is the same row; two extensions, one cause."
 
 # Class 3 — DRIFT. Measured, dated, NOT blessed; `--strict-drift` makes each an error.
 #
@@ -437,3 +629,5 @@ reason = "the options-object constructor idiom. `python` takes `max_walk` as a k
 note = "ts grouping object over the six flat type-path constants, which are `required` and are the contract. Decided, not undecided — see the block comment above."
 [sdk_surface.drift."type:history_event"]
 note = "ts grouping object over the four flat EVENT_* constants; same decision, same reason."
+[sdk_surface.drift."const:operations"]
+note = "rust exports the §4.1 op list as a module const; ts carries it as an instance field (`HistoryHandler.operations`, which also carries the input/output types) and py as a class attribute (`HistoryHandler.OPERATIONS`). **CONTENT filed the identical difference as drift** and this is the second extension to reproduce it, which makes it a candidate for a decision rather than a third entry: the ts form carries MORE information than the other two (the §4.1 manifest's input/output types, not just the names), so the resolution is probably to give all three the richer shape rather than to pick a spelling. Not decided here — one instrument, two extensions, and the decision belongs with whoever writes the third."

@@ -1,0 +1,28 @@
+#!/bin/sh
+# The type-parity arm for this target. ONE UNIFORM ENTRY POINT PER (gate x target).
+#
+#   gates/type-parity/run <extension>   -> the arm's JSON on stdout
+#
+# The arm reaches its port THROUGH THE PACKAGING BOUNDARY -- the staged package resolved
+# by name through its `exports` map -- which is what makes the entities it reads the ones
+# a third party would get rather than the ones the source tree happens to contain.
+set -eu
+EXT="${1:?usage: run <extension>}"
+COMPOSITION="${COMPOSITION:-content-history}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "$TARGET_DIR/../.." && pwd)"
+
+# The stage, validated: present AND not older than the cell it was built from. One copy,
+# in tools/, because "is this artifact current" is protocol rather than polish.
+CELL_SRC="$TARGET_DIR/extensions/$EXT"
+. "$ROOT/tools/gate-stage"
+
+# STAGED, NOT RUN IN PLACE. ESM resolves a bare specifier relative to the IMPORTING FILE,
+# so a probe run from outside the stage cannot see the staged package however cwd is set.
+# `gate-probe-` prefix RESERVED: `tools/gate-stage` excludes it from the staleness scan,
+# because a probe copied in under any other name IS the newest file in the stage and
+# makes the check it just passed meaningless. Measured on this arm's first run.
+cp "$HERE/probe.mjs" "$STAGE/gate-probe-type-parity.mjs"
+cd "$STAGE"
+exec node gate-probe-type-parity.mjs "$EXT"

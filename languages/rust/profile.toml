@@ -121,3 +121,16 @@ frame_budget         = "wire::MAX_FRAME (a public const, NOT configurable)"
 emit_pattern = '\b\w+::err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"'
 # D15's control, as data — see `--self-test`.
 self_test_line = 'return ContentOutcome::err(400, "planted_bogus_code", "x");'
+
+# ── [sdk_surface] — the D16 gate's per-target facts ─────────────────────────────
+# D17: a per-target VALUE lives in the profile. `entry_point` was a literal in
+# `tools/sdk-parity.py`'s `ENTRY_POINTS` dict — one entry per target in a
+# LANGUAGE-NEUTRAL file, which is the shape that becomes a 46-way table. Same defect as
+# AP-9's toolchain image and AP-10's readiness budget, one file over.
+#
+# The PROCEDURE that reads this file lives at `languages/rust/gates/sdk-surface/extract.py` beside it,
+# because a per-target procedure belongs under the target (§1.2b) — not behind a dispatch
+# in the neutral half. The neutral half now discovers both by wildcard.
+[sdk_surface]
+entry_point = "src/lib.rs"
+# The crate root. `pub` is the boundary here and rustc enforces it (E0603), which is why this target's extractor is the shortest of the three.

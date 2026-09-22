@@ -92,3 +92,16 @@ emit_pattern = '\berrorResult\(\s*Status\.\w+\s*,\s*"(?P<code>[a-z_]+)"'
 # asserts it extracts `planted_bogus_code`. A pattern that silently stops matching reports
 # a clean surface, and a clean surface is this gate's most convincing wrong answer.
 self_test_line = 'return errorResult(Status.BadRequest, "planted_bogus_code", "x");'
+
+# ── [sdk_surface] — the D16 gate's per-target facts ─────────────────────────────
+# D17: a per-target VALUE lives in the profile. `entry_point` was a literal in
+# `tools/sdk-parity.py`'s `ENTRY_POINTS` dict — one entry per target in a
+# LANGUAGE-NEUTRAL file, which is the shape that becomes a 46-way table. Same defect as
+# AP-9's toolchain image and AP-10's readiness budget, one file over.
+#
+# The PROCEDURE that reads this file lives at `languages/typescript/gates/sdk-surface/extract.py` beside it,
+# because a per-target procedure belongs under the target (§1.2b) — not behind a dispatch
+# in the neutral half. The neutral half now discovers both by wildcard.
+[sdk_surface]
+entry_point = "index.ts"
+# The PUBLIC entry point, not the source tree: a parser pointed at src/** would report every internal symbol and the §3.4 boundary would vanish.

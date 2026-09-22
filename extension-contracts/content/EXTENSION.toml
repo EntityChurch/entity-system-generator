@@ -351,6 +351,15 @@ required = [
   "fn:create_blob_fixed", "fn:create_blob_cdc", "fn:store_blob",
   # types (§2, §11.1)
   "fn:publish_content_types",
+  # PROMOTED FROM `drift` 2026-09-07, on a second instrument rather than on a second
+  # opinion. `gates/type-parity` reads every port's materialised type entities and
+  # compares their content hashes; it could measure HISTORY on three ports and CONTENT on
+  # two, because `typescript` shipped only the defs form. The drift entry had said, since
+  # the day it was filed, that "a consumer cannot write one call that works on all three"
+  # -- and the gate turned out to be that consumer. `contentTypeEntities` added to the
+  # `typescript` port; the twin `fn:content_type_defs` stays in drift, deliberately, and
+  # the reason is on that entry.
+  "fn:content_type_entities",
   # the shapes a consumer names
   "type:blob", "type:cdc_params", "type:closure_verdict", "type:content_handler",
   # the constants a consumer must agree with us on
@@ -434,9 +443,14 @@ note = "the ts bundle object itself -- the other half of the ten rows above"
 [sdk_surface.drift."type:chunking"]
 note = "the ts enum -- the other half of the two rows above"
 [sdk_surface.drift."fn:content_type_defs"]
-note = "ts+rust. Returns declarations; python exports only the entities form."
-[sdk_surface.drift."fn:content_type_entities"]
-note = "py+rust. Returns materialised entities; typescript exports only the defs form. TWO names for one pair of operations and each port ships a different subset -- the sharpest single instance of the drift, because a consumer cannot write one call that works on all three."
+note = """ts+rust. Returns declarations; python exports only the entities form. STAYS in \
+drift after its twin `fn:content_type_entities` was promoted 2026-09-07, and the \
+asymmetry is deliberate rather than unfinished: the entities form returns \
+`(name, Entity)` -- a peer type with a content hash, identical in meaning on every port \
+-- while the DEFS form returns each port's own builder representation (`TypeDef` objects \
+on ts, dicts on python, `Value` on rust). Promoting it would declare a cross-port \
+contract over three incompatible shapes, which is a name agreeing while the thing behind \
+it does not. Revisit if a consumer ever needs the declarations rather than the entities."""
 [sdk_surface.drift."const:operations"]
 note = "rust exports the §6.1 op list as a const; ts/py carry it as a class member"
 [sdk_surface.drift."fn:create_blob"]

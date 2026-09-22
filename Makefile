@@ -9,17 +9,19 @@
 #   make conformance      validate-peer -category <ext> against the composed peer
 #   make regression       the two-arm core-profile diff (bare vs composed)
 #   make check            build + test + conformance + regression + plan-check + sdk-parity
-#                         + structure + drivers + error-codes
+#                         + structure + drivers + error-codes + citations + scale --check
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
 #   make parity           the chunking-parity gate, one corpus through every target
+#   make type-parity      every port's type entities agree, by content hash (G-3)
 #   make error-codes      every wire code a port emits is declared with an authority (D16)
+#   make citations        every path a declaration file cites resolves (D18)
 #   make clean            remove every target's output/
 #
 # THE LAYOUT IS TARGET-MAJOR. A target is a unified bundle:
 #
-#   languages/<target>/{profile.toml, build, test, host-launch,
+#   languages/<target>/{profile.toml, build, test, host-entry,
 #                       extensions/<ext>/, compositions/<name>/, gates/<gate>/, output/}
 #
 # so the two coordinates are the target and the composition inside it:
@@ -40,6 +42,11 @@ TARGETS       = $(notdir $(wildcard languages/*))
 COMPOSITIONS  = $(notdir $(wildcard languages/$(TARGET)/compositions/*))
 PROBE_TARGETS  = $(patsubst languages/%/gates/host-seam/run,%,$(wildcard languages/*/gates/host-seam/run))
 PARITY_TARGETS = $(patsubst languages/%/gates/chunking-parity/run,%,$(wildcard languages/*/gates/chunking-parity/run))
+TYPES_TARGETS  = $(patsubst languages/%/gates/type-parity/run,%,$(wildcard languages/*/gates/type-parity/run))
+# The extension axis of type-parity is a wildcard too: the gate is per (extension x arm),
+# so a new contract directory joins the cohort without a Makefile edit, exactly as a new
+# target directory does.
+TYPES_EXTS     = $(notdir $(wildcard extension-contracts/*))
 
 # ── the toolchain image comes from the PROFILE, which is now parsed ─────────────
 #
@@ -81,6 +88,8 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
 
 .PHONY: all build test conformance regression check check-all plan plan-check probe \
         parity clean sdk-parity structure drivers error-codes error-codes-control \
+        scale scale-control type-parity glue glue-control \
+        citations citations-control \
         build-native test-native \
         conformance-native probe-native
 
@@ -190,7 +199,8 @@ error-codes:
 error-codes-control:
 	./tools/check-error-codes.py --self-test
 
-check: build test conformance regression plan-check sdk-parity structure drivers error-codes
+check: build test conformance regression plan-check sdk-parity structure drivers error-codes citations glue
+	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
 # port staged. Both loops are wildcards over the tree.
@@ -203,6 +213,7 @@ check-all:
 	done
 	@echo "=== cross-target ==="
 	$(MAKE) --no-print-directory parity
+	$(MAKE) --no-print-directory type-parity
 
 # ── the structure gates ─────────────────────────────────────────────────────────
 # Both are OURS and both are the axis-with-no-upstream-authority kind (D16), so both
@@ -215,6 +226,58 @@ structure:
 
 drivers:
 	./tools/check-drivers.py
+
+# ── the citation gate ───────────────────────────────────────────────────────────
+# D18. D13's enforcement point is a citation and D14's is a citation, and until this
+# existed nothing checked that the cited PATH was real -- so a claim could carry a
+# perfectly-formed citation to a file that had never been written. Its first run found
+# three, including a `probe =` on the block recording the most consequential substrate
+# fact this repo has measured, naming a gate that has never existed.
+citations:
+	./tools/check-citations.py
+
+# ── the cost model ──────────────────────────────────────────────────────────────
+# What grows, and by what multiplier. Every file in the tree multiplies by exactly one
+# thing (1, E, T, E*T, T*C) and its LOCATION decides which, so the cost model is a
+# classification of the tree rather than an opinion about it.
+#
+# `make scale` is a REPORT and is deliberately not in `make check`: a gate needs a
+# threshold and there is no evidence yet for what a per-cell budget should be. Inventing
+# one so a gate becomes possible is the speculation the promotion ladder refuses.
+#
+# `--check` IS in `make check`, and it gates the one invariant here that needs no
+# threshold: every tracked path is classified. That is D16's question in executable form
+# -- when a new kind of artifact appears in this tree, what reads it?
+scale:
+	./tools/scale-report.py
+
+scale-control:
+	./tools/scale-report.py --self-test
+
+# ── the glue gate ───────────────────────────────────────────────────────────────
+# `make scale` measures MASS per multiplier class, and mass is the wrong instrument for
+# this: a neutral file that grows a 46-way branch is still one file in the `neutral`
+# column -- x1 by location and O(T) by edit cost. This measures IDENTITY LEAKAGE.
+#
+#   a language-neutral file names no specific TARGET      <- FAILS
+#   a per-target file names no specific EXTENSION         <- CENSUS, see the tool
+#
+# Its first run found `tools/sdk-parity.py` carrying three per-target EXTRACTORS behind a
+# {target: fn} dispatch plus a {target: filename} table -- ~120 lines of per-language
+# parsing in the neutral half, which at 46 targets is a 46-way branch in the one file whose
+# job is to be finished. Both halves moved to the homes existing rules already named:
+# the value to `profile.toml` (D17), the procedure to `languages/<t>/gates/sdk-surface/`
+# (§1.2b). Output verified name-for-name identical across the move.
+glue:
+	./tools/check-glue.py
+
+glue-control:
+	./tools/check-glue.py --self-test
+
+# D15's control, separate on purpose: it plants two unresolvable citations and requires
+# both to be caught. An instrument observed only passing is not an instrument.
+citations-control:
+	./tools/check-citations.py --self-test
 
 # ── the host-seam probes ────────────────────────────────────────────────────────
 # D13: a capability claim cites an executed probe, or it reads `unknown`.
@@ -263,6 +326,38 @@ parity:
 			> $(PARITY_OUT)/$$t.json || exit 1; \
 	done
 	./gates/chunking-parity/compare.py --min-ports $(PARITY_MIN_PORTS) $(PARITY_OUT)/*.json
+
+# ── type parity ─────────────────────────────────────────────────────────────────
+# Every port's materialised type entities, compared by the PEER'S OWN content hash and by
+# a normalisation of the field map. `REVIEW-CYCLE-2` §4.2, routed as G-3: the oracle's
+# `type_*` checks assert that the type path RESOLVES and never look at what is there, so a
+# port with a subtly wrong field map scores identically to one that got it right — while
+# silently failing to dedup that type with every other peer.
+#
+# The extension is an axis here, unlike chunking-parity: types are per-extension, so the
+# runner is a double loop over two wildcards and the counts are ECHOED before each verdict.
+#
+# TYPES_MIN_PORTS floors at the number of arms that EXIST rather than at a constant, and
+# a target whose arm cannot run for the day (a peer mid-rebuild, a missing stage) shows up
+# as a smaller echoed list rather than as a quietly narrower verdict.
+TYPES_OUT        = output/type-parity
+TYPES_MIN_PORTS ?= $(words $(TYPES_TARGETS))
+
+type-parity:
+	@echo "type-parity arms ($(TYPES_MIN_PORTS)): $(TYPES_TARGETS)"
+	@echo "type-parity extensions: $(TYPES_EXTS)"
+	@mkdir -p $(TYPES_OUT)
+	@for e in $(TYPES_EXTS); do \
+		rm -f $(TYPES_OUT)/$$e-*.json; \
+		for t in $(TYPES_TARGETS); do \
+			echo "=== type-parity: $$e x $$t ==="; \
+			$(PODMAN_RUN) $$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])") \
+				./languages/$$t/gates/type-parity/run $$e \
+				> $(TYPES_OUT)/$$e-$$t.json || exit 1; \
+		done; \
+		./gates/type-parity/compare.py --min-ports $(TYPES_MIN_PORTS) \
+			$(TYPES_OUT)/$$e-*.json || exit 1; \
+	done
 
 # ── -native opt-ins ─────────────────────────────────────────────────────────────
 # Same drivers, host toolchain. They will disagree with the container when the host's

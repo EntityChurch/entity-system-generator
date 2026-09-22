@@ -68,21 +68,57 @@ this one produced the *wrong* answer first.
 from __future__ import annotations
 
 import argparse
+import json
+import subprocess
+import tomllib
 import re
 import sys
-import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: Where each port publishes its public surface. One entry per language, and the file
-#: named here is the PUBLIC ENTRY POINT -- not the source tree. A parser pointed at
-#: `src/**` would report every internal symbol and the §3.4 boundary would vanish.
-ENTRY_POINTS = {
-    "typescript": "index.ts",
-    "python": "__init__.py",
-    "rust": "src/lib.rs",
-}
+#: NO `ENTRY_POINTS` DICT AND NO `EXTRACTORS` DICT, and their absence is the point.
+#:
+#: This file used to carry both: `{target: entry_point_filename}` and
+#: `{target: extractor_function}`, with the three extractors defined above them -- ~120
+#: lines of per-language parsing in the LANGUAGE-NEUTRAL half. At three targets that reads
+#: as a small table. At forty-six it is a forty-six-way dispatch over forty-six hand-written
+#: functions, in the one file whose whole job is to be finished.
+#:
+#: Both halves moved 2026-09-07, each to the home an existing rule already named:
+#:
+#:   the VALUE      -> `languages/<t>/profile.toml [sdk_surface] entry_point`   (D17)
+#:   the PROCEDURE  -> `languages/<t>/gates/sdk-surface/extract.py`             (§1.2b)
+#:
+#: What is left here is the protocol: collect every arm, normalise, compare, decide. The
+#: arm list is a `wildcard` over the tree, so **adding a target is adding a directory** and
+#: never an edit to this file. Found by `tools/check-glue.py` on its first run.
+
+
+def run_arm(target: str, extension: str) -> dict | None:
+    """Execute the target's arm and return its report, or None if it has no arm.
+
+    EXECUTED, not imported. An imported extractor would have to be Python, which is a
+    neutral-half constraint reaching into a target: the point of `languages/<t>/` is that a
+    target holds its own idiom. A `run` emitting JSON lets a future target read its surface
+    with its own toolchain (`tsc`'s API, `rustdoc --output-format json`) without this file
+    learning anything about it.
+    """
+    arm = ROOT / "languages" / target / "gates" / "sdk-surface" / "run"
+    if not arm.exists():
+        return None
+    proc = subprocess.run([str(arm), extension], capture_output=True, text=True, cwd=ROOT)
+    if proc.returncode != 0:
+        # The arm's own refusal, surfaced verbatim. It knows the cause; this does not.
+        raise Refusal(f"languages/{target}/gates/sdk-surface/run: "
+                      f"{proc.stderr.strip() or f'exit {proc.returncode}'}")
+    try:
+        return json.loads(proc.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise Refusal(
+            f"languages/{target}/gates/sdk-surface/run exited 0 but produced no parsable "
+            f"report. Exit 0 with no output is the shape that reads as an empty surface."
+        )
 
 
 class Refusal(Exception):
@@ -98,67 +134,6 @@ def key(name: str) -> tuple[str, str]:
     return ("type" if name[0].isupper() else "fn", snake)
 
 
-def extract_typescript(path: Path) -> set[str]:
-    """Public names from a `.ts` entry point.
-
-    COMMENTS ARE STRIPPED BEFORE SPLITTING, and that is a defect this gate shipped with.
-    A re-export block is split on commas; a `// ...` line inside one has no comma after
-    it, so the comment and the NEXT NAME arrive as a single item, the item fails the
-    identifier match, and the name silently vanishes from the measured surface.
-
-    Found on HISTORY's second port, 2026-09-06: adding two explanatory comments inside
-    `index.ts`'s export block dropped `TRANSITION` and `HistoryTypes` from the count. The
-    gate then reported `TRANSITION` as python-only — a DIVERGENCE THAT DOES NOT EXIST,
-    caused by the instrument. Seventh instrument in this repo, seventh defect found by
-    running it; and the direction is the dangerous one for a parity gate, because an
-    under-reported surface reads as drift and a real drift reads as agreement.
-    """
-    text = path.read_text(encoding="utf-8")
-    out: set[str] = set()
-    # `export type { ... } from` as well as `export { ... } from`. A type-only export is
-    # erased at runtime but it IS public surface: a consumer imports it to type against.
-    # Missing it reported four names as python-only that both ports export (2026-09-06).
-    for block in re.findall(r"export (?:type )?\{([^}]*)\}\s*from", text, re.S):
-        block = re.sub(r"//[^\n]*", "", block)          # line comments
-        block = re.sub(r"/\*.*?\*/", "", block, flags=re.S)  # block comments
-        for item in block.split(","):
-            item = item.strip()
-            if re.match(r"^(type )?[A-Za-z_]\w*$", item):
-                out.add(item.replace("type ", ""))
-    out |= set(re.findall(r"^export (?:function|class|interface|const|type|enum) (\w+)", text, re.M))
-    return out
-
-
-def extract_python(path: Path) -> set[str]:
-    text = path.read_text(encoding="utf-8")
-    # `__all__ = [...]`, not the first mention of `__all__` -- the module docstring
-    # discusses it, and splitting on the token landed inside the prose. That defect cost
-    # a measurement pass: the port parsed to zero names and the run reported it as drift.
-    match = re.search(r"^__all__\s*=\s*\[(.*?)\]", text, re.S | re.M)
-    if not match:
-        raise Refusal(f"{path}: no `__all__` assignment found")
-    return set(re.findall(r'"(\w+)"', match.group(1)))
-
-
-def extract_rust(path: Path) -> set[str]:
-    text = path.read_text(encoding="utf-8")
-    out: set[str] = set()
-    for block in re.findall(r"pub use [\w:]+::\{([^}]*)\};", text, re.S):
-        for item in block.split(","):
-            item = item.strip()
-            if re.match(r"^[A-Za-z_]\w*$", item):
-                out.add(item)
-    out |= set(re.findall(r"^pub (?:fn|struct|enum|const) (\w+)", text, re.M))
-    return out
-
-
-EXTRACTORS = {
-    "typescript": extract_typescript,
-    "python": extract_python,
-    "rust": extract_rust,
-}
-
-
 def surfaces(ext_dir: Path) -> dict[str, dict[tuple[str, str], str]]:
     """`port -> {key: original name}` for every port that has a cell.
 
@@ -170,14 +145,19 @@ def surfaces(ext_dir: Path) -> dict[str, dict[tuple[str, str], str]]:
     """
     name = ext_dir.name
     out: dict[str, dict[tuple[str, str], str]] = {}
-    for lang, entry in ENTRY_POINTS.items():
+    langs = sorted(p.name for p in (ROOT / "languages").iterdir() if p.is_dir())
+    for lang in langs:
         cell = ROOT / "languages" / lang / "extensions" / name
         if not cell.is_dir():
             continue
-        path = cell / entry
-        if not path.exists():
-            raise Refusal(f"{cell.relative_to(ROOT)} has no public entry point at {entry}")
-        names = EXTRACTORS[lang](path)
+        report = run_arm(lang, name)
+        if report is None:
+            raise Refusal(
+                f"languages/{lang}/ has a `{name}` cell but no gates/sdk-surface/run. "
+                "A port with a surface and no arm drops OUT of the comparison silently, "
+                "which is the one direction a parity gate must never fail in."
+            )
+        names = set(report["names"])
         # D15's zero-parse refusal, and this one has fired for real: the python
         # extractor split on the wrong `__all__` and returned an empty set, which the
         # first run reported as "python exports nothing" rather than as a broken parse.
@@ -276,10 +256,16 @@ def main() -> int:
     print(f"  undeclared        : {len(undeclared):3}")
 
     if drift_present:
-        print("\n  unresolved drift -- measured, NOT blessed:")
+        # THE COLUMN IS LABELLED, and it was not always. The marker used to be built from
+        # a hardcoded `("typescript", "python", "rust")` -- a fourth per-target literal in
+        # this neutral file, and the last one removed. It is now `sorted(ports)`, which is
+        # correct and also means the columns MOVED: a reader holding an older report would
+        # map `[.xx]` onto the wrong two ports. An unlabelled positional column is a
+        # quantity with no units.
+        print(f"\n  unresolved drift -- measured, NOT blessed"
+              f"   [{'|'.join(sorted(ports))}]:")
         for k in drift_present:
-            where = "".join("x" if k in ports[p] else "." for p in ("typescript", "python", "rust")
-                            if p in ports)
+            where = "".join("x" if k in ports[p] else "." for p in sorted(ports))
             note = drift.get(f"{k[0]}:{k[1]}", {}).get("note", "")
             print(f"    [{where}] {k[0]:5} {k[1]:28} {note}")
 

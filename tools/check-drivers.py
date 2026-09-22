@@ -4,7 +4,7 @@ profile field.
 
 ## The rule
 
-`languages/<target>/{build,test,host-launch}` is one copy per target, forever — that is
+`languages/<target>/{build,test,host-entry}` is one copy per target, forever — that is
 the point of the target directory, and it is why there are 46 drivers here and not
 26 x 46 = 1,196. But N copies of one protocol is exactly the shape keystone paid for:
 46 copies of `run-s4.sh`, one defect reproduced in 36 of them.

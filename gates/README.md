@@ -24,6 +24,8 @@ assertion we wrote ourselves has nothing watching it.
 | **`drivers`** | **OURS, and it is a LINT rather than a proof** — see below. D17: a driver literal that differs across targets is an undeclared profile field | `tools/check-drivers.py` | `make drivers`, in `make check` | **built 2026-09-06.** Both controls + refusal executed; its own first draft was AP-8 and could not go red |
 | **`structure`** | **OURS.** The mirror rule (`DESIGN-THE-SYSTEM-STRUCTURE` §1.2): a per-target subtree may only hold units the neutral half declares. No upstream authority and none possible — nothing outside this repo has this layout | `tools/check-structure.py` | `make structure`, in `make check` | **built 2026-09-06.** 3 targets, 12 units. Both controls + the vacuity refusal executed |
 | **`error-codes`** | **OURS, and the axis that LOOKED covered.** The `system/content` handler puts **7** distinct codes on the wire and the oracle's `content` category asserts **2** of them (`get_path_required`, `ingest_path_required`). Nothing anywhere checks the rest. D16's third instance | `tools/check-error-codes.py` against `EXTENSION.toml [error_surface]` | `make error-codes`, in `make check`; `make error-codes-control` runs D15's planted-code control | **built 2026-09-06 at the v3.7 re-pin**, which is the event that produced the failure it catches (AP-11). First run: 4 `spec` · 2 `core` · **1 `unresolved`** (`path_required`, routed) · 0 undeclared |
+| **`type-parity`** | **OURS, and the gap is measured rather than assumed.** The oracle spends six `history` checks and seven `content` checks on `client.TreeGet(path)` — it asserts the type path **RESOLVES** and never reads what is at it. Routed as **G-3** (`ROUTING-2026-09-07-core-go-*`); the consistency half is ours (D16) | each arm's `<ext>_type_entities()` through the packaging boundary → the neutral `gates/type-parity/compare.py`. **Two independent measurements**: the peer's own content hash, and our normalisation of the field map | `make type-parity`, a double `wildcard` over arms × `extension-contracts/*`; both counts echoed before each verdict | **built 2026-09-07.** HISTORY: 3 ports agree on all 6. CONTENT: 2 ports agree on all 7, `typescript` **`unknown`** (exit 3 — its stage cannot be rebuilt while keystone is mid-edit on the peer). Negative control executed |
+| **`glue`** | **OURS, and the only axis here whose authority is an OPERATOR REQUIREMENT rather than an incident** — *"the glue code should be pretty stable; we don't want big if blocks of oh, if it's this container and this extension."* D20 | `tools/check-glue.py` — identity leakage, not mass: `make scale` cannot see a 46-way branch because it is still one file in the `neutral` column | `make glue`, in `make check`; `make glue-control` runs both planted directions | **built 2026-09-07.** First run found `tools/sdk-parity.py` holding three per-target extractors behind a `{target: fn}` dispatch. Factored; output verified identical. Per-target→extension is a printed CENSUS, not a verdict — see D20 |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
 
@@ -135,6 +137,15 @@ Inherited from keystone's ratchet, each earned on one of their measured incident
   compares `(kind, snake_case)` because lowercasing collapsed `Blob` and `BLOB` into one key
   and reported agreement across three ports that was not there. A lossy key moves the answer
   in the *agreeing* direction, and agreement is what gets published.
+- **An instrument does not read a quantity its own execution writes** (D19, 2026-09-07). The
+  counter-snapshot rule below is one shape of this; the second shape is a **file mtime**.
+  `gates/type-parity`'s typescript arm must run from inside the stage (ESM resolves a bare
+  specifier relative to the importing file), so it copies its probe in — and that copy is then
+  the newest file in the stage, which is exactly what `tools/gate-stage`'s staleness check
+  reads. Its first run passed a staleness check over a six-hour-old stage. **Anything a gate
+  lands in a stage is named `gate-probe-*`**, which `tools/gate-stage` excludes and
+  `tools/check-structure.py` requires. That check found a second, pre-existing instance in
+  `chunking-parity` on the day it was written.
 - **When the claim is that an installed thing gets consulted, "absent" is not the only alternative
   to "works."** The third state is *installed, live, and never asked*, and only a fourth control
   separates it: call the installed thing **directly** and require it to answer. Earned on

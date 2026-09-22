@@ -1,0 +1,23 @@
+#!/bin/sh
+# The sdk-surface arm for this target. ONE UNIFORM ENTRY POINT PER (gate x target).
+#
+#   gates/sdk-surface/run <extension>   -> {"port":..,"names":[..]} on stdout
+#
+# The arm's job is to answer ONE question -- what public names does this port's cell
+# publish -- and emit structured data. Everything around that (normalising to
+# `(kind, snake_case)`, comparing against `[sdk_surface]`, deciding) is target-neutral and
+# lives in `tools/sdk-parity.py`. That is `chunking-parity`'s split, which is why its arms
+# are 141 lines across three targets and `host-seam`'s are 1,827.
+#
+# THIS SHAPE IS WHY THE ARM IS A `run` RATHER THAN AN IMPORTED MODULE. The neutral half
+# used to hold three extractor FUNCTIONS behind a `{target: fn}` dispatch, so every
+# target's extractor had to be written in Python -- a neutral-half constraint reaching into
+# the target. A `run` emitting JSON removes it: a target whose surface is best read by its
+# own toolchain (`tsc`'s API, `rustdoc --output-format json`) can do that here without the
+# neutral half learning anything. Today all three happen to be Python and that is a
+# coincidence of convenience, not a contract.
+set -eu
+EXT="${1:?usage: run <extension>}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET_DIR="$(cd "$HERE/../.." && pwd)"
+exec python3 "$HERE/emit.py" "$TARGET_DIR" "$EXT"

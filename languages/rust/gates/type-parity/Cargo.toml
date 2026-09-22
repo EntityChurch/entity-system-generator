@@ -1,0 +1,34 @@
+# languages/rust/gates/type-parity — the `rust` arm of the type-parity gate.
+#
+# Its own crate, depending on BOTH cells by path so the probe reads each one's type
+# entities across the crate boundary — the same discipline the other two arms follow by
+# importing the staged package by name rather than reaching into the source tree.
+#
+# Both cells, not one: this arm takes the extension as an argument the way its twins do,
+# and a crate that could only be built for one of them would need a feature flag per
+# extension — 26 of them — which is the shape `gates/README.md` calls a maintained list.
+#
+# A member of `languages/rust/Cargo.toml`'s `gates/*` glob. No `[workspace]` stanza here;
+# see the chunking-parity sibling for why the opt-out was removed rather than copied.
+[package]
+name    = "type-parity-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "probe"
+path = "src/main.rs"
+
+[dependencies]
+entity-content = { path = "../../extensions/content" }
+entity-history = { path = "../../extensions/history" }
+
+# The peer, for `Value`/`Key` and the `Entity` type the cells hand back. Named here
+# rather than re-exported through a cell on purpose: this arm's normaliser walks the
+# peer's OWN value tree, and reaching it through `entity_history::` would make the arm
+# depend on a cell choosing to re-export a type that is not part of its contract.
+#
+# NOT rewritten at stage time the way the cells' copies are: this crate is never staged,
+# it builds in place as a workspace member, so the relative path resolves as written.
+entity-core-protocol-rust = { path = "../../../../../entity-core-keystone/protocol-generator/rust" }

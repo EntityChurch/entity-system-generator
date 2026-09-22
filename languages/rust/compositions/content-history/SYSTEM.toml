@@ -1,0 +1,276 @@
+## SYSTEM.toml — languages/rust/compositions/content-history
+##
+## THE FIFTH COMPOSITION, and the first one where an extension's WRITE face installs and
+## its READ face cannot.
+##
+## `rust × content` established that the four faces get different answers on one peer.
+## That composition's un-installable handler meant CONTENT did nothing at runtime here —
+## it published types and stopped. **HISTORY is not like that.** Its emit consumer
+## installs, and the peer accumulates a real, correct, content-addressed audit chain at
+## `system/history/head/*` from the moment it starts serving. Nothing can read that chain
+## over the wire, because every §4.3 read path is an operation on the handler that cannot
+## exist.
+##
+## So the `history` category will score 7 of 34 on a peer whose recorder is working
+## perfectly, and **the number is about the oracle's access path, not about the
+## extension**. Writing that down BEFORE the run is the whole reason this block exists:
+## "23 checks did not move" and "23 checks failed" are the same bytes in a report and are
+## not the same fact.
+##
+## The resolved plan is DERIVED by `tools/compose.py` into
+## `languages/rust/output/content-history/PLAN.json`.
+
+[system]
+name       = "content-history"
+extensions = ["CONTENT", "HISTORY"]
+
+[system.peer]
+generator = "entity-core-keystone"
+# Read-only, another team's tree. Consumed as a CRATE by path dependency, which is this
+# language's packaging boundary.
+path      = "../entity-core-keystone/protocol-generator/rust"
+
+# ── [system.consumers] — SYSTEM-COMPOSITION §2.2 ────────────────────────────────────
+#
+# HISTORY is position 4. The peer's consumer list is a `Vec` and
+# `Store::register_tree_consumer` PUSHES — no position argument, nothing that could
+# enforce or check one. With a single consumer that is vacuous and saying so is the
+# point: the first composition that could demonstrate the ordering is CONTENT + CLOCK +
+# HISTORY.
+[system.consumers]
+order = ["HISTORY"]
+positions = { HISTORY = 4 }
+enforced_by = "the wiring program's call order — NOT by the peer"
+note = """
+Identical to the `typescript` and `python` compositions, and the identical-ness is a
+finding rather than a copy: three peers, three consumer mechanisms (an `EmitBus` class, a
+callback list, a `Vec<Box<dyn Fn>>`), and NONE of them takes a position. Nine ordered
+positions are normative in SYSTEM-COMPOSITION §2.2 and no peer in the cohort has a place
+to put one. Routed to keystone.
+"""
+
+# ── [system.faces] — per (extension x face), because a peer answers per face (D13) ──
+#
+# **`emit_consumer = "installed"` on `rust` is new here**, and it is the row cycle 1
+# recorded as `available-unused`: measured live with two negatives, and used by nothing
+# because CONTENT registers no consumer. HISTORY registers one, so the row moves from a
+# capability we measured and did not use to one we are using.
+#
+# It moved on the strength of a measurement that did not exist in cycle 1 either.
+# `gates/host-seam` arm G, added for this port: a consumer that WRITES to the store it is
+# called from. `Store::fire` holds `consumers.read()` across the callback and a `bind`
+# from inside re-enters it, which `std::sync::RwLock` documents as a possible panic and
+# its futex implementation could deadlock. The arm ran that shape behind a 5-second
+# timeout — because the failure it was looking for is a hang, and a probe that hangs
+# reports nothing — and the seam held. Reading `store.rs` would have suggested the same
+# answer and would not have been evidence for it.
+[system.faces.CONTENT]
+types         = "installed"
+handler       = "not-installable"
+emit_consumer = "not-installed"     # CONTENT registers none; [surfaces].emit_consumers = []
+sdk           = "library-only"
+
+[system.faces.HISTORY]
+types         = "installed"
+handler       = "not-installable"
+emit_consumer = "installed"         # FIRST TIME ON THIS PEER. See the block above.
+sdk           = "library-only"
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+# THREE categories, and the third is not decoration.
+#   type_system  where CONTENT's six type checks move
+#   content      where CONTENT's three tree-read checks move, and where the five handler
+#                checks stay put — running it is the difference between "we did not
+#                install a handler" and "we did not check"
+#   history      where HISTORY's six type checks move, and where the 23 that need the
+#                query op cannot
+categories = ["type_system", "content", "history"]
+profiles   = ["core"]
+
+# ── [gate.expectation] — WRITTEN BEFORE THE RUN ─────────────────────────────────────
+#
+# `rs-content` got its prediction wrong in a way that produced a correction worth more
+# than the prediction, and the miss was kept. Same rule here.
+#
+# The BARE arm is not a guess: `typescript` and `python` both measured
+# `history` bare = 29 FAIL · 1 PASS · 4 SKIP of 34 in this session's `make check-all`
+# (`languages/typescript/output/content-history/reports/bare-history-1.json`). A bare
+# `rust` peer differs from those only in ways the history category never touches, so the
+# bare arm is predicted to be the same three numbers.
+
+[gate.expectation.history]
+checks         = 34
+measures_us    = 6
+predicted_pass = 7
+predicted_fail = 23
+predicted_skip = 4
+predicted = """
+SIX checks move, all FAIL -> PASS, and they are the six `type_*` checks:
+`type_transition`, `type_config`, `type_query_params`, `type_query_result`,
+`type_rollback_params`, `type_rollback_result`. Those are `client.TreeGet` on
+`system/type/system/history/*` (history.go:120-129) and nothing else — they assert the
+paths RESOLVE. `Store::bind` is public, so they resolve.
+
+NOTHING ELSE MOVES, and the composed arm must equal the bare arm on all 28 others:
+
+  4 SKIP  handler_manifest_present is `optionalManifestPresent`, which SKIPs when the
+          manifest is absent (S1: "absence of an optional extension is conformant"), and
+          `Require` propagates a SKIP to the three dependents.
+
+  23 FAIL `transition_recorded`, `chain_two_transitions`, `limit_returns_1`,
+          `event_filter_only_created`, `rollback_restored_hash` and `w6_caller_cap_absent`
+          each call `historyQuery`/`historyRollback` DIRECTLY — they do not Require the
+          manifest — so they FAIL rather than skip, and `BlockCheck` propagates severity
+          **Fail** to their 17 dependents. `transition_clock_structured` is among them: it
+          WARNs on the other two ports and FAILs here, because it Requires
+          `transition_recorded`.
+
+  1 PASS  in BOTH arms: `rollback_invalid_hash_rejected`. See below.
+"""
+measured = """
+EXACTLY AS PREDICTED, all four numbers and the split.
+
+  bare      29 FAIL ·  1 PASS · 4 SKIP  of 34
+  composed  23 FAIL ·  7 PASS · 4 SKIP  of 34
+
+Six moved, all FAIL -> PASS, and they are exactly the six named above: type_transition,
+type_config, type_query_params, type_query_result, type_rollback_params,
+type_rollback_result. Nothing else differs between the arms in either direction.
+
+Command: `make conformance TARGET=rust COMPOSITION=content-history ROUNDS=1`
+Artifacts: languages/rust/output/content-history/reports/{bare,composed}-history-1.json
+"""
+verdict  = """
+RIGHT, and it is the first pre-registered expectation in this repo that matched exactly.
+`rs-content` got its counts wrong in both categories and the miss was the more instructive
+half; this one had a measured basis the earlier ones did not -- the BARE arm was taken from
+the `typescript` and `python` runs in the same session's `make check-all`, so only the
+COMPOSED arm was a prediction.
+
+**And the number that matters is not the 7.** It is that 23 of the 34 could not move,
+because the oracle reaches transitions only through the query op, and the recorder those 23
+would have measured is running correctly. See [substrate.oracle_read_path] in
+extension-contracts/history/EXTENSION.toml.
+"""
+
+[gate.expectation.history.the_check_that_passes_for_the_wrong_reason]
+check = "rollback_invalid_hash_rejected"
+cite  = "HISTORY §7.5, entity-core-go cmd/internal/validate/history.go:502-518"
+finding = """
+**A §7.5 SECURITY CHECK THAT PASSES ON A PEER WITH NO HISTORY HANDLER AT ALL.**
+
+It sends a rollback with a fabricated hash and asserts `resp.Status != 200`. On a peer
+with no `system/history` handler the dispatcher answers `404 handler_not_found`, which is
+not 200, so the check passes — "rollback with invalid hash returned status 404 (correctly
+rejected)".
+
+This is not a prediction about `rust`, it is a MEASUREMENT of the bare arm on the other
+two ports: `history` bare is 29 FAIL · **1 PASS** · 4 SKIP, and that 1 PASS is this check.
+§7.5 is the refusal that stops rollback being an unrestricted write primitive, and the
+check that guards it is satisfied by the operation not existing.
+
+Routed to `entity-core-go` — the fix is a status/code assertion (`404 not_in_history`, not
+merely "not 200") or an S1 gate on the manifest, and which one is theirs to choose. It is
+their oracle and our finding, produced by being the first composition to run the history
+category against a peer that has the types and not the handler.
+"""
+
+[gate.expectation.content]
+measures_us = 3
+predicted = "identical to `rs-content`: three moved (type_blob, type_chunk, type_descriptor, FAIL -> PASS), the three handler checks SKIP in both arms, get/ingest_path_required FAIL in both."
+measured  = "RIGHT. bare 5 FAIL · 4 PASS · 4 SKIP -> composed 2 FAIL · 7 PASS · 4 SKIP. The three type checks moved and nothing else."
+
+[gate.expectation.type_system]
+measures_us = 6
+predicted = "identical to `rs-content`: six moved (fetch AND match for each of blob, chunk, descriptor). HISTORY's types are NOT in this category — `type_system` enumerates the core floor plus CONTENT's three §11.1 types, and it has no HISTORY rows at all."
+measured  = "RIGHT. Six moved, all FAIL -> PASS, no HISTORY rows in the category. Adding a second extension changed nothing here, which is what a category scoped to CONTENT's §11.1 types should do."
+
+[gate.expectation.core]
+regressions = 0
+predicted = """
+0 regressions. The composition's writes are seven CONTENT type bindings, six HISTORY type
+bindings, one config binding, and then whatever the recorder writes in response to the
+oracle's own tree traffic.
+
+**That last clause is new and is the risk this composition carries that no prior one
+did.** `--profile core` drives 756 checks, many of which write to the tree, and every one
+of those writes now produces a head-pointer binding under `system/history/head/`. If any
+core check enumerates a subtree, counts bindings, or asserts on a listing, the recorder
+changes its answer. That is precisely OUR second failure mode — the peer was right and we
+broke it — and it is what `make regression` exists to catch. Predicted 0 because
+`typescript` and `python` both ran the identical composition to 0 regressions this
+session, but predicted, not assumed.
+"""
+measured = """
+0 regressions, 6 improvements, 0 flaky. ROUNDS=2, 756 checks per arm.
+
+The 6 improvements are CONTENT's type_system checks; `--profile core` includes that
+category and HISTORY's six types are not in it.
+
+**AND THE RISK DID NOT MATERIALISE, which is worth stating as a result rather than as an
+absence.** The composed arm served 756 checks' worth of wire traffic with the recorder
+live, and every tree write among them produced a head-pointer binding under
+`system/history/head/`. Not one core check changed its answer. So no check in the core
+profile enumerates a subtree, counts bindings, or asserts on a listing in a way the
+recorder disturbs -- measured over two rounds, not reasoned from the code.
+
+Command: `make regression TARGET=rust COMPOSITION=content-history`
+Artifacts: languages/rust/output/content-history/reports/{bare,composed}-core-{1,2}.json
+"""
+verdict = "RIGHT."
+side_finding = """
+`languages/rust/gates/host-seam` scenario 4 measured that ONE wire PUT produces THREE
+tree-change events on the responder: the caller's signature bound into the remote
+namespace, the responder's own signature, and the application write. Two of those three
+are the peer's protocol bookkeeping.
+
+The `/{local}/system/signature/*` one is INSIDE this composition's `pattern: "*"` config
+(which canonicalizes to `/{local}/*`), so a composed peer records a transition for it.
+The remote-namespace one is not, and is not recorded.
+
+**It corrupts nothing** -- head pointers are per PATH, so signature transitions live in
+their own chains and no oracle check reads them -- and it is not free either: an audited
+peer accumulates one transition per served request forever, auditing protocol material
+rather than application state. §3.2's self-guard covers `system/history/head` only.
+Whether §2.2's default config should carry an exclusion set, or §3.2's guard should extend
+to engine-written protocol paths, is arch's call. Routed.
+"""
+
+# ── [history] — what the composition configures, because the oracle assumes it ──────
+[history]
+# The oracle's history category writes to `system/validate/history-ext/*` and NEVER
+# configures history first. §6.3's own worked example is `pattern: "*"` for "a peer that
+# wants history for all paths"; that is what this composition binds.
+config_name    = "everything"
+config_pattern = "*"
+config_events  = ["created", "updated", "deleted"]
+max_depth      = 0
+max_depth_note = """
+0 means ABSENT, not zero-retention: the field is `optional: true` (§2.2) and the
+composition omits it. Pruning is a SHOULD (§9.1) and we do not implement it — §3.3's
+algorithm describes severing an immutable content-addressed chain, which cannot be done
+without rewriting every transition's hash. `internal/recorder.rs`'s `prune_history` walks
+and reports rather than pretending.
+"""
+
+# ── the two things this peer cannot supply, declared where a reader will look ───────
+[history.provenance]
+context_available       = false
+handler_grant_available = false
+note = """
+`context_available = false` is the same on all three targets: the peer's tree-change event
+carries no execution context, so every transition records §2.1's autonomous-case values —
+including for writes that arrived over the wire from a remote caller, which are not
+autonomous. Four oracle checks read those fields and they are presence checks over values
+we fabricate. On THIS peer they cannot run at all, because they Require
+`transition_recorded`.
+
+`handler_grant_available = false` is NEW HERE and is one step weaker than the other two
+ports. §2.1's autonomous `capability` is "the handler grant"; `typescript` and `python`
+read back the token their own `install_history` minted at
+`system/capability/grants/system/history`. There is no mint on this peer (`Peer` exposes
+`create` and `dispatch`) and no handler to grant for, so the host passes the local
+identity hash and **`author == capability` on every transition here**. Reported so a
+green row is never read as a satisfied §9.1 MUST.
+"""

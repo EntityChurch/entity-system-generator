@@ -6,8 +6,90 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
-**Two extensions now. `HISTORY` v1.7 is built, composed and measured on `typescript` and
-`python` — 33 PASS · 1 WARN of 34 in the oracle's `history` category on both, `content`
+**Latest: the cost model exists, and it says the refactor we were deferring is not the
+expensive one.** `tools/scale-report.py` classifies every tracked path by what it
+multiplies by — 1, E, E's contracts, T's targets, or E·T — because in this layout a file's
+*location* decides its multiplier. Run `make scale`; the shape of the answer is that the
+**per-cell quadrant is 54% of today's code and 96% of the projection at 26 extensions ×
+46 targets**, and that adding either a language or an extension is ~98% cells either way.
+The per-target duplication three handoffs have flagged as urgent is worth ~1.4% of that.
+It is still worth fixing; it is not the scaling problem, and it had been written up as
+though it were.
+
+**`gates/type-parity` is built** — every port's type entities compared by the peer's own
+content hash *and* by a normalisation of the field map, so that a bug in the normaliser
+surfaces as a contradiction between the two rather than as a divergence blamed on a port.
+It closes the consistency half of G-3: the oracle's `type_*` checks assert that a type path
+**resolves** and never read what is at it, so a subtly wrong field map produces a
+well-formed entity that silently stops deduplicating with every other peer while every
+check stays green. HISTORY: 3 ports agree on all 6. CONTENT: 2 agree on all 7, one
+`unknown`. Negative control executed.
+
+**Its first run cashed a `drift` entry**, which is the first evidence that an unresolved
+one costs something: `typescript` had no `contentTypeEntities`, the difference had been
+declared and undecided since 2026-09-06 with a note reading *"a consumer cannot write one
+call that works on all three"* — and the new gate was that consumer. Resolved rather than
+worked around.
+
+**And the substrate moved under us.** `entity-core-keystone` is implementing **H8**, the
+execution context on the emit event, which this repo routed on 2026-09-06. It has landed on
+`typescript` and `rust` and is in progress on `python`. Two live consequences: `typescript`
+cannot currently be built here at all (the peer's `dist/` is behind its `src/` and the
+staleness gate refuses — *exit 3 is not a verdict*), and HISTORY's `rust` test fixtures no
+longer compile because `TreeChangeEvent` gained a field. **Deliberately not patched with
+`context: None`** — §9.1's MUST on `author`/`capability` is the one requirement this
+extension has never satisfied *because no peer delivered a context*, and that is now false
+on two peers. Details: `docs/status/HANDOFF-2026-09-07-b-*`.
+
+---
+
+**The first batch is complete. `HISTORY` v1.7 is built, composed and measured on all three
+targets** — `typescript` and `python` at 33 PASS · 1 WARN of 34 in the oracle's `history`
+category, and `rust` at **7 PASS · 23 FAIL · 4 SKIP** against a recorder that is working
+correctly. Both extensions now exist on every substrate the repo has: six compositions,
+0 core regressions anywhere.
+
+**The `rust` number is the finding, and it is not a score.** Every check in that category
+that reads a transition reads it through `system/history:query`, and on that peer the
+handler face cannot be installed at any visibility. Meanwhile the **emit consumer installs
+and runs**: the peer accumulates a real, correct, content-addressed audit chain at
+`system/history/head/*` from the moment it serves, measured over real loopback TCP with a
+witness derived from both a request field and registration-time state, and a negative
+control that separates *"not installed"* from *"installed and never asked"*
+(`languages/rust/gates/host-seam` scenario 4, arms H/I).
+
+**So one extension's WRITE face installs and its READ face cannot.** `rust × CONTENT`
+established that four faces get different answers on one peer; there the un-installable
+handler meant the extension did nothing at runtime. This is sharper — the extension works
+and nothing outside it can see that it does. A category score is a statement about the
+oracle's access path, and on the other two targets that sentence and *"a statement about
+the extension"* happen to be the same one.
+
+**The composition pre-registered all four numbers and the split before the run, and matched
+exactly** — the first expectation block in this repo to do so. `rs-content`'s was wrong in
+both categories and the miss was worth more than the prediction; this one had a measured
+basis the earlier ones lacked, because the BARE arm was taken from the `typescript` and
+`python` runs in the same session rather than guessed.
+
+**And the bare arm carried a finding of its own.** `history` bare is 29 FAIL · **1 PASS** ·
+4 SKIP on every target, and the 1 PASS is `rollback_invalid_hash_rejected` — §7.5's
+exfiltration-prevention check, satisfied on a peer with no history handler because
+`404 handler_not_found` is not 200. Routed to `entity-core-go`
+(`ROUTING-2026-09-07-core-go-*` G-1) along with the missing S1 gate that turns 23 skips into
+23 failures, and the absence of any HISTORY analogue of `type_system_*_match`.
+
+**D18 is new, and it is the fourth instance of the same shape.** D13's enforcement point is
+a citation and D14's is a citation, and **nothing checked that the cited path was real**.
+`tools/check-citations.py` found three on its first run, including a `probe =` field on the
+block recording the most consequential substrate fact this repo has measured — naming a gate
+that has never existed. *The thing we own is the thing nothing watches*, now with the
+citation itself as the object.
+
+---
+
+### The `typescript` / `python` result, unchanged
+
+**33 PASS · 1 WARN of 34 in the oracle's `history` category on both, `content`
 unchanged at 12P/1S, 0 core regressions.** The composition `content-history` is the first
 with two extensions in it, and the first that installs an **emit consumer** — the fourth
 face `DESIGN-THE-SDK-LAYER` §1 named and nothing had exercised.
@@ -372,7 +454,7 @@ the delta. **We are not nominating a second control from a source read** — the
   *Where this is*. The structural results, which are the deliverable of equal weight to the code:
 
   **The layout held across the retarget, and the toolchain split is the load-bearing part.**
-  `languages/<lang>/` is four files per language — `profile.toml`, `build`, `test`, `host-launch` —
+  `languages/<lang>/` is four files per language — `profile.toml`, `build`, `test`, `host-entry` —
   and not one of them is extension-aware. The build-driver count stays at 46 and never multiplies by
   the extension corpus.
 

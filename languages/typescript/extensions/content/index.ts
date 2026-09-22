@@ -30,6 +30,7 @@ export {
   MAX_CHUNK_SIZE,
   GET_BATCH_SIZE,
   contentTypeDefs,
+  contentTypeEntities,
   publishContentTypes,
 } from "./types.js";
 export {

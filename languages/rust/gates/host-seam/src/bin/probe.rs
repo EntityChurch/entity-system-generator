@@ -23,6 +23,11 @@
 //! - **D/E/F** the emit face, with two different negatives — no consumer registered,
 //!   and a re-bind that changes nothing. The second is the one that would catch a
 //!   counter incrementing on the CALL rather than on the EVENT.
+//! - **G** added when the second extension needed the face for real. D/E/F measure
+//!   that a consumer is *invoked*; HISTORY §5.1 needs one that **writes** from inside
+//!   the callback, which is a question about `Store`'s consumer lock and not about the
+//!   hook. It runs behind a timeout, because the failure it is looking for is a
+//!   deadlock and a probe that hangs reports nothing at all.
 
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -201,6 +206,36 @@ impl Loopback {
         (status, code)
     }
 
+    /// One EXECUTE at an arbitrary handler, returning `(status, result entity)`.
+    ///
+    /// `execute_content` above is the fixed-shape version scenario 1 needs; this is the
+    /// general one scenario 4 needs, and the two are kept separate rather than merged so
+    /// that scenario 1's request — the one whose 404/501 answer is the measurement —
+    /// cannot change shape when a later scenario wants a different call.
+    fn execute(
+        &mut self,
+        handler: &str,
+        operation: &str,
+        params: Entity,
+        targets: &[&str],
+    ) -> (u64, Entity) {
+        let uri = format!("/{}/{handler}", self.remote);
+        let resource = Value::Map(vec![(
+            Key::Text("targets".into()),
+            Value::Array(targets.iter().map(|t| Value::Text((*t).into())).collect()),
+        )]);
+        let resp = self
+            .session
+            .execute(&uri, operation, params, Some(resource))
+            .expect("a response envelope");
+        let status = resp.root.uint_field("status").unwrap_or(0);
+        let result = resp
+            .root
+            .entity_field("result")
+            .unwrap_or_else(|| Entity::make("primitive/any", Value::Map(vec![])));
+        (status, result)
+    }
+
     fn shutdown(mut self) {
         self.io.close();
         transport::shutdown(&self.teardown);
@@ -331,6 +366,114 @@ fn main() {
     let after_rebind = events.lock().unwrap().len();
     println!("  F. identical re-bind (no change)          {after_rebind} event(s) total (was {})", fired.len());
 
+    // G. THE ARM THE SECOND EXTENSION FORCED — a consumer that WRITES to the store
+    //    it is being called from.
+    //
+    //    D/E/F measure that a consumer is INVOKED. That is not the property HISTORY
+    //    needs. §5.1's recorder writes a transition and advances a head pointer from
+    //    inside the callback, so the question is whether the seam is re-entrant, and
+    //    it is a question about a LOCK rather than about a hook:
+    //
+    //      `Store::fire` holds `consumers.read()` across the callback. A `bind` from
+    //      inside takes `inner.write()` (a different lock — fine) and then calls
+    //      `fire` AGAIN, taking `consumers.read()` recursively on the same thread.
+    //      `std::sync::RwLock::read` documents that it "might panic when called if
+    //      the lock is already held by the current thread", and the futex
+    //      implementation is writer-preferring, so a queued writer would deadlock it.
+    //
+    //    Reading the source cannot settle that (D13: source reads decide what to
+    //    build, never what is true), and a probe that simply called `bind` would HANG
+    //    rather than report on the bad outcome. So the write runs on a worker thread
+    //    behind a `recv_timeout`: a deadlock becomes a measured NO, not a stalled gate.
+    println!();
+    let r = peer(0x33);
+    let head_prefix = format!("/{}/system/history/head", r.local_peer);
+    let reentrant_writes = Arc::new(AtomicUsize::new(0));
+    let guard_hits = Arc::new(AtomicUsize::new(0));
+    {
+        // `Weak`, not `Arc`. An `Arc<Peer>` captured by a closure the peer's own store
+        // owns is a reference cycle, and the recorder in `entity-history` has exactly
+        // this shape — so the probe uses the shape the extension will use rather than
+        // a simpler one that would not have caught it.
+        let owner = Arc::downgrade(&r);
+        let (writes, guarded, hp) = (
+            reentrant_writes.clone(),
+            guard_hits.clone(),
+            head_prefix.clone(),
+        );
+        r.store.register_tree_consumer(move |ev: &TreeChangeEvent| {
+            // §3.2's self-guard, in miniature: without it this recurses forever.
+            if ev.path.starts_with(&hp) {
+                guarded.fetch_add(1, Ordering::SeqCst);
+                return;
+            }
+            let Some(peer) = owner.upgrade() else { return };
+            writes.fetch_add(1, Ordering::SeqCst);
+            peer.store.bind(
+                &format!("{hp}{}", ev.path),
+                &Entity::make(
+                    "system/history/transition",
+                    model::map(vec![("path", model::text(&ev.path))]),
+                ),
+            );
+        });
+    }
+    let app_path = format!("/{}/probe/reentrant", r.local_peer);
+    let (tx, rx) = std::sync::mpsc::channel();
+    {
+        let (rr, ap) = (r.clone(), app_path.clone());
+        thread::spawn(move || {
+            rr.store.bind(
+                &ap,
+                &Entity::make(
+                    "system/content/chunk",
+                    model::map(vec![("payload", model::bytes(b"reentrant"))]),
+                ),
+            );
+            let _ = tx.send(());
+        });
+    }
+    let completed = rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .is_ok();
+    let head_bound = completed && r.store.get_at(&format!("{head_prefix}{app_path}")).is_some();
+    println!("  G. consumer WRITES from inside the callback");
+    println!(
+        "     returned within 5 s:                   {completed}   (false = deadlock or panic)"
+    );
+    println!(
+        "     re-entrant writes attempted:           {}",
+        reentrant_writes.load(Ordering::SeqCst)
+    );
+    println!(
+        "     self-guard hits (the head write's own event): {}",
+        guard_hits.load(Ordering::SeqCst)
+    );
+    println!("     head pointer readable afterwards:      {head_bound}");
+    let reentrant_ok = completed && head_bound && guard_hits.load(Ordering::SeqCst) == 1;
+    // A NO here is a RESULT, not vacuity, and it must not be filed as one: `vacuous`
+    // means "this run measured nothing", and a deadlock measured the sharpest thing
+    // the arm can say. What IS vacuous is the arm never having fired at all — then the
+    // verdict is about the probe rather than about the peer.
+    if reentrant_writes.load(Ordering::SeqCst) == 0 {
+        vacuous.push(
+            "arm G's consumer never fired — the re-entrancy question was not asked, and a NO \
+             from this arm would be about the probe rather than about the peer",
+        );
+    }
+    println!(
+        "  => the emit face is usable BY A CONSUMER THAT WRITES: {}\n",
+        if reentrant_ok {
+            "YES — the seam is re-entrant; a write from inside the callback lands, and its own \
+             event comes back to the guard exactly once"
+        } else if !completed {
+            "NO — the write from inside the callback did not return within 5 s. The seam is not \
+             re-entrant, and §5.1's recorder cannot be a plain consumer on this peer"
+        } else {
+            "NO — the write returned but did not take effect"
+        }
+    );
+
     let emit_ok = fired.len() == 1
         && fired[0] == format!("{REG_NONCE}:created:{path}")
         && after_rebind == 1;
@@ -343,6 +486,199 @@ fn main() {
             "YES — witness carries the registration nonce and the bound path; a no-op re-bind is silent"
         } else {
             "INDETERMINATE"
+        }
+    );
+
+    // ── Scenario 4: the emit face OVER THE WIRE ──────────────────────────────
+    //
+    // Scenario 2 measured that a consumer is invoked, and arm G that it may write. Both
+    // drive `store.bind` DIRECTLY, in the probe's own thread. That is not the claim a
+    // composition makes when it writes `emit_consumer = "installed"`: the claim is that a
+    // write arriving over the wire — through the handshake, the reader-demux, dispatch,
+    // `check_permission` and the peer's own `system/tree` handler — reaches the installed
+    // consumer, and that the consumer's own write is then visible to a subsequent wire
+    // READ.
+    //
+    // D13's clause 2 asks for exactly this and for two things about the witness: it must
+    // derive from a REQUEST FIELD and from REGISTRATION-TIME STATE. Here it does both —
+    // the transition's `path` and `hash` come from the PUT the client chose, and its
+    // `author` is the nonce captured when the consumer was registered — so a peer that
+    // answered from a constant, or from something already in the tree, could not produce
+    // it.
+    //
+    // And the negative distinguishes "not installed" from "installed and never asked": an
+    // otherwise identical peer with NO consumer, driven by the identical two wire calls.
+    println!("Scenario 4 — the emit face, driven over real loopback TCP");
+
+    const APP_PATH: &str = "probe/wire-emit";
+    let head_of = |peer: &str, path: &str| format!("/{peer}/system/history/head/{peer}/{path}");
+    let put_params = |e: &Entity| {
+        Entity::make(
+            "primitive/any",
+            Value::Map(vec![(Key::Text("entity".into()), e.to_cbor())]),
+        )
+    };
+    let subject = Entity::make(
+        "system/validate/history-test",
+        model::map(vec![("value", model::text(REG_NONCE))]),
+    );
+
+    // H. POSITIVE. A consumer registered before the peer serves, exactly as a
+    //    composition's wiring program registers one.
+    let responder_h = peer(0x41);
+    let local_h = responder_h.local_peer.clone();
+    let recorded = Arc::new(AtomicUsize::new(0));
+    // WHAT the consumer saw, not just how many. The count alone said "+3 for one PUT"
+    // and left the other two unexplained, which is the same shape as a cohort number
+    // with no command behind it (D14).
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    {
+        let owner = Arc::downgrade(&responder_h);
+        let hits = recorded.clone();
+        let paths = seen.clone();
+        let guard_prefix = format!("/{local_h}/system/history/head");
+        responder_h
+            .store
+            .register_tree_consumer(move |ev: &TreeChangeEvent| {
+                if ev.path.starts_with(&guard_prefix) {
+                    return;
+                }
+                let Some(p) = owner.upgrade() else { return };
+                hits.fetch_add(1, Ordering::SeqCst);
+                paths
+                    .lock()
+                    .unwrap()
+                    .push(format!("{}:{}", ev.event_type, ev.path));
+                // The witness: the request's path and hash, plus the registration-time
+                // nonce as `author`. Neither half alone would be attributable.
+                let transition = Entity::make(
+                    "system/history/transition",
+                    model::map(vec![
+                        ("path", model::text(&ev.path)),
+                        ("event", model::text(ev.event_type)),
+                        (
+                            "hash",
+                            match &ev.new_hash {
+                                Some(h) => model::bytes(h),
+                                None => Value::Null,
+                            },
+                        ),
+                        ("author", model::text(REG_NONCE)),
+                    ]),
+                );
+                p.store
+                    .bind(&format!("{guard_prefix}{}", ev.path), &transition);
+            });
+    }
+
+    let mut lb = Loopback::connect(responder_h.clone(), peer(0x42));
+    // SNAPSHOT BEFORE THE PUT, and the reason is the first thing this arm found: the
+    // counter is NOT zero here. Establishing a connection writes to the tree — the
+    // remote peer entity, its signature, the session's capability material — and every
+    // one of those is a tree-change event an emit consumer observes. The arm was first
+    // written asserting `invocations == 1` after the PUT and measured 4.
+    //
+    // So the assertion is on the DELTA, and the connection-time count is reported as its
+    // own number, because it is a fact about the peer that HISTORY inherits: a composed
+    // peer's audit chain records protocol-level writes as application transitions, and
+    // `recorded` on the COMPOSED line is therefore not a count of application writes.
+    let before_put = recorded.load(Ordering::SeqCst);
+    let (put_status, _) = lb.execute(
+        "system/tree",
+        "put",
+        put_params(&subject),
+        &[&format!("/{local_h}/{APP_PATH}")],
+    );
+    let after_put = recorded.load(Ordering::SeqCst);
+    let (get_status, transition) = lb.execute(
+        "system/tree",
+        "get",
+        wire::empty_params(),
+        &[&head_of(&local_h, APP_PATH)],
+    );
+    lb.shutdown();
+
+    let witness_author = transition.text_field("author").unwrap_or("").to_string();
+    let witness_path = transition.text_field("path").unwrap_or("").to_string();
+    let witness_hash_ok = transition.bytes_field("hash") == Some(subject.hash.as_slice());
+    println!("  H. consumer registered, wire PUT then wire GET");
+    println!("     PUT  /{{peer}}/{APP_PATH}                    {put_status}");
+    println!("     GET  the head pointer                     {get_status}");
+    println!(
+        "     witness: author={witness_author} (registration-time)  path={} (request field)  hash matches PUT: {witness_hash_ok}",
+        if witness_path.ends_with(APP_PATH) { "ok" } else { &witness_path }
+    );
+    println!(
+        "     consumer invocations: {before_put} during CONNECTION SETUP, +{} for the PUT",
+        after_put - before_put
+    );
+    // **THE FINDING OF THIS ARM.** One wire PUT is not one tree event. Whatever else the
+    // peer binds while serving a request is a tree-change event too, and an emit consumer
+    // sees all of it — so a composed peer's audit chain contains the peer's own protocol
+    // bookkeeping alongside the write the caller asked for. Listed rather than counted,
+    // because "+3" with no paths behind it is a number with nothing to check it against.
+    for p in seen.lock().unwrap().iter() {
+        println!("     saw  {p}");
+    }
+
+    // I. NEGATIVE CONTROL. The same two wire calls against a peer with NO consumer.
+    //    This is what separates "not installed" from "installed and never asked": if the
+    //    GET answered 200 here too, the head pointer would be coming from somewhere other
+    //    than our callback.
+    let responder_i = peer(0x43);
+    let local_i = responder_i.local_peer.clone();
+    let mut lb = Loopback::connect(responder_i.clone(), peer(0x44));
+    let (put_status_i, _) = lb.execute(
+        "system/tree",
+        "put",
+        put_params(&subject),
+        &[&format!("/{local_i}/{APP_PATH}")],
+    );
+    let (get_status_i, _) = lb.execute(
+        "system/tree",
+        "get",
+        wire::empty_params(),
+        &[&head_of(&local_i, APP_PATH)],
+    );
+    lb.shutdown();
+    println!("  I. NO consumer, the identical two calls");
+    println!("     PUT                                       {put_status_i}");
+    println!("     GET  the head pointer                     {get_status_i}  (must NOT be 200)");
+
+    let wire_emit_ok = put_status == 200
+        && get_status == 200
+        && witness_author == REG_NONCE
+        && witness_path == format!("/{local_h}/{APP_PATH}")
+        && witness_hash_ok
+        // EXACTLY ONE EVENT FOR THE APP PATH — not one event for the request. The arm
+        // was first written as `after_put - before_put == 1` and measured 3, because
+        // §6.10 fires per BINDING and serving one request binds more than the caller
+        // asked for. `>= 1` on the total would have passed for a consumer that fired on
+        // everything and never on our path, so the assertion is on the path itself.
+        && seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| p.ends_with(&format!("/{local_h}/{APP_PATH}")))
+            .count()
+            == 1
+        && put_status_i == 200
+        && get_status_i != 200;
+    if put_status != 200 || put_status_i != 200 {
+        // Both arms must be able to WRITE, or the GET comparison is between two peers
+        // that failed for different reasons and the negative proves nothing.
+        vacuous.push(
+            "scenario 4's PUT did not succeed on both arms — the emit question was never \
+             asked, and the negative control is not a control",
+        );
+    }
+    println!(
+        "  => the emit face is reachable FROM THE WIRE: {}\n",
+        if wire_emit_ok {
+            "YES — a wire PUT reaches the installed consumer, its write is readable by a \
+             wire GET, and an identical peer without the consumer answers the GET non-200"
+        } else {
+            "NO"
         }
     );
 
@@ -367,6 +703,18 @@ fn main() {
     println!("\n--- summary ---");
     println!("handler face:  Reach NO (executed, both controls)");
     println!("emit face:     Reach YES (executed, two negatives)");
+    println!(
+        "emit face, RE-ENTRANT (a consumer that writes): {}",
+        if reentrant_ok { "YES (arm G)" } else { "NO (arm G)" }
+    );
+    println!(
+        "emit face, FROM THE WIRE (put -> consumer -> get): {}",
+        if wire_emit_ok {
+            "YES (arms H/I)"
+        } else {
+            "NO (arms H/I)"
+        }
+    );
     println!("frame budget:  MAX_FRAME is a module constant == the literal Am. 1 forbids");
     println!("Access / Read / Export: see access_absent + access_control (rustc decides, not this binary)");
 

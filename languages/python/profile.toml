@@ -81,3 +81,16 @@ handler_protocol     = "handle_op(op, ctx) -> Outcome"   # duck-typed; no base c
 emit_pattern = '\b_err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"'
 # D15's control, as data — see `--self-test`.
 self_test_line = 'return _err(400, "planted_bogus_code", "x")'
+
+# ── [sdk_surface] — the D16 gate's per-target facts ─────────────────────────────
+# D17: a per-target VALUE lives in the profile. `entry_point` was a literal in
+# `tools/sdk-parity.py`'s `ENTRY_POINTS` dict — one entry per target in a
+# LANGUAGE-NEUTRAL file, which is the shape that becomes a 46-way table. Same defect as
+# AP-9's toolchain image and AP-10's readiness budget, one file over.
+#
+# The PROCEDURE that reads this file lives at `languages/python/gates/sdk-surface/extract.py` beside it,
+# because a per-target procedure belongs under the target (§1.2b) — not behind a dispatch
+# in the neutral half. The neutral half now discovers both by wildcard.
+[sdk_surface]
+entry_point = "__init__.py"
+# The package initialiser, whose `__all__` IS the declared surface on this target — convention rather than enforcement, and the cell states it.

@@ -1,0 +1,92 @@
+#!/bin/sh
+# tools/gate-stage — resolve and VALIDATE the staged build a gate arm consumes.
+#
+# Sourced, not executed. `. "$ROOT/tools/gate-stage"` after setting TARGET_DIR,
+# COMPOSITION and CELL_SRC; it exports STAGE or exits non-zero with a reason.
+#
+# ## Why this is shared rather than three copies of six lines
+#
+# `DESIGN-THE-SYSTEM-STRUCTURE` §1.2b: the shared protocol lives in `tools/`, one copy;
+# the ecosystem polish lives under `languages/<target>/` and stays small. "Is the artifact
+# I am about to measure actually current" is protocol — it is the same question with the
+# same right answer on every target — and `tools/host-launch` is the precedent: 210
+# per-target lines became 45 once the protocol moved here.
+#
+# ## The two refusals, and the second is the one that presents as success
+#
+#   no stage          the arm cannot run. Loud, obvious, and nobody misreads it.
+#   STALE stage       the arm CAN run, against code nobody built. It will produce a
+#                     confident verdict about a previous revision of the thing under test.
+#
+# `gates/README.md`, inherited from keystone's own measured incident: *a gate that imports
+# a build artifact must check the artifact's age, and report `unknown` rather than a
+# verdict when it is stale — their instrument reported H7 unsatisfied against source that
+# satisfied it, after a planted-defect run left a mutated dist/ behind.* **Exit 3 is not a
+# verdict.** A caller that treats it as a FAIL has misread this, and one that treats it as
+# a PASS has misread it worse.
+#
+# ## Newest FILE mtime, never the directory's
+#
+# A directory's mtime only moves when an entry is added or removed, so comparing
+# directories red-flags a stage that is ten minutes newer than its source and says nothing
+# about a file edited in place — the exact false red that costs an instrument (AP-4, D15).
+# `languages/typescript/build` learned this on the peer and the fix belongs here too.
+#
+# ## `gate-probe-*` is RESERVED, and it is not a naming convention
+#
+# An arm that must run from inside the stage — ESM resolves a bare specifier relative to
+# the importing file, so the `typescript` arm has no choice — copies its probe in. That
+# copy is then the newest file in the stage, and the staleness check above compares the
+# cell source against **an artifact the gate itself just wrote**. Measured, not predicted:
+# the first run of `gates/type-parity`'s typescript arm passed a staleness check over a
+# stage built six hours earlier, because the previous run had left `type-parity-probe.mjs`
+# in it.
+#
+# Same family as `gates/README.md`'s *"snapshot the counter before the control that
+# contaminates it"*, one level out: **an instrument must not measure a thing it is
+# concurrently modifying.** So anything a gate writes into a stage is named
+# `gate-probe-*` and is excluded here — one rule, one copy, no per-target knowledge, and
+# greppable. A probe copied in under any other name silently restarts this bug.
+
+: "${TARGET_DIR:?gate-stage: TARGET_DIR must be set}"
+: "${COMPOSITION:?gate-stage: COMPOSITION must be set}"
+: "${CELL_SRC:?gate-stage: CELL_SRC must be set (the source the stage is built FROM)}"
+
+STAGE="$TARGET_DIR/output/$COMPOSITION/build"
+export STAGE
+
+# `-not -name 'gate-probe-*'`: see the header. A gate's own probe copy is the newest file
+# in the stage the instant it lands, so including it makes every staleness check pass.
+_gate_newest_mtime() {
+  find "$1" -type f -not -name 'gate-probe-*' -printf '%T@\n' 2>/dev/null | sort -rn | head -1
+}
+
+if [ ! -d "$STAGE" ]; then
+  echo "REFUSING: no staged build at $STAGE" >&2
+  echo "  run: make build TARGET=$(basename "$TARGET_DIR") COMPOSITION=$COMPOSITION" >&2
+  exit 2
+fi
+
+if [ ! -d "$CELL_SRC" ]; then
+  echo "REFUSING: no cell source at $CELL_SRC -- nothing to compare the stage against." >&2
+  echo "  An unstaleable stage is not a fresh one; it is one nothing is watching." >&2
+  exit 2
+fi
+
+_gate_src_age="$(_gate_newest_mtime "$CELL_SRC")"
+_gate_stage_age="$(_gate_newest_mtime "$STAGE")"
+
+if [ -z "$_gate_src_age" ] || [ -z "$_gate_stage_age" ]; then
+  echo "REFUSING: cannot compare $CELL_SRC and $STAGE -- one of them holds no files." >&2
+  exit 2
+fi
+
+# `awk`, not shell arithmetic: these are float epochs and `[ a -gt b ]` would truncate to
+# the second, which on a fast rebuild is exactly the window where a stale stage hides.
+if awk "BEGIN{exit !($_gate_src_age > $_gate_stage_age)}"; then
+  echo "UNKNOWN: the stage at $STAGE is OLDER than the cell source at $CELL_SRC." >&2
+  echo "  Measuring it would produce a confident verdict about code nobody built." >&2
+  echo "  run: make build TARGET=$(basename "$TARGET_DIR") COMPOSITION=$COMPOSITION" >&2
+  echo "  (Exit 3 is not a verdict. Not a FAIL about the port, and not a PASS.)" >&2
+  exit 3
+fi

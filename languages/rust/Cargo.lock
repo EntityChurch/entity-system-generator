@@ -118,6 +118,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity-history"
+version = "1.7.0"
+dependencies = [
+ "entity-core-protocol-rust",
+]
+
+[[package]]
 name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -211,6 +218,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "type-parity-rust"
+version = "0.0.0"
+dependencies = [
+ "entity-content",
+ "entity-core-protocol-rust",
+ "entity-history",
 ]
 
 [[package]]

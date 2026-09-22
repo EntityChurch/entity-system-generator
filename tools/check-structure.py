@@ -42,6 +42,7 @@ refusal. So: zero targets inspected, or a target with nothing under it, REFUSES.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -58,6 +59,45 @@ MIRRORED = {
     "extensions": CONTRACTS,
     "gates": GATES,
 }
+
+
+#: A gate arm writing into the stage it is about to measure. `$STAGE` is exported by
+#: `tools/gate-stage`; anything landed there under a name the staleness scan does not
+#: exclude makes that scan pass unconditionally.
+_STAGE_WRITE = re.compile(r'\b(?:cp|mv|install|cat\s*>)\b[^\n]*?"\$STAGE/([^"]+)"')
+
+
+def _stage_writes(arm: Path, label: str) -> list[str]:
+    """D19: an instrument does not read a quantity its own execution writes.
+
+    A gate arm that copies its probe into `$STAGE` makes that copy the newest file in the
+    stage, so `tools/gate-stage`'s staleness comparison is then run against an artifact
+    the gate itself wrote a moment earlier. Measured on `gates/type-parity`'s typescript
+    arm, which passed a staleness check over a six-hour-old stage on its first run.
+
+    The fix is a reserved prefix rather than a smarter check: `gate-probe-*` is excluded
+    from the scan, so an arm that must run from inside the stage still can. This is the
+    enforcement point -- without it the rule is a comment in one file, and the next arm
+    that needs to copy something in restarts the bug silently.
+    """
+    problems = []
+    for f in sorted(arm.rglob("*")):
+        if not f.is_file():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for dest in _STAGE_WRITE.findall(text):
+            base = dest.rsplit("/", 1)[-1]
+            if not base.startswith("gate-probe-"):
+                problems.append(
+                    f"{label}/{f.name}: writes `{dest}` into the stage it measures. "
+                    "D19 -- anything a gate lands in a stage is named `gate-probe-*` so "
+                    "`tools/gate-stage` can exclude it; under any other name it becomes "
+                    "the newest file in the stage and every staleness check passes."
+                )
+    return problems
 
 
 def main() -> int:
@@ -121,6 +161,8 @@ def main() -> int:
                         "-- one runner with the matrix as data; an arm the runner cannot "
                         "call is an arm nobody measures."
                     )
+                if subtree == "gates":
+                    problems.extend(_stage_writes(unit, f"{name}/gates/{unit.name}"))
 
         comps = target / "compositions"
         if comps.is_dir():

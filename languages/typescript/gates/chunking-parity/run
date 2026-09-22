@@ -21,6 +21,6 @@ STAGE="$TARGET_DIR/output/$COMPOSITION/build"
 # so a probe run from outside the stage cannot see the staged package however cwd is set.
 # Copying it in is what makes `@entity-core/...` resolve through the package's own
 # `exports` map -- which is the boundary this arm exists to consume across.
-cp "$HERE/probe.mjs" "$STAGE/parity-probe.mjs"
+cp "$HERE/probe.mjs" "$STAGE/gate-probe-chunking-parity.mjs"
 cd "$STAGE"
-exec node parity-probe.mjs "$CORPUS" "$TSIZE"
+exec node gate-probe-chunking-parity.mjs "$CORPUS" "$TSIZE"

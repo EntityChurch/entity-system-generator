@@ -135,6 +135,31 @@ export function publishContentTypes(tree: EntityTree, localPeerId: string): read
   return written;
 }
 
+/**
+ * `(typeName, system/type entity)` for each of the seven — the materialised form.
+ *
+ * ADDED 2026-09-07, RESOLVING A `drift` ENTRY RATHER THAN ADDING A NAME. `python` and
+ * `rust` have had `content_type_entities` since their first port; this port had only
+ * `contentTypeDefs`, and `EXTENSION.toml [sdk_surface].drift` has carried the difference
+ * since 2026-09-06 with its own note calling it *"the sharpest single instance of the
+ * drift, because a consumer cannot write one call that works on all three."*
+ *
+ * **What made it a defect rather than an untidiness was a second instrument.**
+ * `gates/type-parity` — written to check that the hand-built field maps have not drifted
+ * apart, which no oracle check reads — could measure HISTORY on three ports and CONTENT
+ * on two, because this function was not here to call. A `drift` entry is undecided, not
+ * free: this one blocked a gate written five sessions after it was filed.
+ *
+ * `HISTORY` already made this decision deliberately in its own `types.ts` (*"this is the
+ * second extension, and the gate exists now"*). CONTENT predates that, and this is the
+ * catch-up.
+ */
+export function contentTypeEntities(): readonly (readonly [string, Entity])[] {
+  return contentTypeDefs().map(
+    (def) => [def.treePath.replace(/^system\/type\//, ""), def.toEntity()] as const,
+  );
+}
+
 /** A `system/protocol/error`-free way to build one of our own result entities. */
 export function contentEntity(type: string, data: Parameters<typeof Entity.create>[1]): Entity {
   return Entity.create(type, data);

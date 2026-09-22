@@ -138,7 +138,17 @@ while IFS="$(printf '\t')" read -r EXT CELL; do
   #      cites the artifact that produced it. The peer's Cargo.toml is that artifact --
   #      which is also why there is no `[workspace.dependencies]` pin, since that would
   #      only make our crates agree with each other.
-  python3 - "$STAGE/cells/$SLUG/Cargo.toml" "$PEER" "$SLUG" <<'PY'
+  #
+  #   3. **The crate name is READ, not assumed.** This block used to end with a literal
+  #      `entity-content = { path = ... }`, which is a per-EXTENSION value written into a
+  #      per-TARGET driver -- D17's shape, one axis over. It was invisible while `rust`
+  #      had exactly one extension and would have emitted the SAME dependency name twice
+  #      with two different paths on the first two-extension composition, so cargo would
+  #      have failed on a duplicate key and the message would have been about TOML rather
+  #      than about a hardcoded name. Found by adding HISTORY, not by reading the driver
+  #      -- which is AP-10's lesson again: the question about a driver line is never "is
+  #      this reasonable", it is "is this a procedure or a value".
+  CRATE="$(python3 - "$STAGE/cells/$SLUG/Cargo.toml" "$PEER" "$SLUG" <<'PY'
 import re, sys
 path, peer, slug = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(path, encoding="utf-8").read()
@@ -170,10 +180,31 @@ if ours is not None:
                  "against a different SHA-256 and nothing would raise an error.")
 
 open(path, "w", encoding="utf-8").write(text)
+
+# The dependency name the host will spell. Read from the manifest that defines it --
+# D14: the number (or the name) cites the artifact that produced it.
+#
+# Scoped to the `[package]` table on purpose. A bare `^name =` search would find
+# `[lib] name` on a reorder, and `[lib] name` is the UNDERSCORED import name
+# (`entity_history`), not the dependency key (`entity-history`) -- so the wrong one
+# resolves to nothing and the error is about a missing crate.
+package = re.split(r'^\[', text, flags=re.M)
+m = None
+for section in package:
+    if section.startswith("package]"):
+        m = re.search(r'^\s*name\s*=\s*"([^"]+)"', section, re.M)
+        break
+if m is None:
+    sys.exit(f"REFUSING: staged {slug} has no [package] name -- the host's dependency "
+             "line would have to be guessed, and a guessed crate name fails as a "
+             "resolution error about something else.")
+sys.stdout.write(m.group(1))
 PY
+)"
+  [ -n "$CRATE" ] || { echo "build: REFUSING -- no crate name read for $EXT" >&2; exit 1; }
   DEPS="$DEPS
-entity-content = { path = \"../cells/$SLUG\" }"
-  echo "build: staged $EXT -> cells/$SLUG"
+$CRATE = { path = \"../cells/$SLUG\" }"
+  echo "build: staged $EXT -> cells/$SLUG (crate $CRATE)"
 done < "$CELLS"
 rm -f "$CELLS"
 
