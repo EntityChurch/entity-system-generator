@@ -107,6 +107,15 @@ truth conditions:
 | **cross-repo** | resolves inside a sibling tree under `../` | **reported, never failed.** A real citation to a tree we may not edit; it moves on their cycle, not ours |
 | **historical snapshot** | lives under `docs/status/` | **exempt, counted.** A dated handoff describes the tree *as it was*; requiring its paths to resolve forever means rewriting history |
 | **durable prose** | everything else in `docs/` | **MUST resolve**, exactly like a declaration file |
+| **could not look** | unresolved here, and there is **no sibling tree** to test the cross-repo class against | **refuses, exit 2**, and says so in those words. Not a verdict about the citation |
+
+**The fourth row is the one a clean clone hits, and it was added because the clone found
+it.** `cross_repo` answered `None` for every candidate when nothing sat beside this
+checkout — the class was switched off and still voting — so two correct citations into the
+peer generator's tree were reported as **our** broken paths. The documented remedy for a
+broken citation is to delete it, which is the single action that destroys a correct one;
+this file's own comment on the `CITATION` lookbehind already says a false red on a path
+that IS right is the worst kind. Absent input is now distinguishable from a finding.
 
 `docs/status/` is the exemption that makes the rest safe, and it is principled rather than
 convenient: those files are immutable once written and their value is that they say what was
@@ -262,7 +271,30 @@ def is_snapshot(rel: str) -> bool:
     return any(rel.startswith(f"{d}/") for d in SNAPSHOT_DIRS)
 
 
-def cross_repo(candidate: str) -> str | None:
+def sibling_dirs() -> list[Path]:
+    """The trees the cross-repo class is decided against — every directory beside ours.
+
+    RETURNED RATHER THAN WALKED INLINE, because the empty case is the whole point. An
+    empty list does NOT mean "no citation resolves in a sibling"; it means the cross-repo
+    class CANNOT BE DECIDED, and every citation into another team's tree is then
+    indistinguishable from a broken local one. `cross_repo` and the could-not-look verdict
+    read the same list so the two can never disagree about what was searched.
+    """
+    if not CHURCH.is_dir():
+        return []
+    try:
+        # A sibling REPOSITORY, not merely a sibling directory: the tree beside us also
+        # holds its own `.git`, a docs directory and tooling, and calling those "sibling
+        # trees" in the printed line would overstate what was searched. `.git` is a FILE
+        # in a linked worktree and a directory in a clone, so `.exists()` and not `.is_dir`.
+        # Measured before narrowing: it moves no citation between classes.
+        return [p for p in sorted(CHURCH.iterdir())
+                if p.is_dir() and p.name != ROOT.name and (p / ".git").exists()]
+    except OSError:
+        return []
+
+
+def cross_repo(candidate: str, siblings: list[Path]) -> str | None:
     """The sibling tree this path resolves in, if any.
 
     A citation into another team's tree is a REAL citation and we cannot fix it here —
@@ -272,10 +304,8 @@ def cross_repo(candidate: str) -> str | None:
     Checked BEFORE the local verdict, because the two collide: `docs/spec/SPEC-KEYSTONE-
     PEER.md` is keystone's real path and would read as a broken local one.
     """
-    if not CHURCH.is_dir():
-        return None
-    for sibling in sorted(CHURCH.iterdir()):
-        if sibling.is_dir() and sibling.name != ROOT.name and (sibling / candidate).exists():
+    for sibling in siblings:
+        if (sibling / candidate).exists():
             return sibling.name
     return None
 
@@ -321,8 +351,15 @@ def extract(path: Path) -> tuple[set[str], set[str]]:
 
 def run(
     extra_files: list[Path] | None = None,
-) -> tuple[list[str], list[str], list[str], int, list[str], list[str]]:
-    """Returns `(missing, artifacts, dead, total, snapshots, foreign)`."""
+    siblings: list[Path] | None = None,
+) -> tuple[list[str], list[str], list[str], int, list[str], list[str], list[str]]:
+    """Returns `(missing, artifacts, dead, total, snapshots, foreign, unclassified)`.
+
+    `siblings` defaults to `sibling_dirs()` and is a parameter only so the self-test can
+    hand in an empty one — the could-not-look path has to be OBSERVED, not reasoned about.
+    """
+    if siblings is None:
+        siblings = sibling_dirs()
     files = corpus_files() + list(extra_files or [])
     if not files:
         raise Refusal(
@@ -335,6 +372,7 @@ def run(
     dead_out: list[str] = []
     snapshots: list[str] = []
     foreign: list[str] = []
+    unclassified: list[str] = []
     total = 0
     for f in files:
         rel = f.relative_to(ROOT).as_posix()
@@ -361,15 +399,26 @@ def run(
             # path and would otherwise read as a broken local one. Their tree is
             # read-only to us and moves on their cycle, so this is reported, never
             # failed -- a gate that goes red on someone else's commit gets suppressed.
-            if (sibling := cross_repo(cited)) is not None:
+            if (sibling := cross_repo(cited, siblings)) is not None:
                 foreign.append(f"{rel}: {cited}   ->   {sibling}")
                 continue
             # Then the snapshot exemption: a dated handoff records a past tree.
             if is_snapshot(rel):
                 snapshots.append(f"{rel}: {cited}")
                 continue
+            # ── COULD NOT LOOK, which is not the same answer as MISSING ─────────
+            # With no sibling tree beside us the cross-repo test above returned None
+            # for every candidate, so it did not separate anything -- it was switched
+            # off and still voting. Calling the remainder `missing` names OUR document
+            # as the defect, and the documented fix for that is to delete the citation,
+            # which is the one action that destroys a correct one. Say we could not
+            # look, and refuse on that instead.
+            if not siblings:
+                unclassified.append(f"{rel}: {cited}   ->   unresolved here: "
+                                    f"{', '.join(unresolved)}")
+                continue
             missing.append(f"{rel}: {cited}   ->   unresolved: {', '.join(unresolved)}")
-    return missing, artifacts, dead_out, total, snapshots, foreign
+    return missing, artifacts, dead_out, total, snapshots, foreign, unclassified
 
 
 def self_test() -> int:
@@ -395,8 +444,17 @@ def self_test() -> int:
     snap.write_text("a planted snapshot path: `tools/this-file-does-not-exist.py`\n",
                     encoding="utf-8")
     try:
-        missing, _artifacts, dead, total, snapshots, foreign = run(
+        missing, _artifacts, dead, total, snapshots, foreign, unclassified = run(
             extra_files=[planted, snap]
+        )
+        # THE SAME CORPUS WITH THE CROSS-REPO TEST BLINDED. A clone with no sibling tree
+        # beside it is the normal state for anyone who has just pulled this repo down,
+        # and until 2026-09-20 it turned two correct citations into a red gate naming our
+        # own documents. The verdict must change from "your citation is broken" to "I
+        # could not look", and it must still REFUSE -- a blinded class reporting clean is
+        # the failure this repo takes personally.
+        blind_missing, _a, _d, _t, _s, blind_foreign, blind_unclassified = run(
+            extra_files=[planted, snap], siblings=[]
         )
     finally:
         planted.unlink()
@@ -418,6 +476,18 @@ def self_test() -> int:
         ),
         "...and that snapshot is NOT reported as missing": not any(
             f"{tag}-snapshot.md" in m for m in missing
+        ),
+        "with NO sibling tree, the cross-repo class decides nothing": not blind_foreign,
+        "...so that citation is COULD-NOT-LOOK, not our broken path": (
+            any(f"{tag}.md" in u and "SPEC-KEYSTONE-PEER" in u
+                for u in blind_unclassified)
+            and not any("SPEC-KEYSTONE-PEER" in m for m in blind_missing)
+        ),
+        "...and a genuinely unresolvable path STILL fails, blinded or not": any(
+            f"{tag}.md" in m and "this-file-does-not-exist" in m for m in blind_missing
+        ) or any(
+            f"{tag}.md" in u and "this-file-does-not-exist" in u
+            for u in blind_unclassified
         ),
     }
     print(f"self-test: {total} citations extracted")
@@ -451,8 +521,11 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
+    siblings = sibling_dirs()
     try:
-        missing, artifacts, dead, total, snapshots, foreign = run()
+        missing, artifacts, dead, total, snapshots, foreign, unclassified = run(
+            siblings=siblings
+        )
     except Refusal as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -472,8 +545,14 @@ def main() -> int:
         f"citations: {total} in {len(files)} files "
         f"({len(files) - n_docs} declaration, {n_docs} docs)"
     )
-    checked = total - len(artifacts) - len(dead) - len(snapshots) - len(foreign)
+    checked = (total - len(artifacts) - len(dead) - len(snapshots) - len(foreign)
+               - len(unclassified))
     print(f"  source citations checked : {checked}")
+    # WHAT THE CROSS-REPO CLASS WAS DECIDED AGAINST, on every run including a clean one.
+    # `0 searched` and `0 found` print the same count and are opposite answers.
+    print(f"  sibling trees searched for the cross-repo class: {len(siblings)}"
+          + (f" ({', '.join(p.name for p in siblings[:6])}"
+             + (", ..." if len(siblings) > 6 else "") + ")" if siblings else ""))
     print(f"  build artifacts (not required to exist): {len(artifacts)}")
     print(f"  quoted as (dead) -- a path named because it is GONE: {len(dead)}")
     # Printed, never silent. An escape hatch that leaves no trace is a way to make a red
@@ -507,6 +586,27 @@ def main() -> int:
             "reader checks INSTEAD of re-deriving the claim."
         )
         return 1
+
+    # Reported AFTER `missing`, and with its own exit code, because the two are different
+    # claims: one says a citation is wrong, the other says this run could not tell.
+    if unclassified:
+        print()
+        for u in unclassified:
+            print(f"  COULD-NOT-LOOK  {u}")
+        print(
+            f"\nCITATIONS: COULD NOT LOOK -- {len(unclassified)} citation(s) do not "
+            "resolve in this tree, and there is no sibling tree beside it to decide "
+            "whether they are cross-repo."
+        )
+        print(
+            "This is NOT a verdict that they are broken. This repo generates onto peers "
+            "it does not produce, so some of its citations name another project's tree by "
+            "design; with nothing beside this checkout, that class cannot be separated "
+            "from a stale local path. Check the repo out next to the tree it builds on "
+            "(see README, 'This repo does not build from a clone on its own') and run "
+            "this again. Do NOT delete a citation on the strength of this message."
+        )
+        return 2
 
     print("\nCITATIONS: OK -- every cited source path resolves.")
     return 0

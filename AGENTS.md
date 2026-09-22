@@ -54,6 +54,38 @@ internals or open items; do not re-ask a question their spec already answers; do
 progress back to the operator.** They have their own seats. A session that ends with analysis of
 three other repos and nothing generated has failed, however correct the analysis was.
 
+## The public surface — the line a breaking verdict is measured against
+
+**This project's public surface is what it GENERATES and the data you author against it — never
+how it generates them.** Four things, and nothing else:
+
+1. **The extension contract format** — `extension-contracts/<ext>/EXTENSION.toml`, including its
+   declared blocks (`[requires]`, `[error_surface]`, `[sdk_surface]`, `[substrate]`) and what an
+   entry in each one means. This is what you write to add an extension.
+2. **The per-target profile format** — `languages/<target>/profile.toml`, and the target-major
+   layout it sits in: a new language is a new directory under `languages/`, discovered rather
+   than registered. This is what you write to add a language.
+3. **The Tier-1 `make` verbs and what they mean** — `help build test lint fmt check clean`, plus
+   `TARGET` and `COMPOSITION` as the two coordinates.
+4. **The installed extension's SDK surface, as far as it is DECLARED** — the names an
+   `[sdk_surface]` block lists as `required` are promised in every port. **Names under `drift`
+   are explicitly not promised** — that class is a dated list of differences nobody has decided
+   yet, and it exists to be resolved. Names under `substrate` are facts about one port.
+
+**Out, and they change without ceremony:** the drivers and build scripts, the gate probes and
+their arms, the extension cell sources, the host-side scripts under `tools/`, the gate verbs
+beyond the Tier-1 seven, the internal shape of a report, and everything under
+`languages/<target>/output/`.
+
+**Two boundaries that are easy to get backwards.** A generated peer's own interface is the peer
+generator's surface, not ours — we consume it. And a conformance figure is a measurement, not a
+promise: it can move in either direction without anything here breaking.
+
+Until a surface is named, every version argument about a repo is an opinion, so this is the
+line, and it is the one a `CHANGELOG` breaking verdict is measured against. **A version-bearing
+file inside this tree is not necessarily about this surface** — `.version-scope` at the root
+names the paths that version on their own axis and says which axis each one is.
+
 ## The keystone peer contract comes before the next extension (operator, 2026-09-13)
 
 **The process matters more than any one extension.** The goal:
@@ -66,12 +98,12 @@ three other repos and nothing generated has failed, however correct the analysis
 - **We are one consumer.** Anyone hand-writing an extension consumes a keystone peer the same way.
 
 **Where it stands:**
-- **The draft contract:** `docs/status/PROPOSAL-2026-09-13-the-keystone-peer-contract.md` — run ·
-  embed · extend · certify · deliver. It cites architecture's `SDK-OPERATIONS` §8/§11 and
+- **The draft contract** — run · embed · extend · certify · deliver, held internally while it is
+  still a draft. It cites architecture's `SDK-OPERATIONS` §8/§11 and
   `SYSTEM-COMPOSITION` §1–§2 as the interface rather than restating them.
 - **Keystone's work:** tracked as K-15…K-18.
 - **Architecture's rulings:** A-34…A-36.
-- **Our consumer side:** `docs/status/LEDGER-generator-open-work.md` W-16…W-20.
+- **Our consumer side:** W-16…W-20 on this project's internal open-work ledger.
 - **Consumed on `rust` (2026-09-13).** Keystone's `v2.0-draft.1` certifies `rust`; `make eligible`
   (first in `make check`) reads that report against each extension's `[requires]`, and the rust
   composed hosts are `run_host(argv, install)`. **Build on the surface the report NAMES, not the

@@ -27,8 +27,8 @@ it, and that is luck rather than method.
 Two copies of a contract is the summary-table failure D14 exists for, one artifact-kind up: the
 second copy is corrected by packet, drifts, and then reads as authoritative because it is the one
 in the tree you are already in. **We do not maintain a second copy.** The derivation and the
-measurements that produced H1–H5 are archived at
-`docs/archive/DRAFT-KEYSTONE-PEER-HOST-CONTRACT.md`; the requirement text is theirs.
+measurements that produced H1–H5 are kept in this project's own archive; the requirement text
+is theirs.
 
 ## What this repo holds instead
 
@@ -37,8 +37,7 @@ measurements that produced H1–H5 are archived at
   nothing (D13).
 - **The probes** — `languages/<t>/gates/host-seam/`, which measure behaviour against the contract
   rather than restating it.
-- **What our loader touches**, which is the façade question, routed 2026-09-09 —
-  `docs/outbox/ROUTING-2026-09-09-b-keystone-*`.
+- **What our loader touches**, which is the façade question, sent to that team on 2026-09-09.
 
 **H8 and H9 are readings this repo routed** and are now normative there. That is the loop working,
 and it is the reason not to keep our own copy: the contract improves in one place.

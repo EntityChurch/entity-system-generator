@@ -84,7 +84,7 @@ F. body = compute/literal{42}   (the floor)      200  value=42
 ```
 
 **Before the H7 seam landed this measured H7 absent** — the entity-native evaluator was not delegable, so model 3
-meant `compute/literal` and nothing else. Routed (`docs/outbox/ROUTING-2026-09-03-b-*`).
+meant `compute/literal` and nothing else. Sent to the peer generator's team.
 
 **With the seam in place H7 is SATISFIED, by execution.** `Peer.setExpressionEvaluator` is consulted after the
 built-in literal path and before the `501`. E's witness is **the computed sum `5`, read out of the

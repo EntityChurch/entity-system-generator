@@ -81,8 +81,16 @@ Build those in keystone first, per its own README. Without them you get
 `build: peer not found at $ROOT/../entity-core-keystone/protocol-generator/<language>`, which is
 the check doing its job rather than a broken clone.
 
-**What works with no sibling at all:** `make help`, `make toolchain`, and `make lint` — every
-host-side gate reads only this tree. That is the fastest way to confirm a checkout is sane.
+**What works with no sibling at all:** `make help` and `make toolchain`. That is the fastest way
+to confirm a checkout is sane.
+
+`make lint` is host-side and needs no container, but **one of its gates needs the sibling tree
+even though it never builds anything.** `make citations` checks that every path this repo's prose
+cites can be resolved, and a citation naming the peer generator's tree is a correct citation it
+cannot resolve on its own — so from a lone checkout it stops and says *could not look*, naming
+the citations it could not classify, rather than calling them broken. **Do not delete a citation
+on the strength of that message.** With the sibling checked out, `make lint` is clean and takes
+seconds.
 
 ```sh
 make help                                    # the verb list; the default goal

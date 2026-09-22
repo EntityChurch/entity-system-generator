@@ -41,8 +41,8 @@ Two neighbours, neither of them memory, and the distinction is load-bearing:
 Memory is where a finding waits **while it is still only prose**. It is not where findings
 retire. So the maintenance pass is not *"trim the file"*; it is, per entry: *could a test, a lint
 rule, a build assertion or a gate make this impossible instead of merely documented?* If yes,
-that is a work item on `docs/status/LEDGER-generator-open-work.md`, and when it lands the entry
-comes out, replaced at most by one line naming the check.
+that is a work item on this project's open-work ledger, and when it lands the entry comes out,
+replaced at most by one line naming the check.
 
 **This repo is unusually well placed to do that and has not yet done it here.** Every discipline
 below D13 already names an enforcement point, so the promotion question for most of these is not

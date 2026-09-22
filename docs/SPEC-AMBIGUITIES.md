@@ -80,8 +80,7 @@ $ grep -c 'path_required' specs/ENTITY-CORE-PROTOCOL.md
   `path_required` is not added — then every peer in the cohort emits a non-conformant code on a
   path the oracle gates, and the correct value becomes `400 invalid_request`. That is a wire
   change for every implementation, which is why it is routed rather than picked.
-- **Routed:** `docs/outbox/ROUTING-2026-09-06-b-arch-the-code-set-that-omits-the-code-it-musts.md`
-  (A-1), with two concrete asks. Tracked locally in
+- **Routed** to the specification authority (A-1), with two concrete asks. Tracked locally in
   `extension-contracts/content/EXTENSION.toml` `[error_surface].unresolved`, where
   `tools/check-error-codes.py --strict` turns it into a build failure the day it is pinned.
 
@@ -107,11 +106,9 @@ So the planning consequence, recorded here because this is the file that would o
 neglected: **a new language port is not how you find spec ambiguities. A new extension is.**
 Ports two and three earned their keep on the substrate axis instead —
 `extension-contracts/content/arch/AUTHORING-NOTES.md` §2 — and that is a different column in a different
-document. Full argument:
-`docs/archive/status/REVIEW-CYCLE-1-2026-09-06-content-across-three-ports.md` §1.
+document.
 
 ## Routed elsewhere
 
 Findings about a **peer** are not spec ambiguities and do not belong here. They go to
-`entity-core-keystone` as a routing packet and are then dropped — another repo's queue is not ours
-to track. Current: `docs/outbox/ROUTING-2026-09-05-keystone-three-from-the-first-generated-extension.md`.
+`entity-core-keystone` and are then dropped — another repo's queue is not ours to track.

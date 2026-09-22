@@ -120,7 +120,7 @@ cannot be added by us without patching the peer, which ends the cohort property.
 named), and fails H4** — while shipping as `PackageId = entity-core-protocol-csharp`, a library
 package whose entire public surface is its exception hierarchy.
 
-> **Fourth instance of the one error class, and the second by this seat.** keystone read `cpp`'s
+> **Fourth instance of the one error class, and the second of them ours.** keystone read `cpp`'s
 > symbol past a `private:`; we read `julia`'s export past a dead map; we then read `csharp`'s
 > `public` past an `internal` **on the enclosing declaration 154 lines above the line we cited**. The
 > access question is not *"is this member public"* — it is **"is this member reachable from outside

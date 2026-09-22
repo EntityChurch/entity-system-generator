@@ -1,0 +1,44 @@
+# .version-scope — which version-bearing paths are NOT this repo's release version.
+#
+# A SCOPE DECLARATION, NOT A MUTE SWITCH. Everything named here still has a version and
+# still has to be right; it is just answerable on a DIFFERENT AXIS, so requiring it to
+# equal this repo's release number would be asking two questions and accepting one answer.
+# Whatever is excluded is printed on every run, including a clean one.
+#
+# This repo's release version lives in exactly two places, both in scope:
+#   VERSION            the number of record
+#   CHANGELOG.md       the top version heading, which must agree with it
+#
+# ── the three extension cells ────────────────────────────────────────────────────────
+#
+# `languages/rust/extensions/<ext>/Cargo.toml` carries the EXTENSION SPECIFICATION REVISION
+# the cell was authored against, not a number about this repo:
+#
+#   content  3.6.0    written against EXTENSION-CONTENT v3.6
+#   history  1.7.0    written against EXTENSION-HISTORY v1.7
+#   compute  3.29.0   written against EXTENSION-COMPUTE v3.29
+#
+# Every one of them is `publish = false`. A cell is staged out of this tree and compiled
+# inside a generated peer; nothing is distributed under these names and nothing outside the
+# tree resolves them. The `typescript` and `python` cells carry no manifest at all — theirs
+# is synthesised at composition time — so `rust` is the only target where this axis is even
+# visible on disk, which is why three files appear here and nine cells do not.
+#
+# ⚠ TWO OF THE THREE ARE STALE AGAINST THE CURRENT PIN. `shared/spec-data/` is pinned at
+# EXTENSION-CONTENT v3.7 and EXTENSION-HISTORY v1.10, and neither cell version moved with
+# the re-pin. This declaration does NOT fix that, and is not meant to: it says the
+# disagreement is with the extension contract, not with the release. Only `compute` (3.29.0
+# against v3.29) currently states its revision correctly.
+#
+# The glob, not the three paths: the axis belongs to "an extension cell", so a fourth
+# extension or a fourth target inherits the ruling instead of silently refusing a cut.
+languages/*/extensions/*/Cargo.toml
+
+# ── the gate probe crates ────────────────────────────────────────────────────────────
+#
+# `languages/rust/gates/<gate>/Cargo.toml` are the probes and their compile-fail controls —
+# `host-seam`, `chunking-parity`, `type-parity`. All `publish = false`, all built only by
+# the gate driver that expects their result, none reachable from outside this tree. They
+# read `0.0.0` deliberately: a probe makes a claim about a peer, never about itself, and a
+# number there would be one more thing to keep true for no reader.
+languages/*/gates/*/Cargo.toml

@@ -116,9 +116,10 @@ ecosystem — but this repo earns its own numbers on its own incidents.
   is a fact about the **generator's input set**, not about the specification. This repo produces
   cohorts; it will produce that error. **And we did, in the plainest form available (AP-34,
   2026-09-10):** a `[substrate]`-shaped assumption in `extension-contracts/compute/EXTENSION.toml`
-  claimed the peer exposed no path-scope capability predicate — **while our own
-  `TRACKER-entity-core-keystone.md` carried that predicate as H9, landed, CLOSED, routed by this
-  seat.** One tree, two answers, and nothing joins a tracker row to an assumption block. The rule
+  claimed the peer exposed no path-scope capability predicate — **while our own record of what we
+  had already settled with the peer generator's team carried that predicate as landed and closed,
+  on a question we raised ourselves.** One tree, two answers, and nothing joins that record to an
+  assumption block. The rule
   that follows is cheap: **an assumption whose subject is a sibling repo's API names the packet that
   established it**, so the reader lands on the ledger row rather than on a sentence.
 - **L7** — *check the toolkit before you build.* `validate-peer` is 66,651 lines and already covers

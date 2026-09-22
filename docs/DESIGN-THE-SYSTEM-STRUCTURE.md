@@ -198,8 +198,8 @@ genuinely different procedures, and that is the ecosystem polish this layout exi
 
 **The projection, which is why this is worth doing at three targets rather than at forty:**
 `host-seam` at its current shape is ~490 lines per target, or **~19,600 lines at forty targets**.
-At `chunking-parity`'s shape it is ~47 per target, or ~1,900. That refactor is the next session's
-(`docs/archive/status/HANDOFF-2026-09-06-c-*`), and it is deliberately not rushed: those probes are the
+At `chunking-parity`'s shape it is ~47 per target, or ~1,900. That refactor is queued and is
+deliberately not rushed: those probes are the
 D13 instruments that produce every measured capability claim in this tree, and a refactor that
 quietly changes what they measure is worse than the duplication.
 

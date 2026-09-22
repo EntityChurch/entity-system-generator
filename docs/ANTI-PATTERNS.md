@@ -565,8 +565,8 @@ printing the input to the verdict. **One instrument, two instances, recorded not
 object — the instrument — and every one of them found by running it rather than by reading it.)*
 *(AP-8 is the third instrument shape and it sharpened `D15` rather than founding a discipline:
 every instrument this repo writes now ships with a **refusal**, not only a control. See
-`AGENTS.md` D15, and the five-for-five tally in
-`docs/archive/status/REVIEW-CYCLE-1-2026-09-06-content-across-three-ports.md` §5.2.)*
+`AGENTS.md` D15; the five-for-five tally behind it is in the internal review of the first
+three ports.)*
 
 *(**AP-9 is a CANDIDATE, deliberately not promoted.** Its mechanism is D14's second one — a fact
 copied into a document that outlives it, with the copy reading as authority — in a third shape:
@@ -1121,8 +1121,8 @@ live numbers rather than asserting them.
 
 **Found:** 2026-09-09, by reading the charter against the build rather than either on its own.
 The previous session had flagged it in a handoff as *"the charter contradiction is still
-open"* and had not been able to close it, because closing it needed a ruling this seat does
-not have.
+open"* and had not been able to close it, because closing it needed a ruling that is not this
+project's to make.
 
 **What happened.** `AGENTS-STANDARD.md` says *"the host needs only `make` + `podman`."*
 `AGENTS.md` restates it. `Makefile` line 3 restated it. Meanwhile:
@@ -1161,7 +1161,7 @@ declaring it, and its scope is not this repo's to rule on.
 **Which sharpens the entry rather than softening it.** There are two failures here and the
 second is the one this catalog is for: we do not hold our own toolchain standard, *and* the
 build's real dependencies were stated nowhere while a false statement about them sat in three
-places. The first is project-wide and above this seat. The second is local, is what made the
+places. The first is wider than this project and not ours to rule on. The second is local, is what made the
 next dependency uncatchable, and is what the enforcement point below fixes.
 
 **The near miss, on the day.** The one genuine third-party dependency in the tree is loaded
@@ -1604,17 +1604,15 @@ with the consequence stated plainly — *a caller who can reach `system/compute:
 tree path* — filed as a substrate gap, marked `gap` in `[conformance]`, and named in `sdk.ts` as
 `CAPABILITY_CHECK_IS_DISPATCH_SCOPED = true`.
 
-**The predicate is public on that peer and this seat is the one that routed it.**
+**The predicate is public on that peer, and we are the ones who raised it.**
 `Permissions.checkPathPermission(operation, path, token, handlerPattern, localPeerId)` is exported,
 takes a `CapabilityToken`, and is `ENTITY-CORE-PROTOCOL` §6.3's primitive by name. We routed its
 ABSENCE on the `python` peer as **H9**
 (`ROUTING-2026-09-06-d-keystone-the-emit-event-carries-no-execution-context.md` §H9), watched it
 land, and wrote the closure ourselves:
 
-```
-$ grep -n 'check_path_permission' docs/status/TRACKER-entity-core-keystone.md
-78: | `check_path_permission` exists on one peer and not the other — ... | **CLOSED.** Landed as **H9**, public ...
-```
+Our own record of what we had settled with that team already carried the row, closed:
+*`check_path_permission` exists on one peer and not the other* — landed as **H9**, public.
 
 So the tree carried, at the same time, a closed tracker row saying the primitive is public and a
 contract saying it does not exist. **Nothing could compare them**: `check-citations.py` checks that

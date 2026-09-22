@@ -118,7 +118,8 @@ exposure is.
 **Ratified 2026-09-11 on two incidents in two shapes, one day apart, both ours, and neither
 found by reading the sentence.** Evidence: `docs/ANTI-PATTERNS.md` **AP-34** (a contract entry
 claiming keystone's peer exposed no path-scope capability predicate — **contradicted by our own
-CLOSED tracker row**, H9, routed by this seat) and **AP-36** (ten sites claiming *"`validate-peer`
+record of the same question, which we had raised and closed ourselves**) and **AP-36** (ten sites
+claiming *"`validate-peer`
 runs against a host launched with `--debug-open-grants`"* — **explained by our own
 `tools/host-launch:137`**, which is the line that passes it; the oracle dials `-addr` and launches
 nothing).
@@ -131,7 +132,7 @@ mechanism was misattributed, and nothing joined the claim to the line that produ
 
 | the claim is about | ask, before writing it |
 |---|---|
-| a sibling's API **existing** | does a tracker row, a routing packet or a closed ask in *our* `docs/status/` already answer this? (AP-34) |
+| a sibling's API **existing** | does something we already settled with them — a question we raised, or one they answered — already answer this? (AP-34) |
 | a sibling's instrument **doing or not doing** something | **what INVOKES it, and is the invocation ours?** (AP-36) |
 | a sibling's instrument's **coverage** | is the gap in their check set, or in the CONFIGURATION we hand it? |
 

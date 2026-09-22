@@ -35,8 +35,8 @@ module, at a **dispatch-path** boundary: the symbol was reachable, something did
 consultation led to a branch that answers `501`. The first three layers ask *can the call be made*;
 Reach asks *does making it accomplish anything*. **A call site is not a capability** — it is the
 same sentence as the Read row, one level further down, and stating it in terms of symbols is why the
-existing rows did not catch it. Cited: `docs/DESIGN-THE-COMPUTE-TRACK.md` §1,
-`ROUTING-2026-09-03-b` §4.
+existing rows did not catch it. Cited: `docs/DESIGN-THE-COMPUTE-TRACK.md` §1, and the finding we
+sent the peer generator's team about the evaluator seam.
 
 **And four layers green is still not the property.** The property is *an EXECUTE to the pattern
 reaches the installed body*, which only execution settles. **Source reads decide what to build; they

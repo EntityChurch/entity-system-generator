@@ -10,6 +10,31 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 First publication. Nothing in this project has been released before, so everything below is
 new rather than changed.
 
+**Breaking:** no — first public release. There is no prior version of this project, so there
+is nothing an existing caller could be relying on and nothing to break. The number is a `0.x`
+one because the shape is still moving: three extensions of twenty-six, three languages of
+forty-six, and a peer contract still being agreed with the generator this repo builds on.
+
+**What this release promises to keep** is what it *generates* and the data you author against
+it — never how it generates them. Four things: the extension contract format
+(`extension-contracts/<ext>/EXTENSION.toml`) and what its declared blocks mean; the per-language
+profile format (`languages/<target>/profile.toml`) and the layout it sits in, so a new language
+is a new directory rather than an entry on a list; the `make` verbs `help build test lint fmt
+check clean` with `TARGET` and `COMPOSITION` as the two coordinates; and the SDK names an
+extension declares as `required`, which are promised in every port. Names an extension declares
+as `drift` are a dated list of unresolved differences and are explicitly **not** promised.
+
+The generator's own internals — the drivers, the gate probes, the cell sources, the host-side
+scripts and everything under `languages/<target>/output/` — are **not** in that surface and will
+change without ceremony. Nor is a generated peer's own interface, which belongs to the project
+that produces the peer; this one consumes it. `AGENTS.md` carries the same line in full.
+
+**On the version numbers inside this tree.** The three Rust extension cells carry the
+extension-specification revision they were authored against (`3.6.0`, `1.7.0`, `3.29.0`), and
+the gate probe crates carry `0.0.0` because a probe makes a claim about a peer and never about
+itself. None of those is this project's release number, none is published under its own name,
+and `.version-scope` at the repo root records which paths version on which axis and why.
+
 ### Added
 
 - **Three standard extensions, implemented across three languages, installed onto generated
