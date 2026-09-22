@@ -20,6 +20,17 @@ reading every check body in the oracle, `cmd/internal/validate/content.go` @ `ed
 | **measures the oracle's own library** | **4** | `inline_include_at_threshold` · `inline_include_above_threshold` (both call `exerciseInlineInclude`, which builds an in-memory store and never contacts the peer) · `descriptor_presence_rule` · `descriptor_integrity_check` (both call `content.ValidateDescriptor` in-process) | 4 PASS, **inattributable**. They would pass against a bare peer, an empty peer, or no peer. |
 | **declared skip** | **1** | `frame-limit-respected` | needs a writable `local/files` root to seed >16 MiB of content. A CONTENT-only composition has no way to provide one. **The surface is untested.** |
 
+> **CORRECTION, 2026-09-06.** The row labelled *"measures our handler"* is **8**, and the
+> count is right. The label is not: **5 of the 8 measure the handler face and 3 —
+> `type_blob`, `type_chunk`, `type_descriptor` — measure the TYPES face.** On this peer
+> both faces install, so nothing distinguished them and the conflation cost nothing.
+> `rs-content` is where it stops being free: on that peer the types face installs and the
+> handler face cannot, and exactly the 3 pass while exactly the 5 do not. That is a
+> measurement, not a re-reading — see
+> `compositions/rs-content/status/CONFORMANCE-2026-09-06.md` §3.1. **No number in this
+> document changes.** The honest phrasing is *"8 measure our module — 5 the handler, 3 the
+> types"*.
+
 **So the honest sentence is: 8 of the 8 checks that measure this handler pass; 4 more passed
 without measuring it; one MUST is unexercised.** The 8/4/1 split was predicted before the run,
 in `compositions/ts-content/SYSTEM.toml [gate.expectation]`, and the run matched it.

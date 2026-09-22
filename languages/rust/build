@@ -1,0 +1,184 @@
+#!/bin/sh
+# languages/rust/build — stage and compile ONE composition. Language-major: one copy,
+# shared by every extension, forever.
+#
+#   build <composition-name>
+#
+# The three drivers now span the whole compilation axis, and the differences are the
+# retarget result rather than an inconvenience:
+#
+#   typescript  tsc x 2        -- full typecheck; a staleness gate, because it LINKS a
+#                                 build artifact and measuring a stale one gates the past
+#   python      no compile     -- stage + an import check; NO staleness gate, deliberately,
+#                                 because the source IS the artifact
+#   rust        cargo x 2      -- full typecheck AND a linked binary; the staleness gate
+#                                 is back, and it is CARGO'S, which is the whole point
+#
+# That last row is why this driver is shorter than `typescript`'s despite compiling
+# more. `typescript`'s freshness check is hand-written (`find src -newer dist`, and it
+# was written wrong the first time -- AP-4, comparing against a DIRECTORY's mtime).
+# Cargo already tracks per-file mtimes and fingerprints across a path dependency, so
+# re-deriving that here would be a second implementation of a mechanism the toolchain
+# owns. What this driver DOES check is the one thing cargo cannot see: that the peer's
+# source tree is present and is the one the plan names.
+#
+# Reads the RESOLVED PLAN (output/<composition>/PLAN.json), so the composition-time
+# refusals -- I6 pattern collision, I7 namespace overlap, I9 unmet dependency -- have
+# already happened before anything is staged.
+
+set -eu
+
+COMP="${1:?usage: build <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+PLAN="$ROOT/output/$COMP/PLAN.json"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -f "$PLAN" ] || { echo "build: no resolved plan at $PLAN" >&2
+  echo "  run: ./tools/compose.py compositions/$COMP" >&2; exit 2; }
+
+plan_field() { python3 -c '
+import json, sys
+plan = json.load(open(sys.argv[1]))
+value = plan
+for key in sys.argv[2].split("."):
+    value = value.get(key) if isinstance(value, dict) else None
+sys.stdout.write("\n".join(value) if isinstance(value, list) else str(value or ""))
+' "$PLAN" "$1"; }
+
+LANGUAGE="$(plan_field language)"
+[ "$LANGUAGE" = "rust" ] || { echo "build: plan language is '$LANGUAGE', not rust" >&2; exit 2; }
+
+PEER_REL="$(plan_field peer.path)"
+PEER="$(cd "$ROOT/$PEER_REL" 2>/dev/null && pwd)" || {
+  echo "build: peer not found at \$ROOT/$PEER_REL" >&2; exit 2; }
+[ -f "$PEER/Cargo.toml" ] || { echo "build: peer has no Cargo.toml at $PEER" >&2; exit 2; }
+
+# The offline crate mirror. It is keystone's gitignored `cargo vendor` output and it is
+# READ-ONLY: without it a --network=none build cannot resolve ed25519-dalek/sha2, and
+# with it nothing is fetched. Missing it must be LOUD rather than fall back to the
+# network, because a build that silently went online is not the build we claim to run.
+VENDOR="${VENDOR_DIR:-$PEER/output/vendor}"
+[ -d "$VENDOR" ] || { echo "build: no vendored crate mirror at $VENDOR" >&2
+  echo "  It is keystone's offline build material (their run-s4.sh produces it)." >&2
+  exit 2; }
+
+# SET UNCONDITIONALLY, NOT `${CARGO_HOME:-...}`.
+#
+# The toolchain image declares `ENV CARGO_HOME=/cargo`, so a `:-` default never fires
+# and every driver silently used the image's path instead of ours. `build` and `test`
+# still worked -- they WRITE the vendor config, and inside one container they wrote it
+# to `/cargo` and then read it back -- so the defect was invisible until `host-launch`
+# ran in a fresh container and tried to READ a config no one in that container had
+# written. It failed as "no matching package named ed25519-dalek", which reads as a
+# missing crate rather than a misdirected CARGO_HOME.
+#
+# An inherited environment variable beating our default is a drift D14 is about: the
+# value was set in two places and the one that won was not the one this repo declares.
+CARGO_HOME="$ROOT/output/.cargo-home"
+export CARGO_HOME
+export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$ROOT/output/$COMP/target}"
+mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+cat > "$CARGO_HOME/config.toml" <<EOF
+[source.crates-io]
+replace-with = "vendored-sources"
+[source.vendored-sources]
+directory = "$VENDOR"
+EOF
+
+echo "build: composition=$COMP peer=$PEER"
+
+# ---- stage -----------------------------------------------------------------
+# `rm -rf` the CELLS and the host, never the target dir: cargo's incremental state is
+# the reason a re-run is 3 s instead of 40, and blowing it away every build is how a
+# driver acquires a reputation for being slow enough to skip.
+rm -rf "$STAGE/cells" "$STAGE/host"
+mkdir -p "$STAGE/cells" "$STAGE/host/src"
+
+CELLS="$STAGE/.cells"
+python3 - "$PLAN" > "$CELLS" <<'PY'
+import json, sys
+plan = json.load(open(sys.argv[1]))
+for install in plan["installs"]:
+    print(install["extension"] + "\t" + install["cell"])
+PY
+
+# Read from a file rather than a pipeline: `cmd | while read` puts the loop in a
+# subshell where `set -e` cannot abort the parent, so a failure inside would print and
+# the build would carry on to report OK.
+DEPS=""
+while IFS="$(printf '\t')" read -r EXT CELL; do
+  [ -n "$EXT" ] || continue
+  SLUG="$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')"
+  cp -R "$ROOT/$CELL" "$STAGE/cells/$SLUG"
+  # The cell's own Cargo.toml points at the peer by a relative path that was correct
+  # in `extensions/content/rust/`. It is not correct here, and a stale relative path
+  # would resolve to some other directory rather than fail -- so it is rewritten to the
+  # absolute peer path, once, at stage time.
+  python3 - "$STAGE/cells/$SLUG/Cargo.toml" "$PEER" <<'PY'
+import re, sys
+path, peer = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+text = re.sub(
+    r'entity-core-protocol-rust\s*=\s*\{\s*path\s*=\s*"[^"]*"\s*\}',
+    f'entity-core-protocol-rust = {{ path = "{peer}" }}',
+    text,
+)
+open(path, "w", encoding="utf-8").write(text)
+PY
+  DEPS="$DEPS
+entity-content = { path = \"../cells/$SLUG\" }"
+  echo "build: staged $EXT -> cells/$SLUG"
+done < "$CELLS"
+rm -f "$CELLS"
+
+# ---- the composition host --------------------------------------------------
+# Its own crate, depending on the cells BY NAME. Compiling the host and the cells as one
+# crate would resolve every path internally and prove the symbol is reachable in the
+# source tree -- D13's Access row, cheapest wrong answer. Across a crate boundary the
+# host sees exactly what `pub` says it sees.
+cp "$ROOT/compositions/$COMP/host.rs" "$STAGE/host/src/main.rs"
+cat > "$STAGE/host/Cargo.toml" <<EOF
+# GENERATED by languages/rust/build. Do not edit; regenerated every build.
+[package]
+name    = "composed-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Explicit and empty: without it cargo walks UP looking for a workspace root, and a
+# Cargo.toml appearing anywhere above output/ would silently absorb this package.
+[workspace]
+
+[[bin]]
+name = "composed-host"
+path = "src/main.rs"
+
+[dependencies]
+entity-core-protocol-rust = { path = "$PEER" }$DEPS
+EOF
+
+# ---- compile ---------------------------------------------------------------
+# `--locked` on the peer's own manifest: the peer's Cargo.lock is ANOTHER TEAM'S FILE
+# and cargo will rewrite it given the chance. This build must not write into their tree
+# even by one line, so a resolution that would change the lock fails instead.
+echo "build: compiling the cells"
+for CELLDIR in "$STAGE"/cells/*; do
+  [ -d "$CELLDIR" ] || continue
+  ( cd "$CELLDIR" && cargo build --offline --quiet )
+  echo "build:   $(basename "$CELLDIR") OK"
+done
+
+echo "build: compiling the host"
+( cd "$STAGE/host" && cargo build --offline --quiet )
+
+# `git status` on the peer is not paranoia. `AGENTS.md` makes keystone read-only, and a
+# cargo invocation against their manifest is exactly the operation that would write a
+# Cargo.lock without anyone noticing. This is the check that would catch it.
+if command -v git >/dev/null 2>&1 && [ -d "$PEER/../../.git" ]; then
+  DIRTIED="$(cd "$PEER" && git status --porcelain -- Cargo.lock 2>/dev/null || true)"
+  [ -z "$DIRTIED" ] || { echo "build: REFUSING -- this build modified the peer's Cargo.lock:" >&2
+    echo "  $DIRTIED" >&2
+    echo "  keystone is another team's tree and is read-only (AGENTS.md)." >&2; exit 1; }
+fi
+
+echo "build: OK -> $STAGE"

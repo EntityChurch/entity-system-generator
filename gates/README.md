@@ -19,10 +19,41 @@ assertion we wrote ourselves has nothing watching it.
 | **`extension-conformance`** | **`entity-core-go`'s `validate-peer`** — the oracle, because it is not the thing under test. The 52 extension categories | `validate-peer -category <ext>` against a running composed peer | owed | not yet run |
 | **`core-regression`** | same oracle, `--profile core` — keystone's 16 | `validate-peer --profile core`, re-run after installing | owed | not yet run |
 | **`host-seam`** | `GUIDE-CONFORMANCE` §7d (arch, proposed) + the keystone peer host contract **H1–H7** | `host-seam/probe-seam.mjs` (H1/H2/H6, model 2) · `host-seam/probe-entity-native.mjs` (**H7**, model 3) | owed — keystone's, `go`/`rust`/`python` first | **1 peer measured, both probes; H1/H2/H6/H7 green there, 45 `unknown`** |
+| **`sdk-surface`** | **OURS, and deliberately so.** arch does not mandate the SDK surface and that is correct — conformance lives on the wire. But we generate N ports of one extension and want them to be the same extension | `tools/sdk-parity.py` against `EXTENSION.toml [sdk_surface]` | n/a — per extension, language-neutral | **built 2026-09-06, in `make check`.** First run: 24 required · 9 substrate · **18 drift** · 0 undeclared |
+| **`chunking-parity`** | `EXTENSION-CONTENT` §3.7 — §3.2/§3.6 are **Conformance** algorithms. **Nothing upstream measures it**: no oracle check chunks anything (`ed9b547`), and §3.6.5's vectors do not exist yet | one corpus → `gates/chunking-parity/probe.{mjs,py,rs}` → `compare.py` | `make parity`, all staged ports | **built 2026-09-06.** 3 ports agree on all 6 fields |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
 
-## The two entries that need explaining
+## The three entries that need explaining
+
+**`sdk-surface` is ours and it arrived two ports late, which is D16.** The rule at the top of
+this file — *the axis with no external authority is the one whose checks go stale* — was
+written here, applied to `isolation`, and then **not applied to the SDK face**. Three ports
+shipped before anything looked, and 18 undeclared differences had accumulated. No existing
+instrument could have caught them: each port passes its own suite, the oracle is a wire client
+that never sees an in-process surface, and the host-seam probes measure the peer rather than
+us. `DESIGN-THE-SDK-LAYER.md` §1.1a's *"the extension is the instrument"* is true about
+**conformance** and we let it stand in for **consistency**; the handler's gated path does run
+through the SDK face, and that says nothing about whether three ports expose the same names.
+**D16 is the rule that earns: an axis with no upstream authority gets its gate at the SECOND
+implementation, not when someone notices.**
+
+Its `drift` class is not a blessing. It ships green with all 18 named and dated, and
+`--strict-drift` turns every entry into an error the moment they are resolved — a gate that
+ships red gets disabled (AP-4), and one that ships green by blessing everything measures
+nothing.
+
+**`chunking-parity` is the one axis here whose authority is upstream but whose instrument
+does not exist upstream.** §3.7 makes §3.2/§3.6 Conformance algorithms and a divergence
+between two of them **does not fail loudly** — every blob still reassembles and the peers
+simply stop deduplicating, with no error and no status code. Checked at `ed9b547`: not one of
+the oracle's 13 `content` checks chunks anything, and §3.6.5's cross-impl vectors are named in
+the spec as a Stage-4 byproduct that does not exist. So this is not a second scorer competing
+with the oracle (which `composition-ordering` correctly refuses to be) — it is an instrument
+for a surface the oracle does not cover at all, and its output is the shape §3.6.5 would need.
+**Offered to arch as a head start, not proposed as a spec change.**
+
+## The other two entries that need explaining
 
 **`isolation` is ours and has no upstream instrument**, which by the rule above makes it the axis most
 likely to rot. It is unavoidable: nothing outside this repo can check that a generated module stayed
@@ -69,6 +100,16 @@ Inherited from keystone's ratchet, each earned on one of their measured incident
   turns an H4 failure into a passing probe.
 - **Both controls or it measures nothing.** The positive must carry a witness the wrong
   implementation cannot produce; the negative must go RED.
+- **And a REFUSAL as well as a control** (D15, sharpened 2026-09-06). A control proves the
+  instrument *can* go red on a planted defect. A refusal fires when it **cannot answer at
+  all** — a parse yielding zero units, a comparison with fewer arms than the verdict needs, a
+  missing input it would otherwise skip. That is a different failure and it is the one that
+  presents as success. Five instruments written in this repo, five with a defect found by
+  running them; **the two that caught themselves are the two that shipped with a refusal.**
+- **A normaliser preserves every distinction its sources can express** (AP-8). `sdk-parity`
+  compares `(kind, snake_case)` because lowercasing collapsed `Blob` and `BLOB` into one key
+  and reported agreement across three ports that was not there. A lossy key moves the answer
+  in the *agreeing* direction, and agreement is what gets published.
 - **When the claim is that an installed thing gets consulted, "absent" is not the only alternative
   to "works."** The third state is *installed, live, and never asked*, and only a fourth control
   separates it: call the installed thing **directly** and require it to answer. Earned on

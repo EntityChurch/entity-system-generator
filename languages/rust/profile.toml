@@ -1,0 +1,105 @@
+## languages/rust/profile.toml — the toolchain facts for ONE language.
+##
+## THIRD LANGUAGE, and the first one that breaks the shape the first two shared.
+## Compare `../typescript/profile.toml` and `../python/profile.toml`: the FIELDS were
+## the same across those two, which is what "the language axis is a profile, not a
+## rewrite" meant. Here the fields are still the same — and one of them, `[gate]
+## host_entry`, has a value that changes what the composition can claim, because on
+## this peer a handler body cannot be installed at all.
+##
+## That is not a defect in the layout. It is the layout doing its job: the thing that
+## differs is recorded as a VALUE in the one place per language, rather than as a
+## special case in a driver.
+
+[language]
+name        = "rust"
+packaging   = "crate"
+compilation = "aot"          # ← the axis two dynamic substrates could not vary.
+                             # Everything below that differs from `python` differs
+                             # because of this one word.
+
+# THE BOUNDARY IS THE CRATE, AND THE COMPILER ENFORCES IT.
+# Three ports, three mechanisms for the SAME §3.4 MUST:
+#   typescript — the `exports` map; node refuses a deep import at resolve time.
+#   python     — convention; nothing refuses anything.
+#   rust       — the absence of `pub`; rustc refuses at COMPILE time, `error[E0603]`,
+#                and there is no dynamic route around it at all.
+# This is the strongest of the three on §3.4's FIRST clause and the weakest on its
+# SECOND (the capability-checking wrapper) — see EXTENSION.toml [substrate.export_boundary].
+boundary    = "the crate: `mod internal;` without `pub`. Enforced by rustc (E0603)."
+
+[toolchain]
+image = "localhost/entity-core-keystone/rust-toolchain:latest"
+# ANOTHER TEAM'S IMAGE, used read-only and recorded as a dependency rather than
+# assumed. Same stance as the other two: the peer under test is built by that
+# toolchain, and compiling our extension against a different rustc would measure a
+# combination nobody ships.
+rust    = "1.96.1"           # the image's pinned distro NVR; the peer's Cargo.toml
+                             # asserts `rust-version = "1.96"` and this is what proves it
+edition = "2021"             # the peer's edition. Ours matches it deliberately: an
+                             # edition skew changes name resolution and closure capture,
+                             # and neither should differ between a peer and a module
+                             # compiled into the same binary.
+
+[deps]
+# We add NOTHING beyond what the peer already pulls. The extension's only import is the
+# peer -- plus `sha2`, which is NOT an addition: the §3.6.1 gear table needs SHA-256,
+# the peer already pins `sha2 = "=0.10.9"`, and the cell pins the SAME version so cargo
+# unifies them into one build of one crate. A different version would compile silently.
+runtime = ["sha2 = \"=0.10.9\"  (identical to the peer's pin; unified, not added)"]
+dev     = []
+
+[build]
+# THREE COMPILES, and the middle one is the point.
+#
+#   1. each extension cell     -> an rlib, as its own crate
+#   2. the composition host    -> a binary that depends on those crates BY NAME
+#   3. `cargo test` per cell   -> integration tests in tests/, which see only `pub`
+#
+# Compiling the cell and the host as ONE crate would resolve every path internally and
+# prove the symbol is reachable in the source tree, which D13's Access row calls the
+# cheapest wrong answer. Separate crates means the crate boundary -- which in this
+# language IS the packaging boundary -- decides what the host can see.
+stage    = "output/<composition>/build"
+offline  = true              # --network=none. The crate closure comes from keystone's
+                             # own `cargo vendor` mirror, mounted read-only. Nothing is
+                             # fetched and nothing in their tree is written.
+compile  = true
+vendor   = "../entity-core-keystone/protocol-generator/rust/output/vendor"
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+oracle_bin = "../entity-core-keystone/output/s4-oracles/validate-peer"
+host_entry = "host/target/debug/composed-host"
+# Speaks keystone's host CLI verbatim: --port / --name / --debug-open-grants /
+# --validate, and a single `LISTENING ...` readiness line on stdout.
+
+[extension_host]
+# Facts about THIS peer that an extension module has to be built around. Every row was
+# MEASURED by `gates/host-seam/rust/` -- half of it by a running program, half by rustc,
+# because on an AOT substrate "is the symbol there" is not a runtime question.
+#
+# keystone carries an [extension_host] block on `typescript` and `python` only; the
+# other 44 read `unknown`. These values are ours until they carry one here.
+registration_surface = "none"          # and not in the `python` sense. `python` has no
+                                       # registerHandler but the caller can perform all
+                                       # four §11.6.1 writes AND bind a body. Here the
+                                       # fifth step has no destination at any visibility.
+handler_install      = "IMPOSSIBLE"    # probe scenario 1: 501 no_handler_body with all
+                                       # four tree writes bound; 404 with none. Both arms.
+ctx_type             = "none"          # the dispatcher passes (&mut Conn, &Envelope) to
+                                       # PRIVATE code. There is no context type to receive.
+outcome_exported     = false           # error[E0603]: struct `Outcome` is private
+emit_consumer        = "Store::register_tree_consumer"   # ← AND THIS ONE IS LIVE.
+                                       # Measured with two negatives: no consumer -> 0
+                                       # events, and an identical re-bind -> no event.
+                                       # One peer, one extension, TWO faces, two answers.
+type_publication     = "Store::bind"   # public; the one install face that works
+frame_budget         = "wire::MAX_FRAME (a public const, NOT configurable)"
+                                       # 16,777,216 -- the exact literal CONTENT Am. 1
+                                       # names as the wrong answer. But it is also the
+                                       # bound `read_frame` actually enforces, and there
+                                       # is no other, so a body reading it reads the
+                                       # truth. Degenerate satisfaction, not a violation.
+                                       # Routed as "make it configurable", not as K-1's
+                                       # "unimplementable". Different packet, on purpose.

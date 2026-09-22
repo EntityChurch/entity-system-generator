@@ -142,6 +142,53 @@ def check_snapshots(resolved: list[dict]) -> list[dict]:
     return out
 
 
+#: The four faces of an extension (`docs/DESIGN-THE-SDK-LAYER.md` §1) and the states a
+#: composition may declare for each. **Added at the third composition, and the reason is
+#: a measurement rather than a design idea**: on the `rust` peer the faces do not get the
+#: same answer -- types and emit install, the handler body cannot be installed at any
+#: visibility (`gates/host-seam/rust/`, 501 with all four §11.6.1 tree writes bound).
+#:
+#: The first two compositions did not need this because on both peers all four faces were
+#: available, so "the composition installs CONTENT" was unambiguous. It is not unambiguous
+#: any more, and the cost of leaving it implicit is a report that reads as a full install.
+FACES = {"types", "handler", "emit_consumer", "sdk"}
+
+#: `not-installable` is the load-bearing one. It is NOT `not-installed`: the difference is
+#: between a choice and a substrate fact, and only the first is revisitable.
+FACE_STATES = {
+    "installed",
+    "not-installed",
+    "not-installable",
+    "available-unused",
+    "library-only",
+}
+
+
+def check_faces(sys_block: dict, comp_name: str) -> dict:
+    """Validate `[system.faces]`, and REFUSE a composition that claims a face it also
+    declares unavailable.
+
+    Optional: the two compositions that predate it declare no block and resolve exactly
+    as before, which is what keeps this from being a retroactive rewrite of their plans.
+    """
+    faces = sys_block.get("faces")
+    if faces is None:
+        return {}
+    unknown = set(faces) - FACES
+    if unknown:
+        raise Refusal(
+            f"{comp_name}: [system.faces] names {sorted(unknown)}, which are not faces. "
+            f"The four are {sorted(FACES)} (DESIGN-THE-SDK-LAYER §1)."
+        )
+    for face, state in faces.items():
+        if state not in FACE_STATES:
+            raise Refusal(
+                f"{comp_name}: [system.faces].{face} = {state!r} is not a declared state. "
+                f"One of {sorted(FACE_STATES)}."
+            )
+    return dict(faces)
+
+
 def build_plan(comp_dir: Path) -> dict:
     system = load_toml(comp_dir / "SYSTEM.toml")
     sys_block = system.get("system", {})
@@ -158,6 +205,8 @@ def build_plan(comp_dir: Path) -> dict:
     if not language:
         raise Refusal(f"{comp_dir.name}: [system.peer].language is required")
 
+    faces = check_faces(sys_block, comp_dir.name)
+
     installs = []
     for item in resolved:
         manifest = item["manifest"]
@@ -168,6 +217,18 @@ def build_plan(comp_dir: Path) -> dict:
                 "a composition names an (extension x language) cell that must exist"
             )
         surfaces = manifest.get("surfaces", {})
+
+        # The refusal that makes `[system.faces]` worth having. An extension whose
+        # `[surfaces].handler` names a dispatch pattern is declaring it HAS a handler
+        # face; a composition declaring that face `not-installable` and then letting the
+        # plan carry the pattern anyway would emit a wiring program that binds a manifest
+        # for a body that does not exist -- which moves the peer from `404
+        # handler_not_found` to `501 no_handler_body`. Measured, both arms:
+        # `gates/host-seam/rust/`. The pattern is dropped from the plan instead, so the
+        # thing that would have been generated cannot be.
+        if surfaces.get("handler") and faces.get("handler") == "not-installable":
+            surfaces = dict(surfaces)
+            surfaces["handler"] = None
         installs.append(
             {
                 "extension": item["name"],
@@ -175,6 +236,11 @@ def build_plan(comp_dir: Path) -> dict:
                 "grade": manifest.get("extension", {}).get("grade"),
                 "cell": str(cell.relative_to(ROOT)),
                 "pattern": surfaces.get("handler"),
+                # What the EXTENSION declares, kept beside what the composition can
+                # install. Dropping `pattern` without recording this would lose the
+                # distinction between "this extension has no handler" (CONTENT does) and
+                # "this peer cannot host one" (the actual situation).
+                "pattern_declared": manifest.get("surfaces", {}).get("handler"),
                 "owned_namespaces": manifest.get("contract", {}).get("owned_namespaces", []),
                 "owned_types": manifest.get("contract", {}).get("owned_types", []),
                 "install_model": manifest.get("install", {}).get("model"),
@@ -186,6 +252,7 @@ def build_plan(comp_dir: Path) -> dict:
     return {
         "composition": sys_block.get("name", comp_dir.name),
         "language": language,
+        "faces": faces,
         "peer": {"generator": peer.get("generator"), "path": peer.get("path")},
         # Install order IS the closure order: a dependency is installed before the
         # extension that declared it. With one extension this is trivially true and

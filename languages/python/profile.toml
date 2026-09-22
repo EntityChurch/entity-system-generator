@@ -1,0 +1,69 @@
+## languages/python/profile.toml — the toolchain facts for ONE language.
+##
+## Second language, and the point of the exercise. Compare `../typescript/profile.toml`:
+## the FIELDS are the same, so the language axis really is a profile rather than a rewrite.
+## The VALUES differ everywhere that matters, and every difference below is a thing a
+## naive template would have got wrong.
+
+[language]
+name      = "python"
+packaging = "wheel"
+compilation = "interpreted"
+
+# THE BOUNDARY IS CONVENTION, NOT A MECHANISM, AND THIS IS THE FIELD THAT SAYS SO.
+# `typescript`'s boundary is the `exports` map and node ENFORCES it: a deep import into
+# `internal/` raises ERR_PACKAGE_PATH_NOT_EXPORTED. Python has no enforced boundary at
+# any level -- a consumer can import `entity_content._internal.reassemble` and it works.
+# D13's Access row in one line: the boundary is not the class, it is the boundary, and
+# here the boundary is a promise. The §3.4 MUST is therefore enforced more weakly in this
+# port than in that one, which is stated in the module and in the conformance report
+# rather than papered over.
+boundary  = "convention (underscore + __all__ + a test); NOT enforced by the runtime"
+
+[toolchain]
+image = "localhost/entity-core-keystone/python-toolchain:latest"
+# ANOTHER TEAM'S IMAGE, used read-only and recorded as a dependency rather than assumed.
+python = ">=3.13"        # the image resolves 3.14.x; the peer's pyproject floor is 3.9
+runtime_deps = ["cryptography==48.0.0"]  # the PEER's one dependency, inherited not added
+
+[deps]
+# We add NOTHING. The extension's only import is the peer package.
+runtime = []
+dev     = ["pytest"]     # present in the toolchain image's test layer; not shipped
+
+[build]
+# THERE IS NO COMPILE STEP, and that is the largest single difference from `typescript`.
+#
+# `languages/typescript/build` runs tsc TWICE -- the module into a package, then the tests
+# against the built package -- specifically so the tests resolve the module through its
+# `exports` map. Here there is no compiler to run and no map to resolve through, so
+# "build" is a STAGE: copy the cell into a package directory on `sys.path` and verify it
+# imports. That verification is not ceremony. It is the only build-time signal this
+# language has: a `typescript` cell with a bad import fails to compile, a `python` one
+# fails at the first test that touches it, which is later and reads as a test failure.
+stage    = "output/<composition>/build"
+offline  = true          # --network=none. The peer is staged from its own declared
+                         # wheel `packages`, never installed from an index.
+compile  = false
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+oracle_bin = "../entity-core-keystone/output/s4-oracles/validate-peer"
+host_entry = "host.py"   # speaks keystone's host CLI verbatim: --port / --name /
+                         # --debug-open-grants / --validate, and a single `LISTENING ...`
+                         # readiness line on stdout. Same contract, different runtime.
+
+[extension_host]
+# Facts about THIS peer that an extension module has to be built around. Every row was
+# measured by `gates/host-seam/probe-seam.py`, not read -- and keystone now carries the
+# same block on their own profile, seeded from the same probe.
+registration_surface = "none"        # no registerHandler, no register_handler. The
+                                     # module performs all four §11.6.1 writes itself.
+ctx_carries_peer     = false         # store/tree/emit arrive by registration-time capture
+ctx_carries_suffix   = false         # re-derive from ctx.exec's uri
+frame_budget         = "ctx.frame_budget()"   # MEASURED BY VALUE, not by attribute name:
+                                     # a peer configured to enforce 3,145,749 reports it,
+                                     # and an unconfigured one reports the 16 MiB default
+                                     # the §6.2 amendment names as the wrong answer.
+                                     # Landed keystone 2026-09-06 (our K-1).
+handler_protocol     = "handle_op(op, ctx) -> Outcome"   # duck-typed; no base class

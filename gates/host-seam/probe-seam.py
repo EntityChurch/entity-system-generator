@@ -82,6 +82,10 @@ REGISTRATION_NONCE = "seam-witness-7f3a"
 SEED_HOST = bytes([0x51] * 32)
 SEED_CLIENT = bytes([0x52] * 32)
 
+#: A frame budget that is NOT the default and not a round number, so the value a body
+#: reads back can only have come from this configuration. See `find_frame_budget`.
+CONFIGURED_FRAME_BUDGET = 3_145_749  # 3 MiB + 21
+
 
 class ReferenceHandler:
     """The reference body. A plain class with ``handle_op(op, ctx)`` — `python`'s
@@ -127,7 +131,8 @@ class ReferenceHandler:
                     "connection_present": ctx.conn is not None,
                     "caller_cap_present": ctx.caller_cap is not None,
                     "frame_budget_reachable": budget is not None,
-                    "frame_budget_site": budget or "-",
+                    "frame_budget_site": budget[0] if budget else "-",
+                    "frame_budget_value": budget[1] if budget else -1,
                 },
             )
         )
@@ -157,33 +162,110 @@ def content_store_of(peer) -> object | None:
     return None
 
 
-def find_frame_budget(ctx: DispatchCtx, peer) -> str | None:
-    """Can the body consult the CONNECTION's configured frame budget? CONTENT v3.6
-    Amendment 1 §6.2/§4.2 makes this a MUST — "the connection's configured budget at
-    response-construction time, NOT a hardcoded 16 MiB literal".
+def find_frame_budget(ctx: DispatchCtx, peer) -> tuple[str, int] | None:
+    """Can the body consult the CONNECTION's configured frame budget, and is the number
+    it gets back the CONFIGURED one? CONTENT v3.6 Amendment 1 §6.2/§4.2 makes this a
+    MUST — "the connection's configured budget at response-construction time, NOT a
+    hardcoded 16 MiB literal".
 
-    ``wire.MAX_FRAME`` is deliberately NOT accepted here. It is a module-level constant
-    equal to 16 MiB, which is the literal the amendment names as the wrong answer; a
-    probe that counted it would report the MUST satisfied by the exact construct it
-    forbids.
+    **This returns the VALUE, not just the site, and that is the D15 correction.**
+    The first version of this function searched for an attribute whose name matched
+    `frame` and `max|limit|budget|bytes` and reported the site. It went green the day
+    keystone landed the fix — correctly, as it happens — but it *could not have gone
+    red* for a peer that stamped the 16 MiB constant onto every connection and named
+    the field `max_frame_bytes`. The name is not the property. The property is that a
+    peer configured to enforce N reports N.
+
+    ``wire.MAX_FRAME`` is still never accepted as an answer: it is the literal the
+    amendment names as the wrong one, and a probe that counted it would report the MUST
+    satisfied by the exact construct it forbids.
     """
-    for label, obj in (("ctx.conn", ctx.conn), ("ctx", ctx), ("peer", peer),
-                       ("peer.store", getattr(peer, "store", None))):
-        if obj is None:
-            continue
-        for key in dir(obj):
-            if key.startswith("_"):
+    # Prefer the peer's own accessor when it has one — that is the surface an extension
+    # is told to use, and reading around it would measure a different thing.
+    budget = None
+    site = None
+    accessor = getattr(ctx, "frame_budget", None)
+    if callable(accessor):
+        try:
+            value = accessor()
+            if isinstance(value, int):
+                budget, site = value, "ctx.frame_budget()"
+        except Exception:  # noqa: BLE001 - an accessor that raises is an answer too
+            budget, site = None, None
+
+    if budget is None:
+        for label, obj in (("ctx.conn", ctx.conn), ("ctx", ctx), ("peer", peer),
+                           ("peer.store", getattr(peer, "store", None))):
+            if obj is None:
                 continue
-            if re.search(r"frame", key, re.I) and re.search(
-                r"max|limit|budget|bytes", key, re.I
-            ):
-                return f"{label}.{key}"
-    return None
+            for key in dir(obj):
+                if key.startswith("_"):
+                    continue
+                if re.search(r"frame", key, re.I) and re.search(
+                    r"max|limit|budget|bytes", key, re.I
+                ):
+                    value = getattr(obj, key, None)
+                    if isinstance(value, int):
+                        budget, site = value, f"{label}.{key}"
+                        break
+            if budget is not None:
+                break
+
+    return None if budget is None or site is None else (site, budget)
+
+
+def negative_control() -> int:
+    """**The control for the frame-budget check itself** (D15).
+
+    A check that cannot go RED measures nothing, and the *name*-matching version of
+    `find_frame_budget` could not: it reported the site and never the value, so a peer
+    stamping the 16 MiB constant onto every connection and calling the field
+    `max_frame_bytes` would have passed it.
+
+    This arm builds the host with **no** budget configuration, drives the same EXECUTE,
+    and asserts the body reads back `wire.MAX_FRAME` — the literal the amendment names
+    as the wrong answer — and that the scoring rejects it. If this arm ever goes green,
+    the positive arm is not measuring what it says.
+    """
+    global _FORCE_DEFAULT_BUDGET
+    _FORCE_DEFAULT_BUDGET = True
+    try:
+        out, _ = run_once(bind_tree=True, set_handler=True)
+    finally:
+        _FORCE_DEFAULT_BUDGET = False
+
+    data = out.get("data") or {}
+    value = data.get("frame_budget_value", -1)
+    site = data.get("frame_budget_site", "-")
+    print("NEGATIVE CONTROL — peer built with no frame-budget configuration:")
+    print(f"  {site} reports {value}   (wire.MAX_FRAME = {_wire.MAX_FRAME})")
+    reads_default = value == _wire.MAX_FRAME
+    rejected = value != CONFIGURED_FRAME_BUDGET
+    print(f"  reads the peer default rather than a stale/absent value: {'yes' if reads_default else 'NO'}")
+    print(f"  scoring REJECTS it as the Amendment 1 answer:            {'yes' if rejected else 'NO — the check is vacuous'}")
+    return 0 if reads_default and rejected else 1
+
+
+#: Set by `negative_control` only. Never a flag a normal run can reach.
+_FORCE_DEFAULT_BUDGET = False
+
+
+def make_host():
+    """The peer under test, configured with a NON-DEFAULT frame budget where the peer
+    supports one. A peer that does not take the keyword is not a failure of the peer —
+    it is the honest reason the value half of the frame-budget check cannot run, and it
+    is reported as `unknown` rather than skipped silently."""
+    if _FORCE_DEFAULT_BUDGET:
+        return Peer(SEED_HOST, open_grants=True), True
+    try:
+        return Peer(SEED_HOST, open_grants=True, max_frame_bytes=CONFIGURED_FRAME_BUDGET), True
+    except TypeError:
+        return Peer(SEED_HOST, open_grants=True), False
 
 
 def run_once(*, bind_tree: bool, set_handler: bool):
     """One control. Returns (result-dict, the handler instance or None)."""
-    host = Peer(SEED_HOST, open_grants=True)
+    host, _ = make_host()
     body = ReferenceHandler(host, REGISTRATION_NONCE) if set_handler else None
 
     if bind_tree:
@@ -277,7 +359,7 @@ def inspect_install_writes() -> dict:
     """What did the install actually put in the tree? In-process, so the probe reports
     WHAT the seam did rather than only that it worked.
     """
-    peer = Peer(SEED_HOST, open_grants=True)
+    peer, _ = make_host()
     local = peer.local_peer
 
     def bound(rel: str) -> bool:
@@ -299,6 +381,7 @@ def inspect_install_writes() -> dict:
 
 
 def main() -> int:
+    _, configurable = make_host()
     print(f"peer package: {RESOLVED.dist_name} {RESOLVED.version}")
     print(f"peer root:    {RESOLVED.peer_root}")
     print(f"resolved via: {RESOLVED.how_resolved}")
@@ -400,12 +483,40 @@ def main() -> int:
     print(f"  store + content store reachable from the body: "
           f"{'yes' if data.get('has_store') and data.get('has_content_store') else 'no'}"
           f"  (via registration-time capture; ctx carries no peer)")
-    print(f"  CONTENT §6.2 frame budget reachable:           "
-          f"{data.get('frame_budget_site') if data.get('frame_budget_reachable') else 'NO — Amendment 1 MUST unimplementable'}")
-    print(f"     (wire.MAX_FRAME = {_wire.MAX_FRAME} is a module constant — the literal "
-          f"the amendment names as the wrong answer, so it is not counted)")
+    # Amendment 1 §6.2, scored on the VALUE. Reachability is not the property: a peer
+    # that stamped `MAX_FRAME` onto every connection and named the field
+    # `max_frame_bytes` would satisfy a name check while enforcing the literal the
+    # amendment forbids. This asks a peer configured to enforce N what it reports.
+    budget_site = data.get("frame_budget_site")
+    budget_value = data.get("frame_budget_value", -1)
+    if not configurable:
+        budget_verdict = "unknown — this peer takes no frame-budget configuration, so the value cannot be varied"
+    elif not data.get("frame_budget_reachable"):
+        budget_verdict = "NO — Amendment 1 MUST unimplementable, nothing carries a budget"
+    elif budget_value == CONFIGURED_FRAME_BUDGET:
+        budget_verdict = f"MEASURED PASS — {budget_site} = {budget_value} (the configured value)"
+    elif budget_value == _wire.MAX_FRAME:
+        budget_verdict = (
+            f"FAIL — {budget_site} reports {budget_value}, which is wire.MAX_FRAME. "
+            f"The peer was configured for {CONFIGURED_FRAME_BUDGET}; the accessor is "
+            "reporting the literal the amendment names as the wrong answer."
+        )
+    else:
+        budget_verdict = (
+            f"FAIL — {budget_site} reports {budget_value}, expected {CONFIGURED_FRAME_BUDGET}"
+        )
+    print(f"  CONTENT §6.2 frame budget (value, not name):  {budget_verdict}")
+    print(f"     (peer configured max_frame_bytes={CONFIGURED_FRAME_BUDGET}; "
+          f"wire.MAX_FRAME={_wire.MAX_FRAME} is never accepted as an answer)")
 
-    ok = witness_ok and negative_ok and dict_is_consulted and never_asked_ok
+    budget_ok = (not configurable) or budget_value == CONFIGURED_FRAME_BUDGET
+    print()
+    control_rc = negative_control()
+
+    ok = (
+        witness_ok and negative_ok and dict_is_consulted and never_asked_ok
+        and budget_ok and control_rc == 0
+    )
     print(f"\n  python tier: {'A (full loop)' if ok else 'B (generate + test only)'}")
     return 0 if ok else 1
 

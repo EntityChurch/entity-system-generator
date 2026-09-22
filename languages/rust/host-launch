@@ -1,0 +1,133 @@
+#!/bin/sh
+# languages/rust/host-launch — boot a composed peer and point the oracle at it.
+#
+#   host-launch <composition-name> [validate-peer args...]
+#
+# The third twin of one script. `typescript`'s and `python`'s differ from each other in
+# two lines -- the entry point and the interpreter -- and that was the retarget result:
+# the readiness contract, the identity provisioning, the teardown and the stderr
+# surfacing were all language-neutral and were already right. THIS one differs in three,
+# and the third is a compile step, which is the honest cost of an AOT substrate.
+#
+# BARE=1 launches the PEER'S OWN host instead of the composed one. That is the baseline
+# arm and it is not optional: "pre-existing failure" is a claim, and ADR-0012 forbids
+# labelling a failure pre-existing without bisecting.
+#
+# **The bare arm builds keystone's `entity-peer-host` from keystone's manifest, and that
+# is a write hazard.** `cargo` rewrites Cargo.lock given the chance, and their tree is
+# read-only. So the bare build passes `--locked` -- a resolution that would change the
+# lock FAILS instead of writing -- and `CARGO_TARGET_DIR` points into our output/, so
+# not one byte lands in their tree. The alternative was to re-implement their host as a
+# second binary of ours, which would have made the baseline arm OUR code and quietly
+# stopped it being a baseline.
+
+set -eu
+
+COMP="${1:?usage: host-launch <composition-name> [validate-peer args...]}"
+shift
+
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+STAGE="$ROOT/output/$COMP/build"
+PORT="${PORT:-7777}"
+ORACLE="${ORACLE:-$ROOT/../entity-core-keystone/output/s4-oracles/validate-peer}"
+PEER="${PEER_ROOT:-$ROOT/../entity-core-keystone/protocol-generator/rust}"
+
+# Set unconditionally. The image declares `ENV CARGO_HOME=/cargo`, so a `:-` default
+# never fires -- see the longer note in `build`. THIS is the driver the defect surfaced
+# in: it is the only one that reads the vendor config without writing it, so it is the
+# only one a fresh container could not paper over.
+CARGO_HOME="$ROOT/output/.cargo-home"
+export CARGO_HOME
+export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$ROOT/output/$COMP/target}"
+[ -f "$CARGO_HOME/config.toml" ] || { echo "host-launch: no vendor config at $CARGO_HOME/config.toml" >&2
+  echo "  run: ./languages/rust/build $COMP" >&2; exit 2; }
+
+[ -d "$STAGE" ] || { echo "host-launch: nothing staged at $STAGE" >&2
+  echo "  run: ./languages/rust/build $COMP" >&2; exit 2; }
+
+if [ "${BARE:-0}" = "1" ]; then
+  ARM="bare"
+  echo "host-launch: building the peer's own host (--locked; their tree stays clean)" >&2
+  ( cd "$PEER" && cargo build --offline --locked --quiet --bin entity-peer-host ) || {
+    echo "host-launch: the peer's own host did not build. The baseline arm cannot be" >&2
+    echo "  synthesised from ours -- refusing rather than reporting a one-armed diff." >&2
+    exit 1; }
+  ENTRY="$CARGO_TARGET_DIR/debug/entity-peer-host"
+else
+  ARM="composed"
+  ENTRY="$CARGO_TARGET_DIR/debug/composed-host"
+  [ -x "$ENTRY" ] || { echo "host-launch: no composed host at $ENTRY" >&2
+    echo "  run: ./languages/rust/build $COMP" >&2; exit 2; }
+fi
+[ -x "$ENTRY" ] || { echo "host-launch: $ENTRY is not executable" >&2; exit 2; }
+
+# The oracle is a gitignored local build from the sibling entity-core-go tree. Missing it
+# must be LOUD: keystone's harness ended in `|| true` and swallowed a missing binary for
+# weeks, exiting 0 having validated nothing.
+[ -x "$ORACLE" ] || { echo "host-launch: ERROR oracle not found or not executable at $ORACLE" >&2
+  echo "  It is built from the sibling entity-core-go repo. It is the oracle BECAUSE" >&2
+  echo "  it is not the thing under test; we do not ship a copy." >&2; exit 3; }
+
+# The peer's persistent identity at the standard on-disk location, so the validator's
+# probes that co-sign AS the peer can find its keypair. Seed 0x11 x 32 matches the host
+# default, so peer_id is unchanged.
+NAME="${PEERNAME:-conformance}"
+KPDIR="${HOME:-/root}/.entity/peers/$NAME"
+mkdir -p "$KPDIR"
+printf '%s\n%s\n%s\n' \
+  '-----BEGIN ENTITY PRIVATE KEY-----' \
+  'ERERERERERERERERERERERERERERERERERERERERERE=' \
+  '-----END ENTITY PRIVATE KEY-----' > "$KPDIR/keypair"
+
+HOST_OUT="$(mktemp)"; HOST_ERR="$(mktemp)"
+"$ENTRY" --port "$PORT" --name "$NAME" --debug-open-grants --validate \
+  >"$HOST_OUT" 2>"$HOST_ERR" &
+HOST_PID=$!
+
+# Deterministic teardown. `kill` only DELIVERS the signal; a fire-and-forget trap returns
+# while the peer still owns the listening socket, and a second run in the same container
+# fails to bind. keystone measured windows over 400 ms on some runtimes.
+reap_host() {
+  [ -n "${HOST_PID:-}" ] || return 0
+  kill -0 "$HOST_PID" 2>/dev/null || return 0
+  kill -TERM "$HOST_PID" 2>/dev/null || true
+  j=0
+  while [ "$j" -lt 50 ]; do
+    kill -0 "$HOST_PID" 2>/dev/null || return 0
+    j=$((j + 1)); sleep 0.1
+  done
+  kill -KILL "$HOST_PID" 2>/dev/null || true
+  wait "$HOST_PID" 2>/dev/null || true
+}
+trap reap_host EXIT INT TERM
+
+i=0
+while [ "$i" -lt 150 ]; do
+  grep -q '^LISTENING' "$HOST_OUT" 2>/dev/null && break
+  if ! kill -0 "$HOST_PID" 2>/dev/null; then
+    echo "host-launch: host exited before LISTENING:" >&2; cat "$HOST_ERR" >&2; exit 1
+  fi
+  i=$((i + 1)); sleep 0.1
+done
+head -1 "$HOST_OUT"
+
+# The COMPOSED line proves the extension installed. A composed peer that silently
+# installed nothing is indistinguishable from a bare peer to everything except the
+# failing checks, which would then read as defects in the PEER.
+if [ "$ARM" = "composed" ]; then
+  grep '^COMPOSED CONTENT' "$HOST_ERR" || { echo "host-launch: no COMPOSED line -- nothing installed" >&2; exit 1; }
+else
+  echo "BASELINE arm=bare (no extensions installed)"
+fi
+
+[ "$#" -eq 0 ] && set -- -category type_system
+
+mkdir -p "$ROOT/output/$COMP/reports"
+"$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
+
+# Surface the peer's own stderr. /tmp inside a --rm container is discarded with it, so
+# without this a mid-run abort leaves a log reading only "connection refused".
+if [ -s "$HOST_ERR" ]; then
+  echo "--- peer stderr ---" >&2
+  cat "$HOST_ERR" >&2
+fi

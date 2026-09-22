@@ -1,0 +1,140 @@
+#!/bin/sh
+# languages/python/build — stage ONE composition. Language-major: one copy, shared by
+# every extension, forever.
+#
+#   build <composition-name>
+#
+# The `typescript` sibling compiles twice. This one compiles zero times, and the shape of
+# the difference is the retarget result worth keeping: what that driver gets from `tsc`
+# -- "does this cell even hold together" -- this language only gets by IMPORTING the
+# staged package, which is why the import check at the end is a build step and not a test.
+#
+# Reads the RESOLVED PLAN (output/<composition>/PLAN.json, an output of tools/compose.py),
+# so the composition-time refusals -- I6 pattern collision, I7 namespace overlap, I9 unmet
+# dependency -- have already happened before anything is staged.
+
+set -eu
+
+COMP="${1:?usage: build <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+PLAN="$ROOT/output/$COMP/PLAN.json"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -f "$PLAN" ] || { echo "build: no resolved plan at $PLAN" >&2
+  echo "  run: ./tools/compose.py compositions/$COMP" >&2; exit 2; }
+
+# python3 is the one interpreter guaranteed present in this image, and the plan is JSON.
+plan_field() { python3 -c '
+import json, sys
+plan = json.load(open(sys.argv[1]))
+value = plan
+for key in sys.argv[2].split("."):
+    value = value.get(key) if isinstance(value, dict) else None
+sys.stdout.write("\n".join(value) if isinstance(value, list) else str(value or ""))
+' "$PLAN" "$1"; }
+
+LANGUAGE="$(plan_field language)"
+[ "$LANGUAGE" = "python" ] || { echo "build: plan language is '$LANGUAGE', not python" >&2; exit 2; }
+
+PEER_REL="$(plan_field peer.path)"
+PEER="$(cd "$ROOT/$PEER_REL" 2>/dev/null && pwd)" || {
+  echo "build: peer not found at \$ROOT/$PEER_REL" >&2; exit 2; }
+
+[ -f "$PEER/pyproject.toml" ] || { echo "build: peer has no pyproject.toml at $PEER" >&2; exit 2; }
+
+# NO STALENESS CHECK, AND THAT IS NOT AN OVERSIGHT.
+#
+# `languages/typescript/build` refuses a peer whose dist/ is older than its src/, because
+# it links a BUILD ARTIFACT and measuring a stale one is a gate on the past. This language
+# has no build artifact: the source IS the artifact, and it is staged fresh below. The
+# nearest analogue is stale `__pycache__`, which the copy excludes and PYTHONDONTWRITEBYTECODE
+# prevents. Writing a staleness check here anyway would be a check that can never fail --
+# which is exactly the AP-3 shape, one session after ratifying D15 over it.
+
+echo "build: composition=$COMP peer=$PEER"
+
+# ---- stage ----------------------------------------------------------------
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+export PYTHONDONTWRITEBYTECODE=1
+
+# The peer, staged the way a consumer receives it: only what its own wheel manifest says
+# it ships. Reading `[tool.hatch.build.targets.wheel] packages` rather than assuming
+# `src/entity_core` is the same discipline `gates/host-seam/peer_under_test.py` applies --
+# if the manifest stops shipping a package, that is a real packaging failure and the build
+# must say so instead of reaching around it into the source tree.
+python3 - "$PEER" "$STAGE" <<'PY'
+import shutil, sys, tomllib
+from pathlib import Path
+
+peer, stage = Path(sys.argv[1]), Path(sys.argv[2])
+manifest = tomllib.loads((peer / "pyproject.toml").read_text(encoding="utf-8"))
+packages = (
+    manifest.get("tool", {}).get("hatch", {}).get("build", {})
+    .get("targets", {}).get("wheel", {}).get("packages")
+)
+if not isinstance(packages, list) or not packages:
+    raise SystemExit(
+        "build: peer pyproject declares no [tool.hatch.build.targets.wheel] packages -- "
+        "that is a real packaging failure, not a build defect"
+    )
+for rel in packages:
+    src = peer / rel
+    if not src.is_dir():
+        raise SystemExit(f"build: declared wheel package {rel!r} does not exist under {peer}")
+    shutil.copytree(src, stage / Path(rel).name,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    print(f"build: staged peer package {rel}")
+PY
+
+# ---- each extension cell, as an importable package ------------------------
+# Written to a file and read back WITHOUT a pipeline: `cmd | while read` puts the loop in
+# a subshell where `set -e` cannot abort the parent, so a failure inside would print and
+# the build would carry on to report OK.
+CELLS="$STAGE/.cells"
+python3 - "$PLAN" > "$CELLS" <<'PY'
+import json, sys
+plan = json.load(open(sys.argv[1]))
+for install in plan["installs"]:
+    print(install["extension"] + "\t" + install["cell"])
+PY
+
+while IFS="$(printf '\t')" read -r EXT CELL; do
+  [ -n "$EXT" ] || continue
+  SLUG="$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')"
+  PKG="$STAGE/entity_$SLUG"
+  mkdir -p "$PKG"
+  # `find`+`cp` rather than `cp -R .`: the cell's test/ directory is staged BESIDE the
+  # package, not inside it, so an importable `entity_content.test` cannot exist. The
+  # tests import the package by name, which is the only way to assert on `__all__`.
+  ( cd "$ROOT/$CELL" && find . -name '__pycache__' -prune -o -type f -print | while read -r f; do
+      case "$f" in ./test/*) continue ;; esac
+      mkdir -p "$PKG/$(dirname "$f")"
+      cp "$f" "$PKG/$f"
+    done )
+  mkdir -p "$STAGE/test_$SLUG"
+  [ -d "$ROOT/$CELL/test" ] && cp -R "$ROOT/$CELL/test/." "$STAGE/test_$SLUG/"
+  echo "build: staged $EXT -> entity_$SLUG"
+done < "$CELLS"
+rm -f "$CELLS"
+
+# ---- the composition host -------------------------------------------------
+cp "$ROOT/compositions/$COMP/host.py" "$STAGE/host.py"
+
+# ---- the only build-time signal this language has -------------------------
+# Import every staged package from the staging root. A cell with a broken import, a
+# missing module, or a syntax error fails HERE rather than in the first test that happens
+# to touch it -- which is what `tsc` buys the other driver for free.
+echo "build: import check"
+( cd "$STAGE" && python3 -c '
+import importlib, pathlib, sys
+sys.dont_write_bytecode = True
+names = sorted(p.name for p in pathlib.Path(".").iterdir()
+               if p.is_dir() and p.name.startswith("entity_") and (p / "__init__.py").exists())
+for name in names:
+    module = importlib.import_module(name)
+    exported = getattr(module, "__all__", None)
+    print(f"  {name}: import OK, __all__ = {len(exported) if exported else 0} names")
+' )
+
+echo "build: OK -> $STAGE"

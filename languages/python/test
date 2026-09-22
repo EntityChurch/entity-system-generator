@@ -1,0 +1,49 @@
+#!/bin/sh
+# languages/python/test — run every staged extension's unit tests.
+#
+#   test <composition-name>
+#
+# Runs from the staging root so the tests import the module BY PACKAGE NAME, exactly as a
+# consumer would. `test_export_surface.py` asserts on `__all__` and on what a deep import
+# reaches, and a test that imported the cell by relative path would be asserting on the
+# source tree instead.
+#
+# `build` must have run. This does not build — a test driver that silently rebuilds hides
+# which change was measured.
+
+set -eu
+
+COMP="${1:?usage: test <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -d "$STAGE" ] || { echo "test: nothing staged at $STAGE" >&2
+  echo "  run: ./languages/python/build $COMP" >&2; exit 2; }
+
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$STAGE"
+
+RC=0
+FOUND=0
+for SUITE in "$STAGE"/test_*; do
+  [ -d "$SUITE" ] || continue
+  NAME="$(basename "$SUITE")"
+  PKG="entity_${NAME#test_}"
+  if [ -z "$(find "$SUITE" -name 'test_*.py' -print -quit)" ]; then
+    # A cell with no tests is a real answer, not a pass. Say so on stderr and score it.
+    echo "test: $PKG has NO tests staged -- not a pass, an absence" >&2
+    RC=1
+    continue
+  fi
+  FOUND=$((FOUND + 1))
+  echo "test: $PKG"
+  ( cd "$STAGE" && python3 -m pytest "$SUITE" -q ) || RC=1
+done
+
+# Zero suites is not a clean run. The same refusal `tools/diff-arms.py` carries, for the
+# same reason: an empty result set reported as green is the most comfortable wrong answer
+# available (D15).
+[ "$FOUND" -gt 0 ] || { echo "test: NO suites ran at all -- refusing to report OK" >&2; exit 1; }
+
+[ "$RC" -eq 0 ] && echo "test: OK" || echo "test: FAILURES" >&2
+exit "$RC"

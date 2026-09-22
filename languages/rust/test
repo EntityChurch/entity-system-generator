@@ -1,0 +1,102 @@
+#!/bin/sh
+# languages/rust/test — run every staged extension's unit tests, plus the one check
+# that can only be made by a compile that FAILS.
+#
+#   test <composition-name>
+#
+# Runs from the STAGED cell, so the integration tests in `tests/` see the crate exactly
+# as a third party does: only `pub`. A `#[cfg(test)] mod tests` inside `src/` would see
+# the private module and prove nothing about the §3.4 boundary, which is why the
+# export-surface assertions live in `tests/` in this language and beside the package in
+# the other two.
+#
+# `build` must have run. This does not build -- a test driver that silently rebuilds
+# hides which change was measured.
+#
+# ## The compile-fail arm, and why it needs a control
+#
+# `src/bin/deep_import.rs` names the private module and MUST NOT compile. On its own
+# that check is the purest D15 false green available: it reports its strongest result
+# when the crate does not build at all, when the vendor mirror is missing, when rustc is
+# the wrong version. So the failure is only interpreted after `cargo test` has passed --
+# and `tests/sdk.rs` carries the positive half, naming the public route's exact
+# signature, so "the boundary is where we say it is" is asserted from both sides.
+
+set -eu
+
+COMP="${1:?usage: test <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -d "$STAGE/cells" ] || { echo "test: nothing staged at $STAGE/cells" >&2
+  echo "  run: ./languages/rust/build $COMP" >&2; exit 2; }
+
+# Set unconditionally. The image declares `ENV CARGO_HOME=/cargo`, so a `:-` default
+# never fires -- see the longer note in `build`.
+CARGO_HOME="$ROOT/output/.cargo-home"
+export CARGO_HOME
+export CARGO_TARGET_DIR="${GENERATOR_CARGO_TARGET_DIR:-$ROOT/output/$COMP/target}"
+[ -f "$CARGO_HOME/config.toml" ] || { echo "test: no vendor config at $CARGO_HOME/config.toml" >&2
+  echo "  run: ./languages/rust/build $COMP -- it writes the offline source replacement" >&2
+  exit 2; }
+
+RC=0
+FOUND=0
+for CELLDIR in "$STAGE"/cells/*; do
+  [ -d "$CELLDIR" ] || continue
+  NAME="$(basename "$CELLDIR")"
+  if [ -z "$(find "$CELLDIR/tests" -name '*.rs' -print -quit 2>/dev/null)" ]; then
+    # A cell with no tests is a real answer, not a pass.
+    echo "test: $NAME has NO tests staged -- not a pass, an absence" >&2
+    RC=1
+    continue
+  fi
+  FOUND=$((FOUND + 1))
+
+  echo "test: $NAME"
+  if ( cd "$CELLDIR" && cargo test --offline --quiet ); then
+    :
+  else
+    RC=1
+    # A failing suite means the compile-fail arm below is uninterpretable for this
+    # cell, so say so rather than scoring it.
+    echo "test: $NAME FAILED -- skipping its compile-fail arm (no control)" >&2
+    continue
+  fi
+
+  # ── the compile-fail arm ─────────────────────────────────────────────────
+  if [ -f "$CELLDIR/src/bin/deep_import.rs" ]; then
+    echo "test: $NAME §3.4 export boundary (a compile that must FAIL)"
+    ERR="$CARGO_TARGET_DIR/$NAME-deep-import.err"
+    if ( cd "$CELLDIR" && cargo build --offline --quiet \
+           --bin deep_import --features compile-fail-fixture ) 2>"$ERR"; then
+      echo "test: $NAME DEEP IMPORT COMPILED." >&2
+      echo "  §3.4 forbids exposing reassemble_content outside a capability-checking" >&2
+      echo "  wrapper. If \`mod internal\` gained a \`pub\`, that is the finding." >&2
+      RC=1
+    else
+      # E0603 specifically. Any OTHER compile error means the fixture failed for a
+      # reason that has nothing to do with the boundary -- a typo, a moved symbol, a
+      # broken build -- and reading that as "the boundary holds" is the false green
+      # this arm exists to avoid.
+      if grep -q "^error\[E0603\]" "$ERR"; then
+        echo "test:   refused with E0603 (private module), as required:"
+        grep "^error\[E0603\]" "$ERR" | sed 's/^/          /'
+      else
+        echo "test: $NAME deep import failed, but NOT with E0603:" >&2
+        grep -E "^error" "$ERR" | head -5 | sed 's/^/          /' >&2
+        echo "  The fixture must fail BECAUSE the module is private. Any other error" >&2
+        echo "  means this arm measured the build, not the boundary." >&2
+        RC=1
+      fi
+    fi
+  fi
+done
+
+# Zero suites is not a clean run. The same refusal `tools/diff-arms.py` carries, for the
+# same reason: an empty result set reported as green is the most comfortable wrong
+# answer available (D15).
+[ "$FOUND" -gt 0 ] || { echo "test: NO suites ran at all -- refusing to report OK" >&2; exit 1; }
+
+[ "$RC" -eq 0 ] && echo "test: OK" || echo "test: FAILURES" >&2
+exit "$RC"

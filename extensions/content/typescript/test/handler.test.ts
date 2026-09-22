@@ -1,27 +1,25 @@
 /**
  * §6 — the system content handler.
  *
- * Split in two, and **the reason for the split is itself a finding.**
- *
- * Everything observable to a client goes OVER THE WIRE, from a second peer, through
+ * **Everything a client can observe goes OVER THE WIRE**, from a second peer, through
  * the real dispatch chain. In-process handler calls would be faster and would measure
  * less; the failure this repo has already shipped once is a call site read as a
  * capability — a symbol present, reachable, consulted, and answering `501` behind the
  * call.
  *
- * But §6.2's central wire contract is *"the fetched entities are delivered via the
- * response envelope's `included` map; `found` is the index that confirms which hashes
- * are present in `included`"* — and **this peer's client API cannot see that map.**
- * `PeerSession.execute` builds `new ExecuteResponse(response.root)` and discards the
- * envelope (`transport/peer-session.ts`). The SERVER side is correct — the dispatcher
- * returns `new Envelope(response.entity, result.included)` — and the Go oracle, which
- * reads `env.Included`, sees them. So conformance is unaffected and the gap is real:
- * a consumer written against this peer's own client surface cannot receive content.
- * **Routed to keystone as one line.**
+ * §6.2's central wire contract is *"the fetched entities are delivered via the response
+ * envelope's `included` map; `found` is the index that confirms which hashes are present
+ * in `included`"*, and **that assertion now runs over the wire.** It could not, for one
+ * day: `PeerSession.execute` built `new ExecuteResponse(response.root)` and dropped the
+ * envelope, so a consumer on this peer's own client surface received the reference and
+ * never the referent. Routed as K-3; closed upstream 2026-09-06, and their version of the
+ * finding was bigger than ours — the same defect sat on `OutboundDispatchImpl.execute`,
+ * the §6.13(b) path a handler uses to originate, which is the one that would have bitten
+ * a composed system rather than a test.
  *
- * So the `included` half is asserted in-process, against a hand-built
- * `HandlerContext`, which is also the only way to pin a frame budget without a
- * negotiated connection. Each such test says which half it measures.
+ * **What stays in-process is only what a wire client cannot construct**: a pinned frame
+ * budget, which needs a `ConnectionState` a negotiated connection does not let you set.
+ * That test says so on its own line.
  */
 
 import assert from "node:assert/strict";
@@ -53,7 +51,11 @@ const NAMESPACE_TARGET = new ResourceTarget([CONTENT_PATTERN], null);
 
 interface Rig {
   readonly host: Peer;
-  exec(op: string, params: Entity, resource: ResourceTarget | null): Promise<{ status: number; result: Entity }>;
+  exec(
+    op: string,
+    params: Entity,
+    resource: ResourceTarget | null,
+  ): Promise<{ status: number; result: Entity; included: ReadonlyMap<string, Entity> }>;
   close(): Promise<void>;
 }
 
@@ -70,7 +72,7 @@ async function rig(): Promise<Rig> {
     host,
     async exec(op, params, resource) {
       const response = await session.execute(uri, op, params, resource);
-      return { status: response.statusCode, result: response.result };
+      return { status: response.statusCode, result: response.result, included: response.included };
     },
     async close() {
       await client.dispose();
@@ -79,7 +81,7 @@ async function rig(): Promise<Rig> {
   };
 }
 
-// ── in-process rig: the only way to see `included` or set a frame budget ────────
+// ── in-process rig: the only thing a wire client cannot construct is a pinned budget ──
 
 function inProcess(peer: Peer, op: string, params: Entity, opts: { resource?: ResourceTarget | null; frameBudget?: number } = {}) {
   const execute = Execute.build({
@@ -159,7 +161,7 @@ test("§6.4 a resource target outside the namespace -> 403", async () => {
 
 // ── §6.2 get (wire) ─────────────────────────────────────────────────────────────
 
-test("§6.2 get names a resolved hash in `found` and an unknown one in `missing`", async () => {
+test("§6.2 get names a resolved hash in `found`, an unknown one in `missing`, and DELIVERS the entity", async () => {
   const r = await rig();
   try {
     const blob = createBlobFixed(new Uint8Array(3000).fill(7), 1024);
@@ -171,7 +173,7 @@ test("§6.2 get names a resolved hash in `found` and an unknown one in `missing`
       ContentTypes.GetRequest,
       Ecf.map(["hashes", Ecf.array([Ecf.bytes(blobHash), Ecf.bytes(unknown)])]),
     );
-    const { status, result } = await r.exec("get", params, NAMESPACE_TARGET);
+    const { status, result, included } = await r.exec("get", params, NAMESPACE_TARGET);
 
     assert.equal(status, 200, "a miss is not an error — §6.2 always answers {found, missing}");
     assert.equal(result.type, ContentTypes.ContentResponse);
@@ -179,6 +181,11 @@ test("§6.2 get names a resolved hash in `found` and an unknown one in `missing`
     // count from an array is trivial; deriving an array from a count is not.
     assert.deepEqual(hashList(result, "found"), [blob.blob.contentHashHex]);
     assert.equal(hashList(result, "missing").length, 1);
+    // THE contract: `found` is an index INTO `included`. A response naming a hash it did
+    // not deliver is the reference-without-referent failure K-3 was, and it is the half
+    // that could not be asserted over the wire until 2026-09-06.
+    assert.ok(included.has(blob.blob.contentHashHex), "the resolved entity rides in envelope.included");
+    assert.equal(included.size, 1, "and nothing the caller did not ask for");
     // Amendment 2: `pending` is OPTIONAL and advertises sync-state visibility. This
     // composition has no subscription and no inbox, so emitting it — even empty —
     // would claim a capability we do not have.
@@ -213,28 +220,34 @@ test("an unadvertised operation -> 501", async () => {
   }
 });
 
-// ── §6.2 `included` + frame budget (in-process; see the header) ─────────────────
-
-test("§6.2 resolved entities ride in the result's `included` set", async () => {
-  const peer = new Peer();
-  const arbitrary = Entity.create("test/whatever", Ecf.map(["k", Ecf.text("v")]));
-  peer.contentStore.put(arbitrary);
-
-  const params = Entity.create(
-    ContentTypes.GetRequest,
-    Ecf.map(["hashes", Ecf.array([Ecf.bytes(arbitrary.contentHash)])]),
-  );
-  const result = await inProcess(peer, "get", params);
-
-  assert.equal(result.status, 200);
-  assert.deepEqual(
-    result.included.map((e) => e.contentHashHex),
-    [arbitrary.contentHashHex],
-    "§6: the handler is type-agnostic — it serves any entity in the store, not just blobs",
-  );
+test("§6 the handler is type-agnostic — any entity in the store, not just blobs", async () => {
+  const r = await rig();
+  try {
+    const arbitrary = Entity.create("test/whatever", Ecf.map(["k", Ecf.text("v")]));
+    r.host.contentStore.put(arbitrary);
+    const params = Entity.create(
+      ContentTypes.GetRequest,
+      Ecf.map(["hashes", Ecf.array([Ecf.bytes(arbitrary.contentHash)])]),
+    );
+    const { status, included } = await r.exec("get", params, NAMESPACE_TARGET);
+    assert.equal(status, 200);
+    assert.ok(
+      included.has(arbitrary.contentHashHex),
+      "§6: 'It serves any entity type, not just blobs and chunks.'",
+    );
+  } finally {
+    await r.close();
+  }
 });
 
+// ── §6.2 frame budget — in-process, because a wire client cannot pin one ────────
+
 test("§6.2 Amendment 1: the budget consulted is the CONNECTION's, and order is the contract", async () => {
+  // The one test that stays in-process. A negotiated connection does not let a client
+  // choose the peer's frame budget, so pinning one needs a hand-built `ConnectionState`
+  // — and pinning it is the whole measurement: the peer default (16 MiB) fits both
+  // entities and an 8 KiB CONNECTION budget fits neither, so a hardcoded literal would
+  // answer identically twice.
   const peer = new Peer();
   const big = Entity.create("test/big", Ecf.map(["p", Ecf.bytes(new Uint8Array(64_000).fill(1))]));
   const small = Entity.create("test/small", Ecf.map(["p", Ecf.text("x")]));

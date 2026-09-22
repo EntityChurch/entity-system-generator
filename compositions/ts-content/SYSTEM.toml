@@ -32,9 +32,16 @@ profiles   = ["core"]
 [gate.expectation]
 # The HONEST target, computed by reading every check body in the oracle's content category
 # (cmd/internal/validate/content.go @ ed9b547) --- 13 checks, not 12:
-#   8 measure our handler   handler_manifest, handler_op_get, handler_op_ingest,
+#   8 measure our MODULE    handler_manifest, handler_op_get, handler_op_ingest,
 #                           type_blob, type_chunk, type_descriptor,
 #                           get_path_required, ingest_path_required
+#     CORRECTED 2026-09-06: this line read "8 measure our handler". The COUNT is right
+#     and the word was not -- 5 of the 8 measure the handler face and 3 (type_blob,
+#     type_chunk, type_descriptor) measure the TYPES face. On this peer both faces
+#     install, so the distinction was invisible and cost nothing. `rs-content` is where
+#     it stops being invisible: there the types face installs, the handler face cannot,
+#     and exactly the 3 pass while exactly the 5 do not. Measured, not re-read --
+#     compositions/rs-content/status/CONFORMANCE-2026-09-06.md §3.1.
 #   4 measure the oracle's own library   inline_include_at_threshold and
 #                           inline_include_above_threshold call exerciseInlineInclude, which
 #                           builds an in-memory store and never contacts the peer;

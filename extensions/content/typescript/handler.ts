@@ -17,6 +17,7 @@ import {
   type ContentStore,
   type Handler,
   type HandlerContext,
+  type HandlerOperations,
 } from "entity-core-protocol-typescript";
 
 import { ContentTypes, CONTENT_PATTERN } from "./types.js";
@@ -48,7 +49,23 @@ export interface ContentHandlerOptions {
 export class ContentHandler implements Handler {
   readonly pattern = CONTENT_PATTERN;
   readonly name = "content";
-  readonly operations: readonly string[] = ["get", "ingest"];
+
+  /**
+   * §6.1's manifest, declared here and published verbatim by `registerHandler`.
+   *
+   * This was `readonly string[]` for exactly one day. keystone's `Handler.operations`
+   * carried operation NAMES only, so registration rendered `{get: {}, ingest: {}}` and
+   * `installContent` had to re-write the interface entity afterwards to say what the
+   * operations take and return. Routed as K-2; closed 2026-09-06 — and the sharper
+   * version of the finding was theirs, not ours: the **wire** register op had always
+   * forwarded a full §3.7 manifest, so the in-process surface was the narrower of the
+   * two rather than both being narrow. The bare-name form still renders byte-identically,
+   * so no bootstrap handler moved.
+   */
+  readonly operations: HandlerOperations = {
+    get: { inputType: ContentTypes.GetRequest, outputType: ContentTypes.ContentResponse },
+    ingest: { inputType: ContentTypes.IngestRequest, outputType: ContentTypes.IngestResult },
+  };
 
   readonly #namespace: string;
 
@@ -90,6 +107,8 @@ export class ContentHandler implements Handler {
       case "ingest":
         return this.#ingest(ctx);
       default:
+        // §6.6(2): "This spec does not define a `system/content:delete`." Removal is
+        // local GC, never a protocol op — so an unknown verb is 501, not 404.
         return errorResult(Status.NotSupported, "unsupported_operation", ctx.operation);
     }
   }

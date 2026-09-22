@@ -6,66 +6,134 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
-**The first extension is generated, composed onto a peer, and measured. `ts-content` exists.**
+**Three substrates. `CONTENT` v3.6 runs on `typescript`, on `python` and on `rust`, composed onto
+keystone peers and gated by the same oracle. The first two are identical check for check. The third
+is not, and the difference is the result.**
 
-`CONTENT` v3.6 in `typescript`: handler, types, chunking and SDK surface, installed into a
-keystone-generated peer through a wiring program, gated by `entity-core-go`'s `validate-peer`.
+| | `ts-content` | `py-content` | `rs-content` |
+|---|---|---|---|
+| `content` category | **12 PASS · 0 FAIL · 1 SKIP** of 13 | **identical, check for check** | **7 PASS · 2 FAIL · 4 SKIP** of 13 |
+| of which measure our module | **8 of 8 PASS** | **8 of 8 PASS** | **3 of 8** — the types face only |
+| `type_system` category | not run | not run | **6 checks FAIL → PASS**, all ours |
+| core-profile regressions | **0** (756 checks, 3 rounds) | **0** (756 checks, 2 rounds) | **0** (756 checks, 2 rounds) |
+| core-profile improvements | 6 | 6 | 6 |
+| unit tests | 31 | 38 | 40 + a compile that must fail |
 
-**The number, with its breakdown, and never as a percentage.** Of the oracle's 13 `content` checks:
-**8 measure this handler and 8 pass**; 4 more pass without contacting the peer at all (two build an
-in-memory store, two call `ValidateDescriptor` in-process); 1 skips for want of a `local/files` root
-to seed >16 MiB of content, so **the Amendment 1 frame-budget MUST is unexercised**. The 8/4/1
-split was predicted in `SYSTEM.toml [gate.expectation]` before the run and the run matched it.
-Report: `compositions/ts-content/status/CONFORMANCE-2026-09-05.md`.
+**The `rs-content` row is not a worse result. It is a different measurement, and the composition
+is built so it cannot pretend otherwise.** On that peer an extension's four faces do not all
+install: types and emit do, the handler body cannot at any visibility, and the SDK is a library
+nothing gated reaches. So three of the eight checks pass — exactly the three that measure type
+publication — and the three handler checks SKIP.
 
-**The regression guard is 0, measured rather than asserted.** Two arms — the peer's own host and the
-composed host, same oracle, same flags, same container, same staged `dist/`, one variable — over the
-full 756-check `--profile core`. No check went `PASS → non-PASS`. Six went the other way:
-`type_system.type_system_content_{blob,chunk,descriptor}_{fetch,match}`, `WARN → PASS`, with the
-`_match` half reporting `content hash match` — the Go oracle's own transcription of §2.1/§2.2/§2.4
-rendered byte-identically to ours. **Two independent readings agreeing, not N**, and it says nothing
-about chunking convergence. And 336 core checks are already non-PASS on the bare peer; that is now a
-diff rather than the word "pre-existing", which [ADR-0012] does not accept without a bisect.
+**And that experiment corrects a number we had already published.** Both prior compositions report
+*"8 of 8 measure our handler"*. The 8 is right about how many checks measure our **module** and
+wrong about which **face**: it is **5 handler + 3 types**. Nothing distinguished them while both
+faces installed. `rs-content` is the first composition where they got different answers, and
+exactly the 3 pass while exactly the 5 do not. Corrected in place at every site; no number changed.
 
-**`python` is tier A, measured, before a line was generated.** `gates/host-seam/probe-seam.py` runs
-four controls, not two: install + reach with a witness derived from a request field *and*
-registration-time state; nothing installed → RED; tree bound but the dict unset → `501`, proving
-which container dispatch consults; and the dict set with the tree unbound → `404` with the body's
-invocation counter at zero, then the same body answering `200` when called directly. That last one
-distinguishes *installed and never asked* from *not installed*, which is the failure this repo
-shipped once already.
+**The 8/4/1 split was written into each `SYSTEM.toml` before its run and both of those runs matched
+it. `rs-content`'s prediction did not, and the miss is recorded rather than corrected away** — it
+predicted zero movement in `content` and three checks moved, which is what produced the `8 = 5 + 3`
+correction above. Never `13P·0F`, never a percentage: 4 of the 12 passes never contact the peer (two
+build an in-memory store, two call `ValidateDescriptor` in-process), and the skip is
+`frame-limit-respected`, so **the Amendment 1 frame-budget MUST is unexercised, not passing** on any
+of the three. Reports: `compositions/{ts,py,rs}-content/status/`.
 
-**Three things the build turned up and routed, one line each.** CONTENT's Amendment 1 §6.2 MUST is
-**unimplementable on the `python` peer** — nothing on the connection, context, peer or store carries
-a frame budget, and `wire.MAX_FRAME` is a module constant equal to the exact 16 MiB literal the
-amendment names as the wrong answer. keystone's `Handler.operations` is `readonly string[]`, so
-**§6.1's manifest cannot be published through `registerHandler`** (we re-write the interface entity
-afterwards). And the `typescript` **client** API discards `envelope.included` from a response, so a
-consumer written against this peer's own client surface cannot receive content — the server side is
-correct and conformance is unaffected.
+**The retarget was a profile change, not a rewrite — measured rather than asserted.**
+`compositions/py-content/SYSTEM.toml` differs from `ts-content`'s in two fields.
+`languages/python/` is the same four files as `languages/typescript/` with different contents and
+the same interface. `tools/compose.py` and `tools/diff-arms.py` needed no change at all.
 
-**The two seam probes that preceded all of this still stand**, and they were the first measurements
-of the extension host seam anywhere in this ecosystem. `gates/host-seam/probe-seam.mjs` installs a
-language-native handler into the generated `typescript` peer through that peer's public registration
-surface, then reaches it with a real EXECUTE over TCP — asserting a response value derived from a
-request field *and* registration-time state, so a peer that merely wrote the right tree entities
-cannot pass. The negative control goes RED. **That peer's model-2 host obligations are green by
-execution; every other peer reads `unknown`, and will until something executes.**
+**And the second substrate paid for itself immediately, in four places a one-language template
+would have been wrong:** `python`'s peer has **no registration surface**, so its install adapter is
+six steps against the other's two; its `DispatchCtx` carries **no peer**, which changes function
+*signatures* and not bodies; it has **no compile step**, so the build driver's only build-time
+signal is an import check; and **the §3.4 security MUST is satisfied at two materially different
+strengths** — enforced by node's `exports` map in one language, convention in the other. The
+substrate model is `extensions/content/arch/AUTHORING-NOTES.md` §2, **and the third port revised
+three of those four rows**: §3.4 turned out to be two clauses that invert (`rust` strongest on one,
+weakest on the other), "no registration surface" turned out to be two different facts wearing one
+word, and "no peer in the context" went from *the* invasive difference to the common case at 2 of 3.
 
-`gates/host-seam/probe-entity-native.mjs` measures the **other** execution model on the same peer.
-It first measured a limit — the entity-native path evaluated `compute/literal` and answered `501` to
-anything richer, with an installed evaluator live, directly callable, and never consulted. That was
-**H7**, and it retracted a claim of ours that had already been routed. **Keystone closed it the same
-day**, and the re-measurement is the good half: an evaluator installed through the new seam answers a
-`compute/arithmetic` body **`200 value=5`, computed from operands read out of the tree**, while the
-`compute/literal` floor still answers first and the evaluator is never consulted for it. **H6 closed
-in the same round** — our *unmodified* `probe-seam.mjs` flipped `frame_budget_reachable` to `true`
-without our touching it, which is the strongest kind of corroboration available: their fix, our
-instrument, no coordination.
+**The biggest live risk paid off.** `python` has no public type-definition builder to reuse — its
+equivalents are all leading-underscore — so its seven type field maps are hand-built dicts, on
+exactly the surface where a mistake is silent: the entity would simply hash differently from
+everyone else's and dedup would stop, with no error anywhere. `entity-core-go`'s own independent
+transcription of §2.1/§2.2/§2.4 reports **`content hash match`** against all **three** ports —
+`rust` has no public builder either, and there it is `error[E0603]` rather than a convention. That
+is three of ours agreeing with one that is not. **Still not independent convergence**: one reading
+of one snapshot, three transcriptions in a shared generation lineage, and no chunker ran.
 
-**Both probes now resolve the peer through its `package.json` `exports` map and refuse to run against
-a stale `dist/`**, reporting `unknown` (exit 2) rather than a verdict — adopted from keystone, who
-caught their own instrument measuring a build nobody asked for. The guard has its own control.
+**All three findings we routed to keystone are closed, re-verified here by our own instruments, and
+two came back bigger than we sent them.** The frame budget is now readable on `python`
+(`ctx.frame_budget()`); `Handler.operations` takes the §3.7 mapped form, so our interface-rewrite
+workaround is **deleted**; and the dropped `included` map was **three sites, not the one we named**
+— including the §6.13(b) outbound path a handler uses to originate, which is the one that would
+have bitten a composed system rather than a test. That last one is **AP-5**: a routed packet naming
+a call site says *"at least here"* unless the search for others was run and can be cited.
+
+**Re-verifying K-1 forced an upgrade to our own probe, and that is the part worth keeping.** The
+frame-budget check searched for an attribute whose *name* matched `frame` and `max|limit|budget`.
+It went green the day the fix landed — correctly — and **could not have gone red** for a peer that
+stamped the 16 MiB constant onto every connection and named the field `max_frame_bytes`. It now
+configures the peer to enforce 3,145,749 and asserts the body reads 3,145,749, with a
+negative-control arm that builds the peer unconfigured, reads 16,777,216, and is rejected. D15,
+applied to our own instrument the session after ratifying it.
+
+## Cycle 1 is closed, and the review is the deliverable of equal weight
+
+**Three ports of one extension, and the most useful thing they measured is where findings come
+from.** Full close-out:
+`docs/status/REVIEW-CYCLE-1-2026-09-06-content-across-three-ports.md`.
+
+| | port 1 `typescript` | port 2 `python` | port 3 `rust` |
+|---|---|---|---|
+| **spec** findings routed to arch | **2** (both landed) | 0 | 0 |
+| spec ambiguities logged | **2** | 0 | 0 |
+| **peer/substrate** findings routed | 0 | **3** (closed) | **2** (open) |
+
+**Every spec finding came from the first port.** Reading a spec closely enough to emit code
+forces every ambiguity to a value on the first pass; later ports re-read the same document with
+the same questions already answered. **So a new language port is not how you find spec
+ambiguities — a new extension is.** That retires an assumption the build order rested on, and
+it is why the next move is `CONTENT` + `HISTORY` rather than a fourth language.
+
+**Two new gates, both on axes nobody upstream owns, and both found something on their first
+run.**
+
+- **`tools/sdk-parity.py`** — the SDK surface standard. **Ours to set, and that is the
+  operator's call rather than a gap in arch:** arch enforces what has to be enforced,
+  conformance lives on the wire, and a cross-impl surface oracle would enforce what
+  `GUIDE-EXTENSION-DEVELOPMENT` explicitly disclaims. We generate N ports of one extension and
+  want them to be the same extension. First run: **24 required · 9 substrate · 18 drift · 0
+  undeclared** of 51 names. **The operation inventory held** — all 15 functions in all three
+  ports — and 18 constants and types had drifted, almost all of it one decision made once in
+  `typescript` and never made again. Nothing could have caught it: each port passes its own
+  suite, and the oracle is a wire client that never sees an in-process surface. **That is
+  D16.**
+- **`gates/chunking-parity/`** — one corpus, three transcriptions of §3.6, compared byte for
+  byte. **3 ports agree on all 6 fields**, and the corpus generator's own fourth transcription
+  agrees with them. §3.7 makes chunking a Conformance algorithm whose divergence *does not fail
+  loudly*, and **nothing upstream measures it**: no oracle check chunks anything (`ed9b547`),
+  and §3.6.5's cross-impl vectors do not exist yet.
+
+**Is FastCDC standard to implement? Measured, and the answer is "yes, unsafely".** Four
+transcriptions agree byte for byte — but §3.6.3's inner loop `fp = (fp << 1) + gear[b]` fails
+three different ways in three substrates, **silently in two of them and as a debug-build panic
+in the third**, and the gear table's `uint64_le` is a second silent trap. It is implementable
+consistently; it is not safely implementable without a cross-impl corpus. We now have one.
+
+**And the process finding we least enjoyed writing down.** `gates/README.md` opens with an
+inherited rule — *the axis with no external authority is the one whose checks go stale* — which
+we wrote, applied to `isolation`, and then did not apply to the SDK face. Three ports shipped
+before anything looked. **D16: an axis with no upstream authority gets its gate at the second
+implementation, not when someone notices.**
+
+**Five instruments written in this repo; five with a defect found by RUNNING them and none by
+reading them.** Three would have reported green-or-agreeing, and two of those three would have
+reported agreement across three ports — the most convincing wrong answer available. **The two
+that caught themselves are the two that shipped with a refusal**, which is now D15's sharpened
+form: every instrument carries an explicit refusal on its own vacuity, not only a control.
 
 ## What is established
 
@@ -205,43 +273,91 @@ the delta. **We are not nominating a second control from a source read** — the
   header marks *historical*; the corpus is now at 362 vectors and locks **go-on-go only**, with the
   three-way bless owed. **A conformance claim cites the MANIFEST beside the bytes, never a spec
   header** — their rule, and we broke it. **COMPUTE moves up to build 3.**
-- ✅ **`typescript` × `CONTENT` — BUILT, COMPOSED, MEASURED.** See *Where this is*. What the build
-  changed about the plan, beyond the numbers:
+- ✅ **`typescript` × `CONTENT` and `python` × `CONTENT` — BUILT, COMPOSED, MEASURED.** See
+  *Where this is*. The structural results, which are the deliverable of equal weight to the code:
 
-  **The layout held, and the toolchain split earned itself immediately.** `extensions/<EXT>/<lang>/`
-  for source, `languages/<lang>/` for the toolchain, `compositions/<name>/` for the wiring.
-  `languages/typescript/` is four files — `profile.toml`, `build`, `test`, `host-launch` — and none
-  of them is extension-aware. That is the whole point: the number of build drivers stays at 46 and
-  never multiplies by the extension corpus.
+  **The layout held across the retarget, and the toolchain split is the load-bearing part.**
+  `languages/<lang>/` is four files per language — `profile.toml`, `build`, `test`, `host-launch` —
+  and not one of them is extension-aware. The build-driver count stays at 46 and never multiplies by
+  the extension corpus.
 
-  **The composition resolver is real and it refuses.** `tools/compose.py` reads `SYSTEM.toml` plus
-  each `EXTENSION.toml`, resolves the closure, and enforces the three composition-time invariants
-  before anything is staged — **I6** pattern collision, **I7** namespace overlap, **I9** unmet
-  dependency — plus the rule that an extension's pinned spec snapshot must exist. It emits
-  `output/<comp>/PLAN.json` as an output with a `--check` mode that fails if a fresh resolve differs.
+  **`sdk-native` is forced, not chosen, and it generalises.** The wire `register` op refuses
+  `system/*` patterns (core §6.2) on both peers, and CONTENT's pattern IS `system/content`. **Most of
+  the 26 inherit this**: a composition is a build-time artifact, and there is no remote-install story
+  for the standard corpus.
 
-  **`sdk-native` is forced, not chosen.** The peer's wire `register` op refuses `system/*` patterns
-  (core §6.2), and CONTENT's pattern *is* `system/content`. **Every extension owning a `system/*`
-  pattern inherits this** — which is most of the 26 — so a composition is a build-time artifact and
-  there is no remote-install story for the standard corpus.
+  **The composition resolver refuses before it emits.** `tools/compose.py` enforces I6 (pattern
+  collision), I7 (namespace overlap) and I9 (unmet dependency) plus a pinned-snapshot check, and
+  emits `output/<comp>/PLAN.json` with a `--check` mode asserting the resolve is deterministic. It
+  needed **no change** for the second language, and none for the third — but the third did
+  need a new *concept*, `[system.faces]`, because a composition on that peer cannot promise a
+  handler. The resolver's refusals did not change; what it refuses grew by one.
 
-  **The per-language adapter is bigger than "call registerHandler", and now measured on two peers.**
-  `typescript` has a registration method that writes three of the §11.6.1 entities and no type
-  entities, cannot express operation input/output types, and gives the body `ctx.peer` and
-  `ctx.frameBudget()`. `python` has **no registration surface at all** — every write is the caller's
-  — and its `DispatchCtx` carries no peer, no suffix and no budget. A template written against
-  `typescript` alone would not have retargeted. The table is in
-  `extensions/content/arch/AUTHORING-NOTES.md` §2.
+  **What retargeting actually costs is now measured, not guessed** —
+  `extensions/content/arch/AUTHORING-NOTES.md` §2, now **five axes across three peers**, with §2.5
+  recording which two-column rows survived the third column and which did not. The two rows that
+  would have broken a naive template at two peers: the dispatch context carrying no peer (it
+  changes signatures — and the third port demoted this to the common case, 2 of 3),
+  and the packaging boundary being enforced in one language and a promise in the other (it changes
+  how strongly a security MUST is satisfied).
 
-  **The §3.4 MUST is enforced by the module resolver, not by review.** `reassemble_content` is
-  module-private and absent from the package's `exports` map; the only public route takes a handler
-  context a consumer cannot manufacture. The test imports the package **by name** and asserts on
-  what node lets through — including that a deep import into `internal/` is refused.
+  **Neither port is a translation of the other.** Both are transcriptions of the same pinned
+  snapshot. A translation of our own first port would agree with it by construction and tell us
+  nothing — which is what makes the `content hash match` result worth anything.
 
-- **Next: `python` × `CONTENT`.** The retarget test, and the first place a template meets a
-  different module system, a different error convention, and an install surface that is a public
-  attribute rather than a method. Then `rust` — compile and unit-test only, tier B, never
-  conformance evidence.
+- ✅ **`rust` × `CONTENT` — BUILT, COMPOSED, MEASURED, and it changed the model rather than
+  confirming it.** Planned as "tier B: generate, compile, unit-test, no install, no conformance
+  claim". **All three of those turned out to be wrong in the same direction**: there IS an install
+  (types), there IS a third-party conformance claim (`type_system`, six checks), and the reason
+  both exist is the finding.
+
+  **The four faces of one extension get four different answers on one peer.** Types install
+  (`Store::bind` is public). The emit consumer installs (`Store::register_tree_consumer`, measured
+  live with two negatives). The SDK is a library nothing gated reaches. **The handler body cannot
+  be installed at any visibility** — measured over real loopback TCP with both arms, and by
+  `rustc` for the three layers a running program cannot ask about:
+
+  ```
+  A. nothing bound at system/content        404  handler_not_found
+  B. all four §11.6.1 tree writes bound     501  no_handler_body
+  C. the same body called DIRECTLY          200  invocations 0 -> 1
+  error[E0624] register_handler is private · [E0609] no field `handlers` · [E0603] `Outcome` is private
+  ```
+
+  **So D13 was amended: a seam claim names a FACE or it names nothing.** `<peer> is a host` is not
+  a proposition; `<peer> hosts <face>` is. A per-peer `[host]` column was always the wrong
+  granularity and no composition where all four faces installed could have shown it.
+
+  **The composition's most important line is the one it does not write.** Binding those four tree
+  writes is possible and would move the peer from `404 handler_not_found` — true — to
+  `501 no_handler_body`, which says a handler exists and is broken. `tools/compose.py` drops the
+  pattern from the resolved plan when `[system.faces].handler = "not-installable"`, so the wiring
+  program that would do it **cannot be generated**.
+
+  **The riskiest part paid off a third time, and this is the one number worth quoting.** `rust` has
+  no public type-definition builder either — `FSpec` / `TypeDef` carry no `pub`, so it is
+  `error[E0603]` where `python` had a convention — so its seven field maps are hand-built too.
+  `entity-core-go`'s independent transcription reports **`content hash match`** for `blob` /
+  `chunk` / `descriptor` against all three ports. **Still three of ours agreeing with one that is
+  not**, still one reading of one snapshot, and still no chunker ran.
+
+  **§3.4 turned out to be two clauses that invert.** `rust` is the *strongest* of the three ports
+  on "do not expose it" — `mod internal;` with no `pub`, refused by the compiler, no dynamic route
+  around it — and the *weakest* on "put a capability-checking wrapper in front", because there is
+  no dispatcher-built value to demand. Recorded as two blocks in `EXTENSION.toml`, because
+  reporting one verdict for two requirements that invert between substrates is the D13 error one
+  level up.
+
+  **And the pre-registered expectation was wrong, which is recorded rather than corrected away.**
+  `type_system` predicted 3 checks moving and 6 moved (each type has a `_fetch` and a `_match` —
+  AP-1's shape again). `content` predicted zero movement and 3 moved. The second miss is what
+  produced the `8 = 5 + 3` correction above.
+
+- **Next: factor the generator.** Three working modules is the input a template should be derived
+  from, and `AUTHORING-NOTES.md` §2.5 is the brief: of the rows that had two values before the
+  third port, **three inverted or gained a third value and two were demoted from "the invasive
+  difference" to "the common case"**. A template derived from the two-column table would have been
+  wrong in five places.
 
 - **The S0′ resolver** — dependency closure, consumer-position assignment, ordering-constraint
   validation. The graph is already machine-readable in the corpus.
@@ -254,7 +370,8 @@ extension with an instrument that is neither ours nor keystone's, it is the prec
 model-3 question, and the collapse argument turns on a per-language port cost nobody has measured.
 **It now has a destination as well as a gate** — H7 means a generated evaluator installs into a real
 peer, so build 3 ends with an entity-native body running rather than with an argument.
-4. A second language, after there is something whose port is worth measuring.
+4. ✅ A second language, then a third. Done: `python` 2026-09-06, `rust` 2026-09-06 — and the
+   third is the one that changed the substrate model rather than adding a column to it.
 
 ### What the first read-for-generation found, before a line was generated
 
