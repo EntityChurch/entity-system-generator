@@ -64,7 +64,7 @@ use std::rc::Rc;
 use entity_core_protocol::cbor;
 use entity_core_protocol::peer::capability;
 use entity_core_protocol::peer::model::Entity;
-use entity_core_protocol::peer::store::Store;
+use entity_core_protocol::peer::store::{ExecContext, Store};
 use entity_core_protocol::value::{Key, Value};
 
 use super::subgraph::grant_covers;
@@ -214,6 +214,10 @@ pub(crate) struct EvalContext<'a> {
     pub capability: Option<&'a Entity>,
     /// §4.1 `ctx.dispatch_execute`. `None` on a path with no request context (§7.2 reactive).
     pub dispatch: Option<&'a Dispatcher<'a>>,
+    /// §6.8a — the execution context to carry onto a tree write this evaluation performs. See
+    /// [`crate::sdk::RequestContext::exec_context`]: `None` is the AUTONOMOUS position, not a
+    /// missing value.
+    pub exec_context: Option<&'a ExecContext>,
 }
 
 impl<'a> EvalContext<'a> {
@@ -534,7 +538,18 @@ fn dispatch(entity: &Entity, scope: &Rc<Scope>, budget: &mut Budget, ctx: &EvalC
                     format!("Capability does not cover tree read: {path}"),
                 );
             }
-            ctx.register_dependency(&path);
+            // §7.1 — A SENTINEL IS NOT A PATH, so it does not become a reactive dependency.
+            // Since keystone's 0.8.2.20 work `capability::canonicalize` is TOTAL and returns
+            // `NEVER_MATCH` for the §1.4 reserved forms (`./x`, `../x`, `*/x`) instead of
+            // prefixing them. That value is "unreachable as a canonical path by CONSTRUCTION"
+            // (their comment), so registering it would mean "re-evaluate when this path
+            // changes" about a path that cannot change — and every reserved-form lookup in
+            // every subgraph would share the one key, which is cross-talk rather than a
+            // dependency. The peer's own constant, never a copy of the string: the whole
+            // failure this avoids is our spelling drifting from theirs.
+            if path != capability::NEVER_MATCH {
+                ctx.register_dependency(&path);
+            }
             match ctx.store.get_at(&path) {
                 None => fail(CODE_NOT_FOUND, format!("No entity at path: {path}")),
                 // §2.1's spreadsheet semantic: a stored EXPRESSION evaluates; a stored value —
@@ -1243,6 +1258,19 @@ fn eval_builtin(
 /// than a `system/tree:put` dispatch, because the first door needs re-entrant dispatch (K-5).
 /// `Store::bind_with_context` runs the §6.10 emit pathway itself, so an emit consumer sees a
 /// `store` write exactly as it sees any other.
+///
+/// **And for two days the call below was `Store::bind`, which passes NO context** — so a
+/// consumer would have read a caller's `builtins/store` write as AUTONOMOUS and attributed it to
+/// the local peer. The doc comment above named `bind_with_context` the whole time; the code did
+/// not do it. Keystone found it by reading, not by driving, and could not have driven it: no
+/// composition of ours runs COMPUTE and HISTORY together, so the only consumer that would have
+/// noticed does not exist in any arm we run
+/// (`ROUTING-2026-09-13-b-entity-system-generator-embed-data-is-measured-the-store-refuses-a-forged-hash-and-one-bind-in-your-evaluator-drops-the-caller`
+/// §4). Fixed 2026-09-14.
+///
+/// **A doc comment asserting the call it sits above is the weakest form of evidence in this
+/// tree**, and this is the instance that proves it: the sentence was correct about the API and
+/// false about the caller, and nothing in `make check` reads a doc comment.
 fn builtin_store(
     args: &BTreeMap<String, Vec<u8>>,
     scope: &Rc<Scope>,
@@ -1293,7 +1321,20 @@ fn builtin_store(
         Entity::make("primitive/any", data)
     };
 
-    ctx.store.bind(&target, &stored);
+    // THE RETURNED `bool` IS CHECKED, and it is not defensive programming. Since keystone's
+    // 13-b the store REFUSES an entity whose carried hash is not its own content hash and
+    // returns `false`, storing nothing and firing no event. Dropping that would let
+    // `builtins/store` answer with the entity it "wrote" to a tree that does not hold it —
+    // a write that reads as done and is not, which is the failure mode the refusal exists to
+    // stop. `Entity::make` above always produces a holding hash, so this is unreachable today;
+    // it is written because `stored` comes from three branches and only one of them is
+    // `Entity::make`.
+    if !ctx.store.bind_with_context(&target, &stored, ctx.exec_context.cloned()) {
+        return err(
+            CODE_INVALID_EXPRESSION,
+            format!("Store refused the write at {target}: the entity's hash is not its content hash"),
+        );
+    }
     ctx.mark_encountered(&stored.hash);
     // §3.5 does not pin the return value. We return the entity written, which every
     // implementation has in hand. Routed as a question.

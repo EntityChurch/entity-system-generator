@@ -231,6 +231,40 @@ def evaluate(stem: str, declared: dict, measured: dict, straddles: dict | None =
 
     want_i = set(declared.get("improved") or [])
     got_i = set(measured["improved"])
+
+    # ── D23 — AN EMPTY `improved` IS A CLAIM, AND IT MUST BE MADE OUT LOUD ──────────────────
+    #
+    # `improved = []` says: on this category, installing the extension moved NOTHING. That is
+    # sometimes true and always suspicious, and it is the exact artifact that hid two of our own
+    # defects for nine days. `python × entity_native` was blessed at `improved = []` because the
+    # peer had no evaluator seam, the face read `not-installable`, and the empty list looked like
+    # an honest record of a substrate limit. It was an honest record of a substrate limit AND a
+    # cover for a wrong signature, an unpopulated §3.2 E1 scope and an unnarrowed §4.1 read path —
+    # none of which any test could reach, because the face they lived behind could not be
+    # installed.
+    #
+    # **A face reported ABSENT is a face whose contents are UNMEASURED**, and those are two
+    # different words. So the empty set is allowed and must carry `why_nothing_moved`: which face
+    # is absent, and what is consequently unmeasured rather than known-good. The field is prose on
+    # purpose — there is nothing here a machine can adjudicate — and its whole job is that writing
+    # it requires saying "and therefore I do not know about X", which is the sentence the empty
+    # list was standing in for.
+    #
+    # SCOPE: *nothing moved at all*, so a category with a regression or a declared straddle is out
+    # — something moved there, it is just not an improvement, and demanding the field anyway would
+    # put the rule in front of readers who are already looking at a finding. Caught by this file's
+    # own AP-23 control going red on the first draft, which is the check doing its job on the
+    # check.
+    if (not want_i and not got_i and not measured["regressed"]
+            and not declared.get("why_nothing_moved")):
+        out.append(
+            f"{where}: `improved` is EMPTY and there is no `why_nothing_moved`. An empty set is "
+            f"a claim that the composition moved nothing on this category; declare WHICH FACE is "
+            f"absent and WHAT IS THEREFORE UNMEASURED. A face reported absent is a face whose "
+            f"contents are unmeasured, and an honest report of an absence reads as an account of "
+            f"the gap when it is not one (D23)."
+        )
+
     lost = sorted(want_i - got_i)
     gained = sorted(got_i - want_i)
     if lost:
@@ -492,6 +526,27 @@ def self_test() -> int:
     expect("and a straddle declared for a DIFFERENT check does not cover this one",
            any("REGRESSION" in f for f in evaluate(
                "c", reg_baseline, m_reg, {"c.other": {"routed": "r.md"}})))
+
+    # ── D23: an empty `improved` must say what is unmeasured behind it ──────────────────────
+    #
+    # Four cases, and the pair is the point: the rule has to fire on an UNEXPLAINED empty set and
+    # stay silent on an explained one, AND it must not fire whenever the set is non-empty — a
+    # version that just demanded the field everywhere would pass case 1 alone and be noise.
+    nothing = {"c.k": "FAIL"}
+    m_zero = measure(*arms(nothing, nothing))
+    zero_baseline = {"total": 1, "composed": m_zero["composed"], "bare": m_zero["bare"],
+                     "improved": []}
+    expect("an unexplained empty `improved` fails",
+           any("unmeasured" in f for f in evaluate("c", zero_baseline, m_zero)))
+    expect("...and an explained one does not",
+           evaluate("c", dict(zero_baseline, why_nothing_moved="no evaluator seam on this peer; "
+                              "the four entity-native scope checks are UNMEASURED, not passing"),
+                    m_zero) == [])
+    expect("...and it does not fire when something DID move",
+           not any("unmeasured" in f for f in evaluate("history", declared, m_before)))
+    expect("...and an empty declaration against a run that gained still reports the GAIN",
+           any("UNDECLARED" in f for f in evaluate(
+               "history", dict(d3, improved=[], why_nothing_moved="x"), m_more)))
 
     # ── the check SET changing is its own failure, ahead of everything else.
     expect("a changed check total fails",

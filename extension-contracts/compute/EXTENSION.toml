@@ -135,6 +135,58 @@ model = "sdk-native"                 # in-process against a live peer object. Sa
 # stronger than it was for CONTENT or HISTORY, because TWO gated paths run through this
 # surface: the `system/compute:eval` handler and the H7 evaluator seam. One implementation,
 # two consumers; a defect in it cannot hide in either.
+# ── [requires] — what this extension needs FROM A PEER, by keystone contract name (W-16) ──────
+#
+# The names are keystone's: `protocol-generator/shared/peer-contract/requirements.toml` (REQUIRED and
+# MODULE rows) and `CONTRACT-DRAFT.md` §5 (pending). **We never keep a copy of that vocabulary** —
+# `tools/check-eligible.py` reads it out of keystone's tree on every run and fails a name it does
+# not define. `make eligible` refuses a composition when any name below meets a report row that is
+# not `pass` (`ROUTING-2026-09-13-a-entity-system-generator-the-contract-runs-rust-is-certified-and-what-we-changed-in-your-draft` §0).
+#
+# `pending` is the honest column: a surface this extension USES that no report certifies, because
+# keystone lists it as named-not-measured. It is printed on every run and `--strict-pending` fails
+# it. It is not a blessing; it is the list of things we build on without evidence.
+#
+# CENSUS, not recall: every name cites the call site that needs it. Taken on the `rust` cell
+# (2026-09-13) and RE-CENSUSED across all three cells 2026-09-14, when keystone's S3 brought the
+# `typescript` and `python` peers under the contract and the re-census this block promised came due
+# (`ROUTING-2026-09-13-c-entity-system-generator-typescript-and-python-are-certified-your-pre-contract-declarations-now-fail-and-what-changed-under-your-arms`).
+# The contract is the same interface in every language up to spelling, so the NAMES are the
+# extension's, not the port's.
+#
+# **The re-census searched for the SPELLINGS, not for one spelling.** A first pass over the three
+# cells reported no consumer registration in either `typescript` cell — which was a fact about the
+# pattern (`register_tree_consumer`), not about the cells: `registerTreeConsumer`/`EmitBus` is how
+# that target spells it, and all six cells do register one. D14's own declared limit, met in the
+# work the limit was written about: a grep proves what it matches, and nothing about how the thing
+# you are counting is spelled.
+[requires]
+contract = "keystone-peer-contract"
+required = [
+  "install.handler", "install.grant", "install.consumer", "context.contents",
+  "context.unforgeable", "context.dispatch", "event.context", "authority.path_permission",
+  "embed.data",
+]
+modules  = ["install.evaluator"]
+# `embed.data` LEFT this list on 2026-09-14. It was the whole of the `pending` column — the honest
+# record of a surface every extension here uses and no report certified. Keystone measured it on
+# all three peers (nine driver cases, three controls, 19/19 plants on `rust`) and it is REQUIRED,
+# so it moved up. The column stays, empty, because `pending` being empty is a fact worth being able
+# to read; deleting the key would make the next unmeasured surface look like it had nowhere to go.
+pending  = []
+
+[requires.why]
+"install.handler"           = "languages/rust/extensions/compute/src/lib.rs register_for_peer_life -> Peer::register_handler(spec, body).detach()"
+"install.grant"             = "src/lib.rs ComputeExpressionEvaluator reads ctx.handler_grant(); §3.3's scope reach runs under the handler's own grant"
+"install.consumer"          = "src/lib.rs install_compute -> Store::register_tree_consumer, AFTER construction (the §7 engine)"
+"context.contents"          = "src/handler.rs HandlerRequest::from_context: operation, params, resource, pattern, caller_capability"
+"context.unforgeable"       = "src/handler.rs takes authority decisions from ctx.caller_capability(); only sound if nothing but the dispatcher builds a context"
+"context.dispatch"          = "src/handler.rs ctx.dispatch_execute(LocalExecute) — compute/apply handler mode (§3.4)"
+"event.context"             = "src/internal/reactive.rs on_tree_change reads ev.context; writes back through Store::bind_with_context"
+"authority.path_permission" = "src/internal/subgraph.rs capability::check_path_permission(operation, path, token, \"system/tree\", local_peer)"
+"install.evaluator"         = "src/lib.rs install_compute -> Peer::set_expression_evaluator, read back through expression_evaluator()"
+"embed.data"                = "REQUIRED since keystone 13-b. rust: Store::{put_entity, bind, bind_with_context, unbind_with_context, get_at, get_by_hash} throughout src/; python: Store.{put_entity, get_by_hash, bind, get_at, unbind}; typescript: ContentStore.{put,get} + EntityTree.{put,get,remove}. Each port's spelling is the binding row in that peer's contract/bindings.toml, echoed into its KEYSTONE-PEER-REPORT.json. publish_compute_types binds 33 types directly rather than through HandlerSpec::with_type (install.types) — W-20"
+
 [sdk.ComputeEvaluator]
 cite       = "§4.1 evaluate + §4.2 resolve + §4.3 scope"
 public     = true
@@ -612,7 +664,7 @@ one. No oracle vector reaches it — every `compute` vector sends a well-formed 
 is a worklist item against the other port, not a finding about anyone.
 """ }
 
-reserved_relative_path_forms = { value = "python: `invalid_expression`. typescript: accepted, then `not_found`. rust: accepted, then `not_found` — through ITS peer's own `canonicalize`.", cite = "§1.4 / §5.4 via §2.1's `system/tree/path`", note = """
+reserved_relative_path_forms = { value = "python: `invalid_expression`. typescript: accepted, then `not_found`. rust: canonicalizes to the NEVER_MATCH sentinel — `not_found` under a permissive predicate, `permission_denied` under a real grant (2026-09-14).", cite = "§1.4 / §5.4 via §2.1's `system/tree/path`", note = """
 `./x`, `../x` and `*/x` are the reserved forms core §1.4/§5.4 name as errors. This port
 canonicalizes through **the peer's own** `entity_core.peer.capability.canonicalize`, which
 returns `None` for all three; `typescript`'s port re-derives the rule inline as
@@ -633,6 +685,28 @@ disagree. That looked routable, and is not: core 0.8.2.20's `CORE-TREE-PATH-FLEX
 and *"a peer that admits such a request and matches nothing is also conformant."* Both peers are
 conformant. The worklist item against `typescript` is withdrawn: on the current core text neither
 reading is the faithful one, and `python`'s refusal is the stricter of two conformant answers.
+
+** FOURTH DATA POINT, 2026-09-14, AND THE `rust` COLUMN MOVED WITHOUT ANYONE ASKING US. ** Keystone's
+0.8.2.20 work made `capability::canonicalize` TOTAL: the three reserved forms now return a
+`NEVER_MATCH` sentinel (`/never-match`) instead of being prefixed. It arrived in the 45-language
+sweep — `c255fdfe`, `2f6547ae` — which is addressed to arch and not to us, and changed our substrate
+anyway. **Our own test caught it**, having been written at the third port with the line *"if keystone
+makes this peer refuse, this test goes red and says so."* It went red. It is now three assertions,
+because the VERDICT is unchanged and two things under it moved:
+
+- **A sentinel is not a path, so it is no longer registered as a §7.1 reactive dependency.**
+  `NEVER_MATCH` is *"unreachable as a canonical path by CONSTRUCTION"* (their comment), so a
+  dependency on it says *re-evaluate when this changes* about something that cannot change — and
+  every reserved-form lookup in every subgraph would share the one key, which is cross-talk rather
+  than a dependency. We read their `capability::NEVER_MATCH` constant and never a copy of the string.
+- **Under a REAL grant the answer is now `permission_denied`, not `not_found`**, because
+  `matches_pattern` refuses the sentinel in either operand — fail-closed, which is the right
+  direction and is still a changed answer. **It was invisible until driven:** every existing
+  assertion here ran on the evaluator's permissive default, so the capability arm was never reached.
+
+So the three ports now give THREE different codes for one input. Still not routed, and for the same
+reason as before: `CORE-TREE-PATH-FLEX-1` makes all three conformant. Recorded so that the next port
+does not read one of them as the answer.
 """ }
 
 grant_covers_absent_operation = { value = "python: asks the peer about the empty string, which a non-`*` grant refuses. rust: the same, through `check_permission` over the same kind of carrier EXECUTE. typescript: skips the operations dimension.", cite = "§3.3 Phase 2 check_grant_covers", note = """

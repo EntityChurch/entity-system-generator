@@ -423,11 +423,53 @@ improved = [
   "type_system.type_system_compute_subgraph_match",
 ]
 
+# ── RE-BLESSED 2026-09-14: 3 -> 9 PASS, and the empty list above was the FINDING ─────────────
+#
+# The previous bless read `composed = bare = {PASS 3, FAIL 10}` with `improved = []`: on this
+# target the COMPUTE extension moved **not one** entity-native check. That was recorded honestly
+# and read as a substrate limit — keystone's `python` peer had no `set_expression_evaluator`, so
+# the fifth face was `not-installable` and there was nothing to argue with.
+#
+# **It was a substrate limit hiding TWO port defects, and the seam landing is what exposed them.**
+# Keystone's S3 bring-up gave this peer the H7 seam with the binding
+# `evaluator(ExpressionRequest, HandlerContext) -> Outcome | None`. Installing against it moved
+# the number in three steps, each a separate defect found by RUNNING and not by reading:
+#
+#   3 -> 3   the seam existed and our evaluator had the WRONG SIGNATURE — one argument, returning
+#            a bare `Entity`. Every dispatch would have raised inside the peer's `except` and
+#            answered `500 internal_error`. Keystone predicted this in their 13-c §3 and told us
+#            not to paper over it with a read-back. (Their G-6.)
+#   3 -> 8   §3.2 E1's scope was never pre-populated on this port. `evaluate_at` had no
+#            `bindings` parameter at all, so every entity-native body evaluated against
+#            `empty_scope()` and `lookup/scope("params")` resolved against nothing. Cost:
+#            `scope_params`, `scope_operation`, `multiple_operations`.
+#   8 -> 9   §4.1's tree reads were never narrowed under the HANDLER GRANT — this port passed no
+#            path predicate on the entity-native route, so it ran permissive. Cost:
+#            `lookup_tree_outside_scope`, which is the check named after exactly that.
+#
+# **Both defects were UNREACHABLE and therefore invisible.** No test could drive them, no oracle
+# check could score them, and the contract's own `evaluator_face` reported `not-installable`,
+# which is true and was the whole problem: a face that cannot be installed hides every defect
+# behind it, and the honest report of the absence read as an account of the gap. That is
+# `[substrate.oracle_read_path]`'s sentence one layer in — a limit on what can be MEASURED
+# masquerading as a limit on the extension.
+#
+# The 4 that remain, and none is ours: `missing_grant_fail_closed` (K-13, a peer defect — passes
+# on `typescript`, fails on `python` and `rust`), `result_unwrapped` (K-12, all three ports),
+# `dispatch_with_deliver_to` (K-14, all three), and `dual_check_handler_grant_blocks`, which
+# needs a capability CEILING field this port's `EvalContext` does not have and `rust`'s does.
+# That last one is ours and is the next increment; `typescript` fails it too, and cannot fix it,
+# because its seam takes no context at all (routed).
 [gate.baseline.entity_native]
-measured = "2026-09-13"   # 2 round(s)
+measured = "2026-09-14"   # 2 round(s)
 total    = 13
-composed = { PASS = 3, FAIL = 10 }
+composed = { PASS = 9, FAIL = 4 }
 bare     = { PASS = 3, FAIL = 10 }
 improved = [
-
+  "entity_native.dual_check_both_pass",
+  "entity_native.lookup_tree_outside_scope",
+  "entity_native.lookup_tree_within_scope",
+  "entity_native.multiple_operations",
+  "entity_native.scope_operation",
+  "entity_native.scope_params",
 ]

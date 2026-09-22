@@ -53,7 +53,18 @@ _NOT_SURFACE = {
     # imported to DEFINE the API, not to export it. `from entity_compute import *` does reach
     # these, which is a real (small) leak this test exists to keep bounded rather than to
     # pretend is absent.
-    "Any", "Entity", "dataclass",
+    #
+    # `Outcome` joined them 2026-09-14 with the G-6 evaluator port: the certified
+    # `install.evaluator` binding returns `Outcome | None`, so the module body has to name the
+    # peer's type to build one. It is keystone's name, not ours — exporting it would put a
+    # peer type in this extension's SDK surface and `tools/sdk-parity.py` would then require
+    # the other two ports to export their own spelling of it, which is drift invented by an
+    # import statement. This test failing on it was the gate working on the first run after
+    # the port.
+    # `check_path_permission` joined them with the same port: §4.1 narrows entity-native tree
+    # reads under the HANDLER GRANT, and this is the peer's own predicate (keystone's H9, which
+    # this seat routed). Keystone's name, not ours — same reason as `Outcome`.
+    "Any", "Entity", "Outcome", "check_path_permission", "dataclass",
     # §3.1's manifest, read by `install_compute` and by `test_install.py`. NOT surface on
     # purpose: `typescript` carries the same data as `ComputeHandler.operations`, an instance
     # field with no exported name, so putting this in `__all__` would be drift with no

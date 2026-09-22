@@ -59,20 +59,12 @@ host_entry = "host.py"   # speaks keystone's host CLI verbatim: --port / --name 
 # Set at port 2, when 100 proved tight for interpreter startup.
 startup_ticks = 150
 
-[extension_host]
-# Facts about THIS peer that an extension module has to be built around. Every row was
-# measured by `languages/python/gates/host-seam/probe-seam.py`, not read -- and keystone now carries the
-# same block on their own profile, seeded from the same probe.
-registration_surface = "none"        # no registerHandler, no register_handler. The
-                                     # module performs all four §11.6.1 writes itself.
-ctx_carries_peer     = false         # store/tree/emit arrive by registration-time capture
-ctx_carries_suffix   = false         # re-derive from ctx.exec's uri
-frame_budget         = "ctx.frame_budget()"   # MEASURED BY VALUE, not by attribute name:
-                                     # a peer configured to enforce 3,145,749 reports it,
-                                     # and an unconfigured one reports the 16 MiB default
-                                     # the §6.2 amendment names as the wrong answer.
-                                     # Landed keystone 2026-09-06 (our K-1).
-handler_protocol     = "handle_op(op, ctx) -> Outcome"   # duck-typed; no base class
+# ── the keystone host facts are NOT declared here ─────────────────────────────────────
+# `[extension_host]` lived here until 2026-09-13 and was removed on purpose: nothing in this tree
+# read it, the three targets carried three different shapes, and it was a second copy of the row
+# keystone keeps in its own profile. The authority is keystone's contract report once it exists
+# (docs/status/PROPOSAL-2026-09-13-the-keystone-peer-contract.md §D); until then, keystone's own
+# `[extension_host]` row. What a COMPOSITION gets on this peer is `[system.faces]`, per composition.
 
 # ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
 # D17: a per-target VALUE lives in the profile. See the typescript profile for the reason
@@ -94,3 +86,40 @@ self_test_line = 'return _err(400, "planted_bogus_code", "x")'
 [sdk_surface]
 entry_point = "__init__.py"
 # The package initialiser, whose `__all__` IS the declared surface on this target — convention rather than enforcement, and the cell states it.
+
+# ── [peer_contract] is GONE, and its own rule is what removed it ─────────────────────────────
+#
+# This target carried `status = "pre-contract"` from 2026-09-13 as the ONE declared exception to
+# `tools/check-eligible.py`'s "no report, not eligible" rule, under a comment ending *"Delete it
+# when that happens."* Keystone published a report for this peer the next day and the gate's R0
+# rule failed all three python compositions, exactly as the block said it would. Deleted
+# 2026-09-14 — `ROUTING-2026-09-13-c-entity-system-generator-typescript-and-python-are-certified-your-pre-contract-declarations-now-fail-and-what-changed-under-your-arms` §0.
+#
+# Kept as a comment rather than a silent deletion because the block is the only instance in this
+# tree of an exemption that carried its own expiry CONDITION instead of a date, and it expired on
+# the condition. That is the shape to copy the next time a target needs one.
+
+# ── [peer_drift] — the certified commit is OLD, declared and self-expiring ────────────────────
+#
+# Read by `tools/check-eligible.py` (`make eligible`) and it covers ONE rule, F1's `moved` arm.
+# Keystone's 45-language sweep (`c255fdfe` sentinel, `2f6547ae` vanguard 0.8.2.23) landed
+# capability changes on all three peers AFTER the commits their contract reports were measured
+# at, and a merge put both lines in one tree. The report is still a true statement about
+# `certified` below; it is no longer a statement about the source we compile.
+#
+# **This is a DECLARATION, not a suppression, and the difference is mechanical.** It names the
+# commit it is ABOUT, so it expires on the CONDITION rather than on a date: the day keystone
+# re-certifies, `delivery.commit` changes, `drift_applies()` returns False and F1 fires again
+# with nobody having to remember. `--strict-drift` promotes it back today. `routed` must resolve
+# (D18) and the gate REFUSES a declaration missing it — a declaration with no destination is a
+# suppression (D21).
+#
+# **We are deliberately NOT asking keystone to re-certify.** They have an arc running; the
+# operator's call is that we absorb the drift rather than stall it. We measured the delta
+# ourselves instead, and it moved a real answer on `rust` — see the routed packet §5 and
+# `extension-contracts/compute/EXTENSION.toml [assumptions].reserved_relative_path_forms`.
+[peer_drift]
+certified = "fd31d9cacc90"
+since     = "2026-09-14"
+routed    = "docs/status/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
+reason    = "keystone's 45-language sweep moved peer capability source after certification; absorbed by operator ruling rather than routed as a re-certification ask"

@@ -5,7 +5,7 @@
 ## same across all three, which is what "the language axis is a profile, not a rewrite"
 ## means. For the first nine compositions one VALUE here changed what a composition could
 ## claim — on this peer a handler body could not be installed at all — until keystone
-## landed H1 on 2026-09-12 and `[extension_host]` below was re-measured.
+## landed H1 on 2026-09-12.
 ##
 ## That is not a defect in the layout. It is the layout doing its job: the thing that
 ## differs is recorded as a VALUE in the one place per language, rather than as a
@@ -81,39 +81,12 @@ host_entry = "host/target/debug/composed-host"
 # budget is generous rather than measured, and it is declared so that saying so is possible.
 startup_ticks = 150
 
-[extension_host]
-# Facts about THIS peer that an extension module has to be built around, each MEASURED by
-# `languages/rust/gates/host-seam/probe-seam-rust.sh` (a running program for Reach, rustc for H3).
-#
-# ** RE-MEASURED 2026-09-12 (second session) at keystone `dev` 029d1c7. ** Every handler-face row
-# below read the opposite until then — `registration_surface = "none"`, `handler_install =
-# "IMPOSSIBLE"`, `outcome_exported = false`, `frame_budget = "wire::MAX_FRAME (a public const, NOT
-# configurable)"` — and all of it was true of the peer it was measured on. Keystone landed H1, H3,
-# H6, H7, H9 and K-5 on this peer for our K-9
-# (`ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe`).
-# keystone now carries its own `[extension_host]` row for `rust`; these are ours, measured from
-# outside the crate, and where the two disagree that is a finding.
-registration_surface = "Peer::register_handler"   # public; probe scenario 1 B (witness, counter 0 -> 1)
-handler_install      = "installable"              # probe scenario 1 A/B/C: 404 -> 200 witness -> 404
-                                                  # after unregister_handler, counter unmoved
-ctx_type             = "HandlerContext"           # public type, `pub(crate)` fields: a body receives
-                                                  # one and cannot construct one (why each cell's
-                                                  # unit tests keep their own HandlerRequest)
-outcome_exported     = "HandlerResult"            # public. `peer::core::Outcome` is still private
-                                                  # (E0603, access_absent claim 3) and nothing needs it
-raw_container        = "private"                  # H3: E0616 `native_handlers`, E0609 `handlers`,
-                                                  # E0624 `resolve_handler` — access_absent, each code required
-emit_consumer        = "Store::register_tree_consumer"   # live, two negatives (scenario 2)
-type_publication     = "Store::bind"
-frame_budget         = "HandlerContext::frame_budget (configured by PeerConfig::max_frame_bytes)"
-                                                  # probe scenario 3, BY VALUE: 3,145,749 configured
-                                                  # -> read back; unconfigured -> 16,777,216
-expression_evaluator = "Peer::set_expression_evaluator"  # probe scenario 5: 501 -> 200 (a request
-                                                  # field folded in) -> 501 for a declined body; the
-                                                  # compute/literal floor answered unasked
-path_permission      = "capability::check_path_permission"  # H9; compiled against by access_control
-local_dispatch       = "HandlerContext::dispatch_execute"   # K-5; measured by the compute category's
-                                                  # three handler-mode checks through `install_compute`
+# ── the keystone host facts are NOT declared here ─────────────────────────────────────
+# `[extension_host]` lived here until 2026-09-13 and was removed on purpose: nothing in this tree
+# read it, the three targets carried three different shapes, and it was a second copy of the row
+# keystone keeps in its own profile. The authority is keystone's contract report once it exists
+# (docs/status/PROPOSAL-2026-09-13-the-keystone-peer-contract.md §D); until then, keystone's own
+# `[extension_host]` row. What a COMPOSITION gets on this peer is `[system.faces]`, per composition.
 
 # ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
 # D17: a per-target VALUE lives in the profile. The type name is left open (`\w+::err`)
@@ -149,3 +122,28 @@ self_test_line = [
 [sdk_surface]
 entry_point = "src/lib.rs"
 # The crate root. `pub` is the boundary here and rustc enforces it (E0603), which is why this target's extractor is the shortest of the three.
+
+# ── [peer_drift] — the certified commit is OLD, declared and self-expiring ────────────────────
+#
+# Read by `tools/check-eligible.py` (`make eligible`) and it covers ONE rule, F1's `moved` arm.
+# Keystone's 45-language sweep (`c255fdfe` sentinel, `2f6547ae` vanguard 0.8.2.23) landed
+# capability changes on all three peers AFTER the commits their contract reports were measured
+# at, and a merge put both lines in one tree. The report is still a true statement about
+# `certified` below; it is no longer a statement about the source we compile.
+#
+# **This is a DECLARATION, not a suppression, and the difference is mechanical.** It names the
+# commit it is ABOUT, so it expires on the CONDITION rather than on a date: the day keystone
+# re-certifies, `delivery.commit` changes, `drift_applies()` returns False and F1 fires again
+# with nobody having to remember. `--strict-drift` promotes it back today. `routed` must resolve
+# (D18) and the gate REFUSES a declaration missing it — a declaration with no destination is a
+# suppression (D21).
+#
+# **We are deliberately NOT asking keystone to re-certify.** They have an arc running; the
+# operator's call is that we absorb the drift rather than stall it. We measured the delta
+# ourselves instead, and it moved a real answer on `rust` — see the routed packet §5 and
+# `extension-contracts/compute/EXTENSION.toml [assumptions].reserved_relative_path_forms`.
+[peer_drift]
+certified = "93f6f65fdc30"
+since     = "2026-09-14"
+routed    = "docs/status/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
+reason    = "keystone's 45-language sweep moved peer capability source after certification; absorbed by operator ruling rather than routed as a re-certification ask"

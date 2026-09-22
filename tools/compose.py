@@ -456,7 +456,6 @@ def build_plan(comp_dir: Path) -> dict:
             # the same binary". The fact whose purpose is *do not skew* was in two places
             # with nothing comparing them. Optional: only compiled targets have one.
             "edition": profile.get("toolchain", {}).get("edition"),
-            "extension_host": profile.get("extension_host", {}),
         },
         "faces": faces,
         "peer": {"generator": peer.get("generator"), "path": peer.get("path")},

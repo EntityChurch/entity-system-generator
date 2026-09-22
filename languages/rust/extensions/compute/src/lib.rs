@@ -33,7 +33,8 @@ mod internal;
 use std::sync::Arc;
 
 use entity_core_protocol::peer::handler::{
-    ExpressionEvaluator, ExpressionRequest, HandlerContext, HandlerResult, RegisterError,
+    ExpressionEvaluator, ExpressionRequest, Handler, HandlerContext, HandlerResult, HandlerSpec,
+    RegisterError,
 };
 use entity_core_protocol::peer::store::TreeChangeEvent;
 use entity_core_protocol::peer::Peer;
@@ -94,7 +95,7 @@ pub fn install_compute(peer: &Arc<Peer>, limits: EvaluatorLimits) -> Result<Comp
     // ONE engine, TWO halves: §3.3's Phase 4 runs through the handler and §7.2's trigger through the
     // emit bus. The engine holds a `Weak<Peer>`; the peer holds the handler, which holds the engine.
     let engine = Arc::new(ReactiveEngine::new(peer, limits));
-    peer.register_handler(Arc::new(ComputeHandler::new(Some(engine.clone()), limits)))?;
+    register_for_peer_life(peer, Arc::new(ComputeHandler::new(Some(engine.clone()), limits)))?;
 
     let type_paths = publish_compute_types(&peer.store, &peer.local_peer);
 
@@ -119,6 +120,20 @@ pub fn install_compute(peer: &Arc<Peer>, limits: EvaluatorLimits) -> Result<Comp
         engine,
         rebuilt,
     })
+}
+
+/// Install `handler` through the surface keystone's contract CERTIFIES — `Peer::register_handler`
+/// (`install.handler`, `install.remove` in `KEYSTONE-PEER-REPORT.json`) — and keep it for the peer's
+/// life. `Peer::install_handler` does the same work but is not the binding the report names, and an
+/// extension builds on what is certified (AGENTS.md, the keystone peer contract).
+///
+/// **`detach()` is load-bearing.** The handle unregisters on drop; without it the handler would be
+/// gone before the host's `configure` closure returned, and the peer would listen with nothing at
+/// the pattern.
+fn register_for_peer_life(peer: &Arc<Peer>, handler: Arc<dyn Handler>) -> Result<(), RegisterError> {
+    let spec = HandlerSpec::new(handler.pattern(), handler.name()).operations(handler.operations());
+    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?.detach();
+    Ok(())
 }
 
 /// The H7 evaluator for entity-native handler bodies.
@@ -162,6 +177,10 @@ impl ExpressionEvaluator for ComputeExpressionEvaluator {
             ("caller_capability".to_string(), null_or(ctx.caller_capability().cloned().map(Binding::Entity))),
         ];
         let dispatch = handler::local_dispatcher(ctx, Some(grant.clone()));
+        // §6.8a — entity-native evaluation is still a DISPATCHED request, so a `builtins/store`
+        // write inside it carries the caller's context. `exec_context()` returns an owned value,
+        // so it is bound here rather than called inline: the `RequestContext` borrows it.
+        let exec_ctx = ctx.exec_context();
         // A fresh evaluator per dispatch: §4.2 scopes the encountered set to one evaluation.
         let outcome = ComputeEvaluator::new(&peer.store, &peer.local_peer, self.limits).evaluate_in_request(
             request.expression,
@@ -175,6 +194,7 @@ impl ExpressionEvaluator for ComputeExpressionEvaluator {
                 capability: Some(&grant),
                 dispatch: Some(&dispatch),
                 bindings,
+                exec_context: Some(&exec_ctx),
             },
         );
         Some(HandlerResult::ok(unwrap_at_dispatch_boundary(outcome)))

@@ -100,7 +100,7 @@ fn install_history_installs_every_face_and_the_recorder_sees_none_of_it() {
     assert_eq!(install.recorder.stats().observed, 1, "control: an application write is observed");
 
     match install_history(&peer, None) {
-        Err(RegisterError::AlreadyRegistered(p)) => assert_eq!(p, HISTORY_PATTERN),
+        Err(RegisterError::PatternCollision(p)) => assert_eq!(p, HISTORY_PATTERN),
         other => panic!("a second install must be refused, got {:?}", other.map(|i| i.pattern)),
     }
 }

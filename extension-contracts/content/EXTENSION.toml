@@ -256,6 +256,50 @@ model = "sdk-native"                 # installed in-process against a live peer 
 # *"Every system-namespace extension inherits this"* was a claim about the SPEC and is now a claim
 # about A DEPLOYMENT POLICY on 2 of 46 peers, 44 of which are unmeasured. That is D12/L8's shape on
 # our own file: a cohort's uniform behaviour is a fact about the cohort, not about the standard.
+# ── [requires] — what this extension needs FROM A PEER, by keystone contract name (W-16) ──────
+#
+# The names are keystone's: `protocol-generator/shared/peer-contract/requirements.toml` (REQUIRED and
+# MODULE rows) and `CONTRACT-DRAFT.md` §5 (pending). **We never keep a copy of that vocabulary** —
+# `tools/check-eligible.py` reads it out of keystone's tree on every run and fails a name it does
+# not define. `make eligible` refuses a composition when any name below meets a report row that is
+# not `pass` (`ROUTING-2026-09-13-a-entity-system-generator-the-contract-runs-rust-is-certified-and-what-we-changed-in-your-draft` §0).
+#
+# `pending` is the honest column: a surface this extension USES that no report certifies, because
+# keystone lists it as named-not-measured. It is printed on every run and `--strict-pending` fails
+# it. It is not a blessing; it is the list of things we build on without evidence.
+#
+# CENSUS, not recall: every name cites the call site that needs it. Taken on the `rust` cell
+# (2026-09-13) and RE-CENSUSED across all three cells 2026-09-14, when keystone's S3 brought the
+# `typescript` and `python` peers under the contract and the re-census this block promised came due
+# (`ROUTING-2026-09-13-c-entity-system-generator-typescript-and-python-are-certified-your-pre-contract-declarations-now-fail-and-what-changed-under-your-arms`).
+# The contract is the same interface in every language up to spelling, so the NAMES are the
+# extension's, not the port's.
+#
+# **The re-census searched for the SPELLINGS, not for one spelling.** A first pass over the three
+# cells reported no consumer registration in either `typescript` cell — which was a fact about the
+# pattern (`register_tree_consumer`), not about the cells: `registerTreeConsumer`/`EmitBus` is how
+# that target spells it, and all six cells do register one. D14's own declared limit, met in the
+# work the limit was written about: a grep proves what it matches, and nothing about how the thing
+# you are counting is spelled.
+[requires]
+contract = "keystone-peer-contract"
+required = [
+  "install.handler", "context.contents", "context.unforgeable", "context.frame_budget",
+  "authority.path_permission", "embed.data",
+]
+modules  = []
+# `embed.data` LEFT this list on 2026-09-14 — see the COMPUTE contract's note. The column stays,
+# empty, because `pending` being empty is a fact worth being able to read.
+pending  = []
+
+[requires.why]
+"install.handler"           = "languages/rust/extensions/content/src/lib.rs install_content -> Peer::register_handler(spec, body).detach()"
+"context.contents"          = "src/handler.rs HandlerRequest::from_context: operation, pattern, caller_capability"
+"context.unforgeable"       = "§3.4's capability-checking wrapper: src/handler.rs authorises on ctx.caller_capability(), sound only if nothing but the dispatcher builds a context"
+"context.frame_budget"      = "src/handler.rs FrameBudget::Enforced(ctx.frame_budget()) — §6.2 Am. 1 batch sizing"
+"authority.path_permission" = "src/handler.rs capability::check_path_permission(op, target, cap, CONTENT_PATTERN, local_peer)"
+"embed.data"                = "REQUIRED since keystone 13-b. rust: Store::{put_entity, bind, get_at, get_by_hash} in src/; python and typescript the same operations in their own spelling — each port's binding row is in that peer's contract/bindings.toml, echoed into its report. publish_content_types binds types directly rather than through HandlerSpec::with_type (install.types) — W-20"
+
 [substrate.wire_install_refusal]
 must         = "NONE -- 0.8.2.13 withdrew the reservation. What remains is a deployment policy the protocol explicitly declines to constrain either way."
 typescript   = "REFUSES -- `403 forbidden_pattern`, quoting the withdrawn §6.2 sentence"

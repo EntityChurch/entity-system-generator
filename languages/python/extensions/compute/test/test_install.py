@@ -20,6 +20,7 @@ import importlib
 
 import pytest
 from entity_core.peer import Entity, Peer
+from entity_core.peer.handlers import Outcome
 
 import entity_compute
 from entity_compute import (
@@ -45,7 +46,7 @@ def peer() -> Peer:
 def test_install_performs_all_four_11_6_1_writes():
     """**This peer has no registration surface** (measured —
     ``languages/python/gates/host-seam/probe-seam.py``; ``profile.toml``
-    ``[extension_host].registration_surface = "none"``), so all four writes are ours, through
+    keystone's python peer has no registration call), so all four writes are ours, through
     public names only. `typescript` calls ``peer.registerHandler`` and gets all four for free,
     which is the largest single difference between the two wiring programs and is entirely
     inside the extension.
@@ -156,11 +157,14 @@ def test_the_guard_does_NOT_refuse_a_NEAR_MISS_or_our_own_pattern():
     assert_not_builtin_override("system/content")
 
 
-# ── the FIFTH FACE, and the three verdicts the detector must be able to give ─────
+# ── the FIFTH FACE, and the FOUR verdicts the detector must be able to give ──────
 
 
 class _NoSeam:
-    """A peer with no ``set_expression_evaluator``. What keystone's `python` peer is today."""
+    """A peer with no ``set_expression_evaluator``.
+
+    What keystone's `python` peer was until their S3 bring-up; 44 of the 46 peers still.
+    """
 
     def __init__(self) -> None:
         self.store = None
@@ -192,6 +196,24 @@ class _SwallowingSeam(_NoSeam):
 
     def set_expression_evaluator(self, fn) -> None:  # noqa: ARG002
         return None
+
+
+class _NoReadBackSeam(_NoSeam):
+    """A peer whose setter STORES, privately, and exposes no read-back attribute.
+
+    **This is keystone's `python` peer, exactly** — the evaluator lives at ``Peer._evaluator``
+    and they declined to add a public property on purpose, because a read-back that came back
+    matching would have read ``installed`` over a signature mismatch and put a false green in
+    our gate (their 13-c §3). The detector must not report this as ``not-observed``: nothing
+    was observed to disagree, there is simply nothing to observe.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._evaluator = None
+
+    def set_expression_evaluator(self, fn) -> None:
+        self._evaluator = fn
 
 
 def test_the_evaluator_face_reads_not_installable_when_the_seam_is_ABSENT():
@@ -229,28 +251,67 @@ def test_the_evaluator_face_reads_not_observed_when_the_setter_SWALLOWS():
     assert _install_evaluator(_SwallowingSeam(), DEFAULT_LIMITS) == "not-observed"
 
 
-def test_install_reports_not_installable_on_the_real_peer_and_installs_everything_else():
+def test_the_evaluator_face_reads_unverifiable_when_there_is_NOTHING_TO_READ_BACK():
+    """Control 3, added 2026-09-14, and it is the one that separates two facts a single
+    ``getattr(..., None)`` had been collapsing.
+
+    ``_SwallowingSeam`` and ``_NoReadBackSeam`` both make ``getattr(peer,
+    "expression_evaluator", None)`` return ``None``, and they are opposite situations: one is a
+    peer defect we would owe keystone a packet about, the other is a missing instrument we
+    would owe them a REQUEST about. Reporting both as ``not-observed`` understates the
+    capability, which is the direction D14 records as the one nothing re-checks.
+
+    **The negative control is the pair**: this assertion is only worth anything beside the
+    ``_SwallowingSeam`` one above, because a detector that answered ``unverifiable`` for both
+    would pass this test alone.
+    """
+    from entity_compute import _install_evaluator
+    from entity_compute.sdk import DEFAULT_LIMITS
+
+    seam = _NoReadBackSeam()
+    assert _install_evaluator(seam, DEFAULT_LIMITS) == "unverifiable"
+    # ...and the setter really did receive it. Without this the verdict would be satisfiable by
+    # a peer that took the call and dropped it, which is the `_SwallowingSeam` case.
+    assert callable(seam._evaluator)
+    assert _install_evaluator(_SwallowingSeam(), DEFAULT_LIMITS) == "not-observed"
+
+
+def test_install_reports_unverifiable_on_the_real_peer_and_installs_everything_else():
     """The D13 face amendment applied to our own installer rather than only to our reports: the
     other faces install regardless.
 
-    **This is the only assertion in this file about the REAL peer**, and it is the one a future
-    keystone change should flip. When H7 lands here it becomes ``installed`` with no edit to the
-    port — which is the whole reason the value is observed instead of written down.
+    **This is the only assertion in this file about the REAL peer**, and it has now flipped
+    once, exactly as it was built to.** It read ``not-installable`` while keystone's `python`
+    peer had no ``set_expression_evaluator``; their S3 bring-up landed the seam, so it reads
+    ``unverifiable`` — installed through the certified two-argument binding, with no public
+    read-back on the peer to confirm it. It becomes ``installed`` the day keystone adds
+    ``Peer.expression_evaluator``, with no edit to the port. That is the whole reason the value
+    is observed instead of written down.
     """
     p = peer()
     inst = install_compute(p)
-    assert inst.evaluator_face == "not-installable"
+    assert inst.evaluator_face == "unverifiable"
     assert len(inst.type_paths) == 33          # types face: installed
     assert COMPUTE_PATTERN in p.handlers        # handler face: installed
     assert inst.engine is not None              # emit_consumer face: installed
 
 
 def test_the_installed_evaluator_DECLINES_a_non_compute_body():
-    """The H7 seam's composition rule, exercised on a stand-in because the real peer has no
-    seam: returning None is how an evaluator DECLINES, and declining is the COMMON case rather
-    than an error path. The peer's own ``501 unsupported_expression`` then stands, which is a
-    better answer than one we invented about a body we do not understand — and it is what lets
-    two installed evaluators compose."""
+    """The H7 seam's composition rule: returning None is how an evaluator DECLINES, and
+    declining is the COMMON case rather than an error path. The peer's own
+    ``501 unsupported_expression`` then stands, which is a better answer than one we invented
+    about a body we do not understand — and it is what lets two installed evaluators compose.
+
+    **Driven on a stand-in with a read-back, not on the real peer**, so the object handed to
+    the setter can be recovered and CALLED. That is the only reason the stand-in is still here
+    now that the real peer has the seam: keystone exposes no read-back, so there is no way to
+    reach the installed callable through the peer.
+
+    **The call shape below IS the certified binding**, and it is the assertion that would have
+    caught the defect this file shipped with: ``evaluator(request, ctx) -> Outcome | None``.
+    A one-argument callable raises ``TypeError`` inside the peer's ``except Exception`` and
+    every compute body answers ``500 internal_error``.
+    """
     from entity_compute import _install_evaluator
     from entity_compute.sdk import DEFAULT_LIMITS
 
@@ -273,16 +334,47 @@ def test_the_installed_evaluator_DECLINES_a_non_compute_body():
             self.expression = expression
             self.expression_path = path
 
+    # `ctx` is the §6.8a HandlerContext, and it is READ rather than merely accepted: §4.1's
+    # handler grant comes off it, and so do §3.2 E1's four scope bindings. A stand-in carrying
+    # exactly the five attributes this evaluator reads — a real `HandlerContext` cannot be
+    # constructed outside the peer's dispatcher, which is `context.unforgeable` doing its job.
+    class _Ctx:
+        def __init__(self, grant) -> None:
+            self.handler_grant = grant
+            self.operation = "eval"
+            self.params = None
+            self.resource = None
+            self.caller_capability = None
+
+    token, _sig = p.mint_token(p.identity.identity_hash, [], None)
+    ctx = _Ctx(token)
+
     # Not a compute expression: DECLINED.
     assert seam.expression_evaluator(
-        _Request(Entity.make("app/thing", {"x": 1}), "/p/app/x")
+        _Request(Entity.make("app/thing", {"x": 1}), "/p/app/x"), ctx
     ) is None
 
-    # A compute expression: ANSWERED, and a primitive comes back wrapped per §2.4.
+    # A compute expression: ANSWERED as an `Outcome`, and §3.2 E1 UNWRAPS the primitive at the
+    # dispatch boundary — `primitive/any`, not the `compute/result` envelope §2.4 uses on the
+    # handler path. Returning the wrapper here is K-12, the defect we routed against the peer's
+    # own literal floor.
     lit = Entity.make("compute/literal", {"value": 7})
-    answered = seam.expression_evaluator(_Request(lit, "/p/app/x"))
-    assert isinstance(answered, Entity)
-    assert answered.type == RESULT and answered.field("value") == 7
+    answered = seam.expression_evaluator(_Request(lit, "/p/app/x"), ctx)
+    assert isinstance(answered, Outcome)
+    assert answered.status == 200
+    assert answered.result.type == "primitive/any"
+    assert answered.result.data == 7
+    assert answered.result.type != RESULT
+
+    # CONTROL — §4.1 FAILS CLOSED with no handler grant. This is the assertion that caught the
+    # port: the test above was written passing `ctx = None` and went red at `403` the moment the
+    # grant read landed, which is the evaluator refusing rather than the test being wrong.
+    # Evaluating under the caller's capability instead would let
+    # `capability = lookup/scope("caller_capability")` pass its own ceiling.
+    refused = seam.expression_evaluator(_Request(lit, "/p/app/x"), _Ctx(None))
+    assert isinstance(refused, Outcome)
+    assert refused.status == 403
+    assert refused.result.field("code") == "capability_denied"
 
 
 # ── the surface ──────────────────────────────────────────────────────────────────

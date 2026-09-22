@@ -39,7 +39,7 @@ mod internal;
 
 use std::sync::{Arc, Weak};
 
-use entity_core_protocol::peer::handler::RegisterError;
+use entity_core_protocol::peer::handler::{Handler, HandlerContext, HandlerSpec, RegisterError};
 use entity_core_protocol::peer::store::TreeChangeEvent;
 use entity_core_protocol::peer::Peer;
 
@@ -112,7 +112,10 @@ pub fn install_history(peer: &Arc<Peer>, max_walk: Option<u64>) -> Result<Histor
         Some(n) => HistoryHandler::with_max_walk(n),
         None => HistoryHandler::new(),
     };
-    peer.register_handler(Arc::new(handler))?;
+    let handler: Arc<dyn Handler> = Arc::new(handler);
+    // The certified surface (`install.handler`), detached: the handle unregisters on drop.
+    let spec = HandlerSpec::new(handler.pattern(), handler.name()).operations(handler.operations());
+    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?.detach();
 
     let local = peer.local_peer.clone();
     let type_paths = publish_history_types(&peer.store, &local);

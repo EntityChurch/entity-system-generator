@@ -117,6 +117,7 @@ class ComputeEvaluator:
         authorized_data_hashes: frozenset[str] | None = None,
         can_read_path: Callable[[str], bool] | None = None,
         can_write_path: Callable[[str], bool] | None = None,
+        bindings: dict[str, Any] | None = None,
     ) -> EvalOutcome:
         """Evaluate ``expression``, with ``subgraph_root`` as the base for ``relative: true``
         paths.
@@ -151,6 +152,23 @@ class ComputeEvaluator:
             than an oversight — see :data:`CAPABILITY_CHECK_IS_DISPATCH_SCOPED`. §7.2's
             reactive path supplies both, because it evaluates under the INSTALLATION GRANT,
             which is an entity it fetched from the content store.
+        ``bindings``
+            §3.2 E1 — the scope a DISPATCH LAYER pre-populates: ``operation``, ``params``,
+            ``resource``, ``caller_capability``, read by the body through
+            ``compute/lookup/scope``. Empty for every in-process caller, and empty on the §3.2
+            ``handle_eval`` path, which is not entity-native dispatch. The one caller that
+            supplies it is the H7 evaluator, whose second argument is the ``HandlerContext``
+            these four values come off.
+
+            **This parameter did not exist until 2026-09-14 and its absence cost three oracle
+            checks on this port**, silently: `typescript` and `rust` both seed the scope and
+            score `entity_native.scope_params`, `scope_operation` and `multiple_operations`;
+            this port evaluated every entity-native body against `empty_scope()`, so a
+            `lookup/scope("params")` resolved against nothing. Nothing in the tree could say
+            so — the peer had no evaluator seam to install into until keystone's S3, so the
+            branch was unreachable and the gap read as "not installable" rather than as a
+            missing feature. **A face that cannot be installed hides every defect behind it**,
+            which is the same sentence as `[substrate.oracle_read_path]` one layer in.
         """
         # §5.2's minimum rule, in the one place it can be applied: the caller's ask and the
         # peer default, whichever is smaller.
@@ -163,7 +181,15 @@ class ComputeEvaluator:
         ctx = self._context(subgraph_root, content_store_access, included, authorized_data_hashes,
                             can_read_path, can_write_path)
 
-        out = evaluate(expression, empty_scope(), counters, ctx)
+        # §3.2 E1's pre-populated scope. A FRESH scope per evaluation, seeded from the caller's
+        # map rather than holding a reference to it: `compute/let` copies the scope per binding,
+        # but the ROOT scope is mutated in place by nothing and shared by everything below it,
+        # and handing the evaluator the caller's own dict would let one dispatch's scope outlive
+        # it. `typescript` does the same copy at `sdk.ts` §evaluateAt.
+        scope = empty_scope()
+        if bindings:
+            scope.bindings.update(bindings)
+        out = evaluate(expression, scope, counters, ctx)
         used = operations - counters.operations
 
         if is_error(out):

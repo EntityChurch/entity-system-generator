@@ -286,18 +286,55 @@ fn lookup_tree_canonicalizes_and_the_dependency_records_the_canonical_form() {
     assert_eq!(ev.dependencies(), [format!("/{PEER}/app/v")]);
 }
 
-/// **substrate, and the third data point for `[assumptions].reserved_relative_path_forms`.** This
-/// peer's `capability::canonicalize` prefixes `./x` like any relative path rather than refusing it
-/// (`python`'s peer returns `None`, and that port answers `invalid_expression`). We call the peer's
-/// primitive, so the answer here is the peer's: the path is canonicalized, nothing is bound there,
-/// and the lookup is `not_found`. If keystone makes this peer refuse, this test goes red and says so.
+/// **substrate, and the FOURTH data point for `[assumptions].reserved_relative_path_forms` — this
+/// test went red on the peer moving under us, which is what it was written to do.**
+///
+/// It used to assert that this peer's `capability::canonicalize` PREFIXES `./x` like any relative
+/// path (`/{PEER}/./x`), and its own docstring ended *"if keystone makes this peer refuse, this
+/// test goes red and says so."* Keystone's 0.8.2.20 work did neither: `canonicalize` went TOTAL and
+/// now returns the `NEVER_MATCH` sentinel for the three §1.4 reserved forms. Landed in
+/// `c255fdfe`/`2f6547ae` — the 45-language sweep, which is not addressed to us and changed our
+/// substrate anyway.
+///
+/// **The observable verdict is UNCHANGED and the two things under it both moved**, which is why
+/// this is three assertions now rather than one:
+///   1. still `not_found` under a permissive read predicate — nothing is bound at the sentinel;
+///   2. NO dependency is registered, where the old path registered `/{PEER}/./x`;
+///   3. under a REAL grant it is `permission_denied`, not `not_found`, because `matches_pattern`
+///      refuses `NEVER_MATCH` in either operand. That third one is a genuine change of answer and
+///      it was invisible before: every existing assertion here ran on the default permissive
+///      predicate, so the capability arm was never reached.
 #[test]
-fn a_reserved_relative_form_is_canonicalized_by_this_peer_not_refused() {
+fn a_reserved_relative_form_canonicalizes_to_the_sentinel_and_is_not_a_dependency() {
     let s = Store::new();
     let mut ev = ComputeEvaluator::new(&s, PEER, DEFAULT_LIMITS);
     let out = ev.evaluate_at(&entity(LOOKUP_TREE, vec![("path", text("./x"))]), &root(), EvaluateOptions::default());
     assert_eq!(code_of(&out), CODE_NOT_FOUND);
-    assert_eq!(ev.dependencies(), [format!("/{PEER}/./x")]);
+    assert!(ev.dependencies().is_empty(), "the sentinel is not a path: {:?}", ev.dependencies());
+
+    // CONTROL — the same lookup at an ORDINARY relative path still registers its dependency. Without
+    // this, a `register_dependency` that had simply stopped working would pass the assertion above.
+    let mut ev2 = ComputeEvaluator::new(&s, PEER, DEFAULT_LIMITS);
+    let _ = ev2.evaluate_at(&entity(LOOKUP_TREE, vec![("path", text("app/x"))]), &root(), EvaluateOptions::default());
+    assert_eq!(ev2.dependencies(), [format!("/{PEER}/app/x")]);
+}
+
+/// The third assertion above, given its own test because it is a CHANGE OF ANSWER rather than a
+/// change of internal bookkeeping: on this peer a §1.4 reserved form under a real grant now fails
+/// CLOSED. `python` answers `invalid_expression` and `typescript` answers `not_found`, so the three
+/// ports now give three different codes for one input — recorded in the contract's assumption row,
+/// not routed, because core `CORE-TREE-PATH-FLEX-1` makes all three conformant.
+#[test]
+fn a_reserved_relative_form_fails_closed_under_a_real_grant() {
+    let s = Store::new();
+    let deny_sentinel = |p: &str| p != "/never-match";
+    let mut ev = ComputeEvaluator::new(&s, PEER, DEFAULT_LIMITS);
+    let out = ev.evaluate_at(
+        &entity(LOOKUP_TREE, vec![("path", text("./x"))]),
+        &root(),
+        EvaluateOptions { can_read_path: Some(&deny_sentinel), ..Default::default() },
+    );
+    assert_eq!(code_of(&out), CODE_PERMISSION_DENIED);
 }
 
 #[test]

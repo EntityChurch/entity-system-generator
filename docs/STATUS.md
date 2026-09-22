@@ -6,7 +6,36 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
-**`python` × `COMPUTE` is BUILT, COMPOSED AND MEASURED: 125 PASS · 0 WARN · 3 FAIL of 128, from a
+**ALL NINE COMPOSITIONS RUN ON A CERTIFIED PEER, AND THE FIFTH FACE IS LIVE ON ALL THREE TARGETS.**
+Three extensions — CONTENT, HISTORY, COMPUTE — across `typescript`, `python` and `rust`. Every one
+builds, unit-tests and passes a two-round conformance differential with **0 regressions
+attributable to the composition**. The peers underneath them are now certified against a published
+contract rather than taken on trust: `embed.data` and fifteen other requirements are read out of a
+report, per composition, on every run.
+
+**The measurement that moved this cycle is `python` × entity-native: 3 → 9 of 13**, and it is worth
+more than the number. That peer gained an expression-evaluator seam, and installing against it
+exposed two defects in our own port that had been unreachable — and therefore invisible — for nine
+days: the §3.2 E1 scope was never pre-populated, and §4.1's tree reads were never narrowed under the
+handler grant. The contract had reported the face as `not-installable` throughout, which was TRUE.
+
+**A FACE THAT CANNOT BE INSTALLED HIDES EVERY DEFECT BEHIND IT.** That is the lesson of the cycle,
+and it is the third appearance of one shape: an honest report of an ABSENCE reads as an account of
+the gap, and it is not one. It cost nothing here only because the seam landed while we were still
+building. The defence is not better reading — nothing in either tree could have found these — it is
+that a face reported absent is a face whose contents are **unmeasured**, and those are two different
+words that had been wearing one.
+
+**Numbers, per target, COMPUTE:** `rust` 128 of 128 · `typescript` and `python` 125 of 128, the
+three remaining being `compute/apply` handler mode, which needs a re-entrant local dispatch those
+two peers do not expose. Entity-native, the separate category: `rust` 10, `typescript` 9,
+`python` 9 of 13. Four of the remainder are peer-side and routed; one is ours and is next.
+
+---
+
+### The previous entry
+
+**`python` × `COMPUTE` was BUILT, COMPOSED AND MEASURED: 125 PASS · 0 WARN · 3 FAIL of 128, from a
 bare arm of 0 of 128. 0 core regressions across 778 core checks, 115 unit tests. The second port
 of the largest extension in the corpus, and it matched the first exactly.**
 

@@ -46,7 +46,7 @@ pub use handler::{
 
 use std::sync::Arc;
 
-use entity_core_protocol::peer::handler::RegisterError;
+use entity_core_protocol::peer::handler::{Handler, HandlerContext, HandlerSpec, RegisterError};
 use entity_core_protocol::peer::Peer;
 pub use sdk::{
     at_peer, bind_at_peer, create_descriptor, descriptor_matches_anchor, descriptor_path,
@@ -74,12 +74,18 @@ pub struct ContentInstallation {
 /// `namespace` is §6.4's served prefix and defaults to [`CONTENT_PATTERN`]; the handler is always
 /// installed AT [`CONTENT_PATTERN`], as on the other two ports. Refused (keystone H3) when a handler
 /// is already bound there, before anything is written.
-pub fn install_content(peer: &Peer, namespace: Option<&str>) -> Result<ContentInstallation, RegisterError> {
+///
+/// Takes `&Arc<Peer>` (it took `&Peer`): the certified surface, `Peer::register_handler`, installs
+/// through the `Arc` so its handle can unregister. The handle is detached — installed for the peer's
+/// life, as before.
+pub fn install_content(peer: &Arc<Peer>, namespace: Option<&str>) -> Result<ContentInstallation, RegisterError> {
     let handler = match namespace {
         Some(ns) => ContentHandler::with_namespace(ns),
         None => ContentHandler::new(),
     };
-    peer.register_handler(Arc::new(handler))?;
+    let handler: Arc<dyn Handler> = Arc::new(handler);
+    let spec = HandlerSpec::new(handler.pattern(), handler.name()).operations(handler.operations());
+    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?.detach();
     let local = &peer.local_peer;
     Ok(ContentInstallation {
         pattern: CONTENT_PATTERN.to_string(),

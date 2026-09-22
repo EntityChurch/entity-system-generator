@@ -159,6 +159,10 @@ impl ComputeHandler {
                 capability: req.caller_capability,
                 dispatch,
                 bindings: Vec::new(),
+                // §6.8a — `system/compute:eval` is a dispatched request, so a `builtins/store`
+                // write inside this evaluation is the CALLER's, not the peer's. `req.context` is
+                // `ctx.exec_context()` (handler.rs, `HandlerRequest::from_context`).
+                exec_context: req.context,
             },
         );
 

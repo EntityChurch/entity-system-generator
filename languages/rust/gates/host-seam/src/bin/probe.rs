@@ -259,7 +259,7 @@ fn main() {
     }
 
     // B. Installed through the public registration call.
-    let registered = responder.register_handler(witness_handler(invocations.clone()));
+    let registered = responder.install_handler(witness_handler(invocations.clone()));
     let before = invocations.load(Ordering::SeqCst);
     let (status_b, code_b, witness_b) = lb.execute_content("hello");
     let after_dispatch = invocations.load(Ordering::SeqCst);
@@ -650,7 +650,7 @@ fn main() {
     println!("Scenario 3 — H6: the connection frame budget a body reads (CONTENT Am. 1 §6.2)");
     const CONFIGURED: u64 = 3_145_749;
     let read_budget = |responder: Arc<Peer>, seed: u8| -> Option<u64> {
-        responder.register_handler(budget_handler()).ok()?;
+        responder.install_handler(budget_handler()).ok()?;
         let mut lb = Loopback::connect(responder, peer(seed));
         let (status, result) = lb.execute(PATTERN, "get", Entity::make("primitive/any", model::map(vec![])), &[PATTERN]);
         lb.shutdown();

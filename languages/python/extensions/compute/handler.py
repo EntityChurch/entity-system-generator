@@ -113,7 +113,7 @@ class ComputeHandler:
     ) -> None:
         #: Registration-time capture — this peer's ``DispatchCtx`` carries no peer (measured,
         #: ``languages/python/gates/host-seam/probe-seam.py``; ``profile.toml``
-        #: ``[extension_host].ctx_carries_peer = false``).
+        #: the python peer's context carries no peer).
         self.peer = peer
         self._limits = EvaluatorLimits(
             max_operations=DEFAULT_MAX_OPS if max_operations is None else max_operations,

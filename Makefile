@@ -147,6 +147,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
         expectation expectation-control diff-arms-control \
         citations citations-control toolchain toolchain-control \
         spec-lists spec-lists-control routing routing-control \
+        eligible eligible-control \
         build-native test-native \
         conformance-native probe-native
 
@@ -382,7 +383,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage-composition spec-lists toolchain
+check: eligible build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage-composition spec-lists toolchain
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -511,6 +512,18 @@ spec-lists:
 
 spec-lists-control:
 	./tools/check-spec-lists.py --self-test
+
+# ── eligible — do we build on this peer at all? (W-17, the keystone peer contract) ───────────
+# FIRST in `check`, before anything is compiled: keystone certifies the peer and publishes a
+# report; we read it and refuse a composition whose declared needs ([requires] in each
+# EXTENSION.toml, plus gates/eligible/LAUNCH.toml) meet a row that is not `pass`. We never
+# re-measure what the report certifies. A target whose profile declares [peer_contract]
+# pre-contract prints PRE-CONTRACT and passes; ELIGIBLE_FLAGS=--strict fails it.
+eligible:
+	./tools/check-eligible.py $(TDIR)/compositions/$(COMPOSITION) $(ELIGIBLE_FLAGS)
+
+eligible-control:
+	./tools/check-eligible.py --self-test
 
 routing:
 	./tools/check-routing.py

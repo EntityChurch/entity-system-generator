@@ -40,6 +40,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from entity_core.peer.capability import check_path_permission
+from entity_core.peer.handlers import Outcome
 from entity_core.peer.model import Entity
 
 from .handler import OPERATION_SPECS, ComputeHandler
@@ -134,16 +136,29 @@ class ComputeInstallation:
     rebuilt: int
     #: Whether the peer accepted an expression evaluator through the H7 seam.
     #:
-    #: **Three-valued and OBSERVED, never declared.** HISTORY shipped a hardcoded
+    #: **FOUR-valued and OBSERVED, never declared.** HISTORY shipped a hardcoded
     #: ``context_available = False`` commented "measured" — a claim about another team's peer,
     #: frozen in our source, asserted by our own tests; when the substrate moved nothing could
-    #: notice. This is read off the peer: ``installed`` when the read-back returns the object we
-    #: handed it, ``not-installable`` when the seam is absent, ``not-observed`` when the seam
-    #: exists and the read-back does not agree.
+    #: notice. This is read off the peer:
     #:
-    #: On this peer it is ``not-installable`` today. The value is produced by
-    #: :func:`_install_evaluator` rather than written here, so it stops being a claim about
-    #: another team's tree the moment that tree changes.
+    #: - ``installed`` — the read-back returns the object we handed it;
+    #: - ``not-installable`` — the seam is absent;
+    #: - ``not-observed`` — a read-back surface EXISTS and does not agree (the peer defect
+    #:   keystone planted against their own H7 work: a setter that writes nothing);
+    #: - ``unverifiable`` — the setter accepted it and **no read-back surface exists**, so
+    #:   nothing here can confirm or deny. See :func:`_install_evaluator`.
+    #:
+    #: **The fourth value was added 2026-09-14 and it is D14's asymmetry, not a new state.**
+    #: ``not-observed`` had been carrying both "we looked and it disagreed" and "there was
+    #: nothing to look at" — the same conflation keystone found in a survey that printed
+    #: ``absent`` where it meant *could not look*, in the direction that UNDERSTATES a
+    #: capability and that nothing re-checks. Keystone's python peer holds the evaluator
+    #: privately (``Peer._evaluator``) and deliberately ships no public read-back
+    #: (``ROUTING-2026-09-13-c-entity-system-generator-typescript-and-python-are-certified-your-pre-contract-declarations-now-fail-and-what-changed-under-your-arms``
+    #: §3), so this target reads ``unverifiable`` and the other two read ``installed``.
+    #:
+    #: The value is produced by :func:`_install_evaluator` rather than written here, so it
+    #: stops being a claim about another team's tree the moment that tree changes.
     evaluator_face: str
 
 
@@ -155,7 +170,7 @@ def install_compute(
 
     **This peer has no registration surface** (measured —
     ``languages/python/gates/host-seam/probe-seam.py``; ``profile.toml``
-    ``[extension_host].registration_surface = "none"``), so all four §11.6.1 writes are ours,
+    keystone's python peer has no registration call), so all four §11.6.1 writes are ours,
     through public names only. Same seven-step shape ``install_history`` has, plus the
     evaluator step.
 
@@ -259,48 +274,128 @@ def _install_evaluator(peer: Any, limits: EvaluatorLimits) -> str:
     literal floor is out of an evaluator's reach and installing one cannot move a conformance
     result.
 
-    **THE SEAM IS DETECTED, NOT ASSUMED, AND ON THIS PEER IT IS ABSENT.**
-    ``set_expression_evaluator`` is keystone's addition to ONE of the 46 peers and 45 read
-    ``unknown``. A peer without the method gets ``not-installable`` and everything else still
-    installs — the D13 face amendment applied to our own installer rather than only to our
-    reports.
+    **THE SEAM IS DETECTED, NOT ASSUMED, AND ON THIS PEER IT NOW EXISTS.**
+    ``set_expression_evaluator`` was keystone's addition to ONE of the 46 peers when this
+    function was written; keystone's S3 bring-up landed it on this peer too, so the
+    ``not-installable`` branch is no longer the one this target takes. A peer without the
+    method still gets ``not-installable`` and everything else still installs — the D13 face
+    amendment applied to our own installer rather than only to our reports.
+
+    **THE BINDING IS TWO ARGUMENTS AND AN ``Outcome``, AND GETTING THAT WRONG WAS A 500 ON
+    EVERY COMPUTE BODY.** The certified binding is
+    ``evaluator(ExpressionRequest, HandlerContext) -> Outcome | None``
+    (keystone's ``python`` ``install.evaluator`` binding row; ``peer.py`` calls
+    ``evaluator(ExpressionRequest(...), ctx)`` and accepts the answer only
+    ``isinstance(answered, Outcome)``). This function previously installed a ONE-argument
+    callable returning a bare ``Entity``: every dispatch would have raised ``TypeError``
+    inside the peer's ``except Exception`` and answered
+    ``500 internal_error ("expression evaluator raised")``, and any answer that did get
+    through would have fallen past the ``isinstance`` check to ``501``. Ported 2026-09-14 —
+    ``ROUTING-2026-09-13-c-…-typescript-and-python-are-certified-…`` §3, their G-6.
+
+    **The unwrap follows the TYPESCRIPT arm, not this cell's own §3.2 handler**, and the
+    difference is deliberate: §3.2 E1 says an entity-native result is *"unwrapped at the
+    dispatch boundary"*, so a primitive comes back as ``primitive/any`` rather than in a
+    ``compute/result`` envelope. ``_eval`` wraps because §2.4 is the other side of that same
+    split. Returning the wrapper here is K-12's defect — the one we routed against the peer's
+    own literal floor — and writing it into our own evaluator would have put us on the wrong
+    side of a finding we filed.
 
     **The branches below the detection are unexercised against the real peer today, and that is
     the AP-3 shape unless something drives them** — a check that cannot reach its assertion.
-    ``test/test_install.py`` drives all three verdicts against stand-in peers (no seam / a seam
-    that stores / a seam that swallows), so the detector is known to be able to answer
-    something other than ``not-installable`` before the day it has to.
+    ``test/test_install.py`` drives every verdict against stand-in peers (no seam / a seam
+    that stores / a seam that swallows / a seam with no read-back), so the detector is known to
+    be able to answer something other than ``not-installable`` before the day it has to.
     """
     setter = getattr(peer, "set_expression_evaluator", None)
     if not callable(setter):
         return "not-installable"
 
-    def evaluate_expression(request: Any) -> Any:
+    def evaluate_expression(request: Any, ctx: Any) -> Any:
         # DECLINE anything that is not a compute expression. The peer's own
         # `501 unsupported_expression` then stands — a better answer than one we invented about
         # a body we do not understand, and what makes two installed evaluators compose.
         expression = getattr(request, "expression", None)
         if expression is None or not is_compute_expression(expression.type):
             return None
+
+        # §4.1 — "Entity-native dispatch: the handler (HANDLER GRANT authorizes the expression)."
+        # Tree reads narrow under the GRANT, not under the caller's capability. FAIL CLOSED
+        # without one: evaluating under the caller's token instead would let
+        # `capability = lookup/scope("caller_capability")` pass its own ceiling, which is the
+        # escape §4.1's dual check exists to block. `rust` reads the same sentence the same way
+        # (`lib.rs`, ComputeExpressionEvaluator); this port had NO path authority on this route
+        # at all until 2026-09-14, so every entity-native tree read ran permissive and
+        # `entity_native.lookup_tree_outside_scope` failed for the reason it is named after.
+        grant = getattr(ctx, "handler_grant", None)
+        if grant is None:
+            return Outcome.err(
+                403,
+                "capability_denied",
+                "entity-native evaluation runs under the handler grant (§4.1) and this handler has none",
+            )
+        local = peer.local_peer
+
+        def can_read(path: str) -> bool:
+            return check_path_permission("get", path, grant, "system/tree", local)
+
+        def can_write(path: str) -> bool:
+            return check_path_permission("put", path, grant, "system/tree", local)
+        # §3.2 E1 — the dispatch layer pre-populates `{operation, params, resource,
+        # caller_capability}`, which the body reads through `compute/lookup/scope`. All four come
+        # off the HandlerContext, which is the SECOND ARGUMENT — so this is only writable at all
+        # because of the G-6 port, and it is what the port was worth: without it every
+        # entity-native body evaluated against an empty scope and `lookup/scope("params")`
+        # resolved against nothing.
+        #
+        # **`caller_capability` is the REAL capability here, where `typescript` binds null.**
+        # That is not a divergence we chose: keystone's `typescript` seam is
+        # `evaluate(request)` — ONE argument, no context — so that port has nothing to read it
+        # from and says so in `[substrate.evaluator_seam]`. `python` and `rust` are
+        # `(request, ctx)` and both bind the verified token. Three peers, two seam shapes.
+        bindings = {
+            "operation": getattr(ctx, "operation", "") or "",
+            "params": getattr(ctx, "params", None),
+            "resource": getattr(ctx, "resource", None),
+            "caller_capability": getattr(ctx, "caller_capability", None),
+        }
         # A fresh evaluator per dispatch: §4.2 scopes the encountered set to one evaluation, so
         # a shared instance would widen `resolve()`'s reach across unrelated requests.
         outcome = ComputeEvaluator(peer, limits).evaluate_at(
-            expression, getattr(request, "expression_path", "")
+            expression,
+            getattr(request, "expression_path", ""),
+            bindings=bindings,
+            can_read_path=can_read,
+            can_write_path=can_write,
         )
         # F10 — an evaluated `compute/error` is a VALUE at 200, not a transport failure, and the
         # dispatch boundary unwraps it as the result entity (§3.2). Declining here instead would
         # answer 501 for a program that RAN and produced an error.
         if outcome.error is not None:
-            return outcome.error.to_entity()
-        if isinstance(outcome.value, Entity):
-            return outcome.value
-        return Entity.make(RESULT, {"value": outcome.value, "expression": expression.hash})
+            return Outcome.ok(outcome.error.to_entity())
+        # §3.2 E1 — "the result is unwrapped at the dispatch boundary". An entity that is not a
+        # `compute/result` travels as itself; a wrapper or a bare primitive is unwrapped to
+        # `primitive/any`. Byte-for-byte the typescript arm's tail (`index.ts` §installEvaluator).
+        value = outcome.value
+        if isinstance(value, Entity) and value.type != RESULT:
+            return Outcome.ok(value)
+        bare = value.field("value") if isinstance(value, Entity) else value
+        return Outcome.ok(Entity.make("primitive/any", bare))
 
     setter(evaluate_expression)
     # READ BACK, never assume. The one thing a setter cannot tell you is whether it set
     # anything — keystone planted exactly that defect against their own H7 work (a setter that
     # writes nothing, shaped like `julia`'s dead register map), and D13's Read layer exists
     # because a call site is not a capability.
+    #
+    # AND "NO READ-BACK" IS NOT "THE READ-BACK DISAGREED". `getattr(peer, ..., None)` returns
+    # `None` for both, and collapsing them is the D14 asymmetry in the understating direction —
+    # keystone's own survey printed `absent` where it meant `could not look`. Keystone holds the
+    # evaluator privately and deliberately ships no public read-back, so `hasattr` is the
+    # question that separates "this peer has no instrument" from "this peer has one and it says
+    # no". The first is ours to ask them for; the second would be their defect.
+    if not hasattr(peer, "expression_evaluator"):
+        return "unverifiable"
     return (
         "installed"
         if getattr(peer, "expression_evaluator", None) is evaluate_expression

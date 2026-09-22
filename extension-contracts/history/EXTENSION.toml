@@ -153,6 +153,52 @@ model = "sdk-native"                 # UNCHANGED VALUE, WITHDRAWN AUTHORITY. Thi
 # ── [emit_consumer] — the position, the class, and the self-guard ───────────────────────
 # All three are normative and NONE of them is in `EXTENSION-HISTORY.md` alone, which is why
 # SYSTEM-COMPOSITION.md is in this snapshot.
+# ── [requires] — what this extension needs FROM A PEER, by keystone contract name (W-16) ──────
+#
+# The names are keystone's: `protocol-generator/shared/peer-contract/requirements.toml` (REQUIRED and
+# MODULE rows) and `CONTRACT-DRAFT.md` §5 (pending). **We never keep a copy of that vocabulary** —
+# `tools/check-eligible.py` reads it out of keystone's tree on every run and fails a name it does
+# not define. `make eligible` refuses a composition when any name below meets a report row that is
+# not `pass` (`ROUTING-2026-09-13-a-entity-system-generator-the-contract-runs-rust-is-certified-and-what-we-changed-in-your-draft` §0).
+#
+# `pending` is the honest column: a surface this extension USES that no report certifies, because
+# keystone lists it as named-not-measured. It is printed on every run and `--strict-pending` fails
+# it. It is not a blessing; it is the list of things we build on without evidence.
+#
+# CENSUS, not recall: every name cites the call site that needs it. Taken on the `rust` cell
+# (2026-09-13) and RE-CENSUSED across all three cells 2026-09-14, when keystone's S3 brought the
+# `typescript` and `python` peers under the contract and the re-census this block promised came due
+# (`ROUTING-2026-09-13-c-entity-system-generator-typescript-and-python-are-certified-your-pre-contract-declarations-now-fail-and-what-changed-under-your-arms`).
+# The contract is the same interface in every language up to spelling, so the NAMES are the
+# extension's, not the port's.
+#
+# **The re-census searched for the SPELLINGS, not for one spelling.** A first pass over the three
+# cells reported no consumer registration in either `typescript` cell — which was a fact about the
+# pattern (`register_tree_consumer`), not about the cells: `registerTreeConsumer`/`EmitBus` is how
+# that target spells it, and all six cells do register one. D14's own declared limit, met in the
+# work the limit was written about: a grep proves what it matches, and nothing about how the thing
+# you are counting is spelled.
+[requires]
+contract = "keystone-peer-contract"
+required = [
+  "install.handler", "install.grant", "install.consumer", "context.contents",
+  "context.unforgeable", "event.context", "authority.path_permission", "embed.data",
+]
+modules  = []
+# `embed.data` LEFT this list on 2026-09-14 — see the COMPUTE contract's note. The column stays,
+# empty, because `pending` being empty is a fact worth being able to read.
+pending  = []
+
+[requires.why]
+"install.handler"           = "languages/rust/extensions/history/src/lib.rs install_history -> Peer::register_handler(spec, body).detach()"
+"install.grant"             = "src/lib.rs install_history reads the bound grant back from system/capability/grants/{pattern} — §2.1's autonomous capability"
+"install.consumer"          = "src/lib.rs install_history -> Store::register_tree_consumer, after construction (the recorder)"
+"context.contents"          = "src/handler.rs HandlerRequest::from_context: operation, pattern, caller_capability, exec_context"
+"context.unforgeable"       = "src/handler.rs authorises on ctx.caller_capability(), sound only if nothing but the dispatcher builds a context"
+"event.context"             = "src/sdk.rs HistoryRecorder::on_tree_change reads ev.context for the carried author/chain"
+"authority.path_permission" = "src/handler.rs capability::check_path_permission for the §4.2 read gate"
+"embed.data"                = "REQUIRED since keystone 13-b. rust: Store::{bind, bind_with_context, get_at, get_by_hash} in src/; python and typescript the same operations in their own spelling — each port's binding row is in that peer's contract/bindings.toml, echoed into its report. The grant read-back still depends on keystone's tree LAYOUT, which no requirement certifies and embed.data does not cover — W-20"
+
 [emit_consumer.tree_change]
 position   = 4                       # SYSTEM-COMPOSITION §2.2: "4. History — bounded reactive
                                      # (record transition, self-guarded)"

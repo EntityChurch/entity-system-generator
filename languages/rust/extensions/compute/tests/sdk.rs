@@ -56,8 +56,8 @@ fn a_second_install_is_refused_and_leaves_the_first_in_place() {
     install_compute(&p, DEFAULT_LIMITS).expect("first install");
     let first = p.expression_evaluator().expect("evaluator after the first install");
     match install_compute(&p, DEFAULT_LIMITS) {
-        Err(RegisterError::AlreadyRegistered(pattern)) => assert_eq!(pattern, COMPUTE_PATTERN),
-        Err(other) => panic!("expected AlreadyRegistered, got {other:?}"),
+        Err(RegisterError::PatternCollision(pattern)) => assert_eq!(pattern, COMPUTE_PATTERN),
+        Err(other) => panic!("expected PatternCollision, got {other:?}"),
         Ok(_) => panic!("a second install at {COMPUTE_PATTERN} was accepted"),
     }
     assert!(Arc::ptr_eq(&first, &p.expression_evaluator().unwrap()));

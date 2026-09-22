@@ -129,6 +129,11 @@ fn run(store: &Store, apply: &Entity, capability: Option<&Entity>, rec: Option<&
             capability,
             dispatch: if rec.is_some() { Some(&closure) } else { None },
             bindings: Vec::new(),
+            // These tests drive `compute/apply` through a recording dispatcher, never the store,
+            // so there is no write for a context to be carried onto. `None` is the honest value
+            // and NOT a shortcut: it is the autonomous position, and a test that passed a
+            // fabricated context here would be asserting against a label it invented.
+            exec_context: None,
         },
     )
 }

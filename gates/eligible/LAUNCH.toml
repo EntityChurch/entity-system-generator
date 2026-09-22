@@ -1,0 +1,22 @@
+## gates/eligible/LAUNCH.toml — what OUR LAUNCH PATH needs from a peer, by keystone contract name.
+##
+## The extensions' needs are in each `extension-contracts/<ext>/EXTENSION.toml [requires]`. These
+## are the needs of the thing that RUNS every composition: `tools/host-launch` and the composed
+## hosts it starts. Same shape, same vocabulary, same gate (`tools/check-eligible.py`).
+##
+## Every `why` cites the invocation site in OUR tree (D22: an instrument's reach is a fact about
+## whoever invokes it).
+
+[requires]
+contract = "keystone-peer-contract"
+required = ["run.cli", "run.identity", "run.ready", "run.stop", "embed.host_main", "embed.package"]
+modules  = []
+pending  = []
+
+[requires.why]
+"run.cli"         = "tools/host-launch starts every host with --port --name --debug-open-grants --validate, and the oracle runs against exactly those flags"
+"run.identity"    = "tools/host-launch writes the 0x11 seed at ~/.entity/peers/$NAME/keypair and passes --name; the oracle co-signs as that peer"
+"run.ready"       = "tools/host-launch polls for ^LISTENING on stdout within the profile's startup_ticks"
+"run.stop"        = "tools/host-launch reap_host: SIGTERM, 5 s of kill -0, then SIGKILL — a port outliving the process fails the next round's bind"
+"embed.host_main" = "languages/rust/compositions/compute/host.rs is run_host(argv, install); the bare arm is the peer's own run_host(argv, no-op)"
+"embed.package"   = "languages/rust/build stages the composed host as its own crate depending on the peer by path — D13's Access row, across a real crate boundary"

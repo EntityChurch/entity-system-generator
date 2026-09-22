@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use entity_core_protocol::peer::model::Entity;
-use entity_core_protocol::peer::store::Store;
+use entity_core_protocol::peer::store::{ExecContext, Store};
 use entity_core_protocol::value::Value;
 
 use crate::internal::evaluator::{
@@ -89,6 +89,15 @@ pub(crate) struct RequestContext<'r> {
     pub capability: Option<&'r Entity>,
     pub dispatch: Option<&'r Dispatcher<'r>>,
     pub bindings: Vec<(String, Binding)>,
+    /// §6.8a — the execution context of the dispatch this evaluation is running inside, carried
+    /// onto any tree write the evaluation performs (§3.5's `store` builtin, today the only one).
+    ///
+    /// **`None` is a POSITION, not a missing value.** A write with no context is the AUTONOMOUS
+    /// case (`EXTENSION-HISTORY` §2.1: author = the local peer's identity hash), so a request-
+    /// driven write that reaches the store without this field is not merely unlabelled — it is
+    /// labelled, wrongly, as the peer's own. That is H8's defect, and it is what
+    /// `embed.data/bind-carries-context` measures.
+    pub exec_context: Option<&'r ExecContext>,
 }
 
 /// The evaluator, as an in-process object. One instance per evaluation: it carries the dependency
@@ -159,7 +168,7 @@ impl<'a> ComputeEvaluator<'a> {
         let store = self.store;
         let local_peer = self.local_peer;
         let content_store_access = options.content_store_access;
-        let RequestContext { capability, dispatch, bindings } = request;
+        let RequestContext { capability, dispatch, bindings, exec_context } = request;
 
         let (outcome, dependencies) = std::thread::scope(|s| {
             std::thread::Builder::new()
@@ -179,6 +188,7 @@ impl<'a> ComputeEvaluator<'a> {
                         encountered: Default::default(),
                         capability,
                         dispatch,
+                        exec_context,
                     };
                     let mut initial = Scope::default();
                     for (name, binding) in bindings {

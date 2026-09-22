@@ -68,7 +68,7 @@ fn main() {
 
     // The host contract a third party installs through (keystone H1, H3, H6, H7, H9, K-5). Named
     // here so that `access_absent`'s claims are about what is BEHIND these, not about these.
-    let _: fn(&Peer, Arc<dyn Handler>) -> _ = Peer::register_handler;
+    let _: fn(&Peer, Arc<dyn Handler>) -> _ = Peer::install_handler;
     let _: fn(&Peer, &str) -> bool = Peer::unregister_handler;
     let _: fn(&Peer, Option<Arc<dyn ExpressionEvaluator>>) = Peer::set_expression_evaluator;
     let _: fn(&Peer) -> usize = Peer::max_frame_bytes;
@@ -76,7 +76,7 @@ fn main() {
     let _ = PeerConfig::default().max_frame_bytes(1 << 20);
     let _ = |c: &HandlerContext<'_>| -> usize { c.frame_budget() };
     let _ = |c: &HandlerContext<'_>, l: LocalExecute| -> HandlerResult { c.dispatch_execute(l) };
-    let installed = peer.register_handler(Arc::new(FnHandler::new(
+    let installed = peer.install_handler(Arc::new(FnHandler::new(
         "app/control",
         "control",
         vec![OperationSpec::named("run")],
