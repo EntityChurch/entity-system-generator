@@ -53,6 +53,19 @@ STAGE="$TARGET_DIR/output/$COMP/build"
 PLAN="$TARGET_DIR/output/$COMP/PLAN.json"
 PORT="${PORT:-7777}"
 ORACLE="${ORACLE:-$ROOT/../entity-core-keystone/output/s4-oracles/validate-peer}"
+# The B-ROLE REFERENCE PEER. `--profile core` alone leaves the whole `origination` category
+# collapsed into a single `origination/skipped` sentinel; with `-reference-peer <addr>` its
+# three checks actually run. A SKIP COUNTS AS A FAILURE ([ADR-0012]), so a category we have
+# never once executed is not a gap in the oracle — it is a flag we never passed.
+#
+# Found 2026-09-09 by diffing our executed set against keystone's: ours 776, theirs 778, at
+# the SAME oracle commit. The +2 is 3 real checks minus the 1 sentinel they replace. This is
+# `entity-core-go`'s own `entity-peer`, from the same pinned build as the oracle, on a second
+# loopback port. Loopback is private to the container (--network=none), so PORT+2 cannot
+# collide with any other run on this box.
+REFPEER="${REFPEER:-$ROOT/../entity-core-keystone/output/s4-oracles/entity-peer}"
+RPORT="${RPORT:-$((PORT + 2))}"
+REFPEER_FLAG=""
 
 [ -d "$TARGET_DIR" ] || { echo "host-launch: no target at languages/$TARGET" >&2; exit 2; }
 [ -f "$PLAN" ] || { echo "host-launch: no resolved plan at $PLAN" >&2
@@ -140,7 +153,24 @@ reap_host() {
   kill -KILL "$HOST_PID" 2>/dev/null || true
   wait "$HOST_PID" 2>/dev/null || true
 }
-trap reap_host EXIT INT TERM
+# The reference peer's reaper, defined HERE rather than beside `refpeer_up` further down,
+# because the trap below names it: `sh` resolves a trap body at signal time, so a script that
+# exits between this line and that definition would fire a trap calling a function that does
+# not exist yet. Same shape as reaping before surfacing — the ordering is the point.
+refpeer_reap() {
+  [ -n "${REF_PID:-}" ] || return 0
+  kill -0 "$REF_PID" 2>/dev/null || return 0
+  kill -TERM "$REF_PID" 2>/dev/null || true
+  k=0
+  while [ "$k" -lt 50 ]; do
+    kill -0 "$REF_PID" 2>/dev/null || return 0
+    k=$((k + 1)); sleep 0.1
+  done
+  kill -KILL "$REF_PID" 2>/dev/null || true
+  wait "$REF_PID" 2>/dev/null || true
+}
+
+trap 'refpeer_reap; reap_host' EXIT INT TERM
 
 # The readiness budget is a PROFILE FIELD, not a literal (D17 / AP-10). It was a literal
 # in each copy and had drifted 100/150/150 with no comment on any of the three.
@@ -169,6 +199,47 @@ fi
 
 mkdir -p "$TARGET_DIR/output/$COMP/reports"
 
+# ---- the B-role reference peer, for the ORACLE path only ---------------------
+#
+# NOT started for a `CLIENT` run. The reference is an ORACLE INPUT — `validate-peer` dials it
+# to drive `origination/{reference_connect,reference_ready,dispatch_outbound_reentry}` — and
+# nothing under `gates/ext-checks` knows it exists. Starting it for every client would leave a
+# process and a port that no consumer reads, which is the kind of thing that later gets
+# mistaken for a dependency.
+refpeer_up() {
+  # A MISSING REFERENCE IS FATAL, NOT SILENT. Without this the three checks quietly become a
+  # skip again — the exact coverage loss this exists to end — and it would present as a
+  # slightly smaller total that nothing re-derives. D14's asymmetry: a wrong cohort number
+  # usually UNDERSTATES a capability, and nothing re-checks in that direction.
+  [ -x "$REFPEER" ] || {
+    echo "host-launch: ERROR reference peer not found or not executable at $REFPEER" >&2
+    echo "  It is entity-core-go's own entity-peer, built beside the oracle at the pinned" >&2
+    echo "  digest. Without it the whole 'origination' category SKIPS, and a skip is a" >&2
+    echo "  failure -- so this refuses rather than measuring two checks fewer in silence." >&2
+    exit 3; }
+  "$REFPEER" -addr "127.0.0.1:$RPORT" -open-access >"$REF_OUT" 2>"$REF_ERR" &
+  REF_PID=$!
+  # Readiness goes to STDERR, and it is POLLED rather than slept on: a fixed sleep is either
+  # too slow on every run or too short on a loaded host, and a reference that is not up yet
+  # fails `reference_connect` in a way that reads as a defect in the peer under test.
+  # Reuses the target's declared STARTUP_TICKS rather than a second literal (D17 / AP-10).
+  r=0
+  while [ "$r" -lt "$STARTUP_TICKS" ]; do
+    if grep -q "Ready to accept connections" "$REF_ERR" 2>/dev/null; then
+      REFPEER_FLAG="-reference-peer 127.0.0.1:$RPORT"
+      return 0
+    fi
+    if ! kill -0 "$REF_PID" 2>/dev/null; then
+      echo "host-launch: ERROR reference peer exited before ready" >&2
+      cat "$REF_ERR" >&2; exit 1
+    fi
+    r=$((r + 1)); sleep 0.1
+  done
+  echo "host-launch: ERROR reference peer never became ready on :$RPORT" >&2
+  cat "$REF_ERR" >&2
+  exit 1
+}
+
 # WHO DRIVES THE BOOTED HOST. Default: the oracle, which is why this script exists.
 #
 # `CLIENT` points it at something else -- today `languages/<t>/gates/ext-checks/exec`, the
@@ -188,7 +259,13 @@ if [ -n "${CLIENT:-}" ]; then
   ADDR="127.0.0.1:$PORT" ARM="$ARM" TARGET="$TARGET" COMP="$COMP" "$CLIENT" "$@" || true
 else
   [ "$#" -eq 0 ] && set -- -category content
-  "$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
+  REF_OUT="$(mktemp)"; REF_ERR="$(mktemp)"
+  refpeer_up
+  # $REFPEER_FLAG goes BEFORE "$@" so an explicit caller value still wins — Go's flag package
+  # takes the last occurrence. Unquoted on purpose: it is a two-token flag or empty.
+  # shellcheck disable=SC2086
+  "$ORACLE" -addr "127.0.0.1:$PORT" $REFPEER_FLAG "$@" || true
+  refpeer_reap
 fi
 
 # REAP BEFORE SURFACING, and the order is the whole point.

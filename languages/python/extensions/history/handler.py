@@ -1,19 +1,29 @@
 """HISTORY §4 — the system history handler. ``query`` (§4.3.1) and ``rollback`` (§4.3.2).
 
-**§4.2's dual capability model is where this port diverges most from `typescript`, and
-the cause is a missing peer function rather than a language difference.**
+**§4.2's dual capability model calls the primitive the spec names, and this port took
+three tries to get there. The history of the other two is kept because each was wrong in
+a way the next one was not.**
 
-§4.2 names core's ``check_path_permission`` (§6.3) for its second check. The `typescript`
-peer exports it (``Permissions.checkPathPermission``). **This peer has no such function
-at all** — ``entity_core.peer.capability`` exposes ``check_permission``, which takes an
-EXECUTE entity and answers about the dispatch as a whole, and the grant-walking helpers
-it would need (``_grants_of_token``, ``_matches_scope``) are leading-underscore.
+§4.2 names core's ``check_path_permission`` (§6.3) for its second check.
 
-So the second check is built here from the one public primitive that IS available,
-``matches_pattern``, walking the caller token's grants directly. That is a
-re-transcription of part of core §5.2's scope logic and it is the thing L18 warns about —
-recorded in ``EXTENSION.toml [substrate.path_permission]`` rather than left to look like
-a design choice.
+1. **Hand-walked the token's grants** with the public ``matches_pattern``, because at the
+   time this peer exposed no such function and every scope helper it is built from
+   (``_grants_of_token``, ``_matches_scope``, ``_covered``, ``_canon``) is
+   leading-underscore. It denied every request the oracle made — 23 of 34 checks failed —
+   and it was the wrong SHAPE regardless of the bug: a second reading of core §5.2's
+   authorization logic inside an extension is exactly what L18 and D12 warn about.
+2. **Synthesised an EXECUTE and called ``check_permission``.** Correct on the oracle, and
+   it reused the peer's own predicate rather than re-transcribing one. But it resolved a
+   **granter** frame to do it, and §6.3's check is against the LOCAL peer — so it asked a
+   subtly wider question than §4.2 does.
+3. **Calls ``check_path_permission``**, which is what §4.2 names. Routed as H9 after (1);
+   keystone made it public on this peer in response, and the signature deliberately
+   mirrors ``typescript``'s ``Permissions.checkPathPermission`` so a spec-literal
+   implementation ports between the two unchanged.
+
+**``rust`` is still at (2) and that is not drift** — no ``check_path_permission`` exists
+on that peer, which is recorded in ``EXTENSION.toml [substrate.path_permission]`` and is
+the open half of H9.
 """
 
 from __future__ import annotations
@@ -22,9 +32,7 @@ from typing import Any
 
 from entity_core.peer.capability import (
     canonicalize,
-    cap_resolve,
-    check_permission,
-    resolve_granter_peer_id,
+    check_path_permission,
 )
 from entity_core.peer.handlers import DispatchCtx, Outcome
 from entity_core.peer.model import Entity
@@ -62,46 +70,27 @@ def _resource_targets(exec_e: Entity) -> list[str] | None:
 
 
 def _token_covers(
-    peer, token: Entity, operation: str, path: str, handler_pattern: str, included
+    peer, token: Entity, operation: str, path: str, handler_pattern: str
 ) -> bool:
-    """§4.2 check 2, using the PEER'S OWN authorization function.
+    """§4.2 check 2 — core §6.3's path check, by the name §4.2 gives it.
 
-    **The first version of this hand-walked the token's grants** with the public
-    ``matches_pattern``, because §4.2 names core's ``check_path_permission`` (§6.3) and
-    this peer has no such function — ``entity_core.peer.capability`` exposes
-    ``check_permission``, and the scope helpers it uses (``_grants_of_token``,
-    ``_matches_scope``, ``_covered``, ``_canon``) are all leading-underscore.
+    One call, no synthesis. ``check_path_permission`` takes the path as an ARGUMENT,
+    which is precisely what an extension whose target lives in ``params`` needs: the
+    dispatcher's resource scoping never sees such a target, so the handler asks itself.
 
-    That version denied every request the oracle made and 23 of 34 checks failed on it.
-    It was also the wrong shape regardless of the bug: re-transcribing part of core §5.2
-    inside an extension is exactly what L18 and D12 warn about, and a second reading of a
-    shared authorization algorithm is a security divergence waiting to be found by
-    someone else.
+    **No granter frame, deliberately.** The previous version resolved one — via
+    ``resolve_granter_peer_id(cap_resolve(...))`` — and handed it to ``check_permission``.
+    That is the §5.5a chain-attenuation surface, and §6.3 is not it: this is the
+    defence-in-depth check on a path the LOCAL peer owns, so resources match against
+    ``local_peer``. The peer's own docstring says *"do not add a granter frame to it"*,
+    and re-adding one here would ask a wider question than §4.2 does while looking
+    stricter. The parameter list no longer carries ``included``, so there is nothing left
+    to resolve a frame FROM — the fix is structural rather than a comment asking the next
+    reader not to.
 
-    **So it reuses instead.** ``check_permission`` takes an EXECUTE entity and answers
-    about operation + uri + resource against a token for a handler pattern — which is the
-    whole of §4.2's second check if the EXECUTE describes the TARGET access rather than
-    the history call. So we synthesise exactly that: operation ``get``/``put``, uri and
-    resource naming the target path, handler pattern ``system/tree``.
-
-    The synthesised entity is never signed, never dispatched and never leaves this
-    function; it is an argument shaped the way the peer's own predicate expects. L7 — run
-    what exists before building an instrument.
+    ``handler_pattern`` is ``system/tree``, not ``system/history`` — see the caller.
     """
-    probe = Entity.make(
-        "system/execute",
-        {
-            "uri": path,
-            "operation": operation,
-            "resource": {"targets": [path]},
-        },
-    )
-    # `included` is threaded from the DispatchCtx rather than defaulted: `cap_resolve`
-    # looks in the request's included map BEFORE the store, and a delegated caller
-    # capability's parent chain rides in the envelope, not in our tree. Passing `None`
-    # here raises on the first bytes lookup — the peer resolves included-first by design.
-    granter = resolve_granter_peer_id(cap_resolve(included, peer.store), token) or peer.local_peer
-    return check_permission(peer.local_peer, granter, probe, token, handler_pattern)
+    return check_path_permission(operation, path, token, handler_pattern, peer.local_peer)
 
 
 class HistoryHandler:
@@ -159,7 +148,7 @@ class HistoryHandler:
         # caller must hold authority over the target as a TREE path, exactly as if they
         # were reading or writing it directly. That is the crux of the dual model.
         if not _token_covers(
-            self.peer, ctx.caller_cap, target_op, target_path, "system/tree", ctx.included
+            self.peer, ctx.caller_cap, target_op, target_path, "system/tree"
         ):
             return _err(
                 403,

@@ -220,6 +220,7 @@ def _now_ms() -> int:
 def history_config(
     pattern: str,
     enabled: bool = True,
+    pattern_exclude: list[str] | None = None,
     events: list[str] | None = None,
     max_depth: int | None = None,
 ) -> Entity:
@@ -233,8 +234,17 @@ def history_config(
     ``primitive/bool``, and a disabled config that decoded as malformed would be SKIPPED
     by ``_parse_config`` and would silently RE-ENABLE history for the path it was written
     to turn off.
+
+    ``pattern_exclude`` (v1.10) is written only when non-empty, so a caller that does not
+    use it produces the same bytes as before the field existed. **The parameter sits after
+    ``enabled`` to match §2.2's field order, which makes it a POSITIONAL break for anyone
+    who passed ``events`` positionally.** That is deliberate: the alternative is a
+    parameter list that disagrees with the entity it builds, and this is a two-extension
+    tree where every call site is in it.
     """
     data: dict = {"pattern": pattern, "enabled": enabled}
+    if pattern_exclude:
+        data["pattern_exclude"] = list(pattern_exclude)
     if events:
         data["events"] = list(events)
     if max_depth is not None:

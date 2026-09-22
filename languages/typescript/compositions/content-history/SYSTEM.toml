@@ -265,12 +265,21 @@ improved = [
   "history.type_transition",
 ]
 
-# RE-BLESSED 2026-09-09 — THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
+# PRIOR re-bless, earlier the same day, and its 776 is superseded by the note below.
+# WAS: THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
 # profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in
 # `connectivity` (13) and `tree_operations` (6) from their tree_put_error_codes.go and
 # connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
+# ── RE-BLESSED 2026-09-09: the check SET grew by 2 and the cause is OURS, not the oracle's.
+# `tools/host-launch` now starts entity-core-go's `entity-peer` on PORT+2 and passes
+# `-reference-peer`, so the `origination` category's three checks EXECUTE instead of
+# collapsing into one `origination/skipped` sentinel. 3 checks - 1 sentinel = +2, and the
+# arms move identically: PASS +3, SKIP -1, WARN unchanged, `improved` UNCHANGED. That last
+# one is the point -- all three PASS in BOTH arms, so they say nothing about this
+# composition and this re-bless adds no capability claim. We had never passed the flag;
+# keystone had, which is how 776 vs 778 at one oracle commit got noticed (AP-29).
 [gate.baseline.core]
 # RE-BLESSED 2026-09-08, and the reason is the rule change rather than a measurement change.
 #
@@ -285,9 +294,9 @@ improved = [
 # only from `regressed`: dropped from both arms and from `total`, and NAMED in the run's
 # output every time. Hence 755 rather than 756, and one fewer PASS in each arm.
 measured = "2026-09-09"   # 2 round(s)
-total    = 775
-composed = { PASS = 338, WARN = 329, SKIP = 108 }
-bare     = { PASS = 332, WARN = 335, SKIP = 108 }
+total    = 777
+composed = { PASS = 341, WARN = 329, SKIP = 107 }
+bare     = { PASS = 335, WARN = 335, SKIP = 107 }
 improved = [
   "type_system.type_system_content_blob_fetch",
   "type_system.type_system_content_blob_match",

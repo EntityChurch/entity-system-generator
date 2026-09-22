@@ -69,10 +69,17 @@ fn write(store: &Store, rec: &HistoryRecorder, path: &str, value: &str) -> Entit
     ent
 }
 
-fn configure(store: &Store, name: &str, pattern: &str, enabled: bool, events: Option<&[&str]>) {
+fn configure(
+    store: &Store,
+    name: &str,
+    pattern: &str,
+    enabled: bool,
+    exclude: Option<&[&str]>,
+    events: Option<&[&str]>,
+) {
     store.bind(
         &config_path(PEER, name),
-        &history_config(pattern, enabled, events, None),
+        &history_config(pattern, enabled, exclude, events, None),
     );
 }
 
@@ -94,7 +101,7 @@ fn an_unconfigured_path_records_nothing() {
 #[test]
 fn a_disabled_config_records_nothing() {
     let store = Store::new();
-    configure(&store, "off", "*", false, None);
+    configure(&store, "off", "*", false, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
     write(&store, &rec, &path, "v1");
@@ -110,8 +117,8 @@ fn a_disabled_config_records_nothing() {
 #[test]
 fn a_specific_disabled_config_shadows_a_general_enabled_one() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
-    configure(&store, "secrets", "app/secrets/*", false, None);
+    configure(&store, "everything", "*", true, None, None);
+    configure(&store, "secrets", "app/secrets/*", false, None, None);
     let rec = HistoryRecorder::new(identity());
 
     let public = format!("/{PEER}/app/doc");
@@ -131,7 +138,7 @@ fn a_specific_disabled_config_shadows_a_general_enabled_one() {
 #[test]
 fn a_first_write_records_a_created_transition_with_no_previous() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
     let ent = write(&store, &rec, &path, "v1");
@@ -156,7 +163,7 @@ fn a_first_write_records_a_created_transition_with_no_previous() {
 #[test]
 fn a_second_write_records_updated_and_links_both_chains() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
 
@@ -183,7 +190,7 @@ fn a_second_write_records_updated_and_links_both_chains() {
 #[test]
 fn an_unrecognised_core_event_is_not_recorded_as_a_nearest_neighbour() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
     rec.on_tree_change(
@@ -208,7 +215,7 @@ fn an_unrecognised_core_event_is_not_recorded_as_a_nearest_neighbour() {
 #[test]
 fn an_event_type_not_listed_in_the_config_is_not_recorded() {
     let store = Store::new();
-    configure(&store, "creates-only", "*", true, Some(&["created"]));
+    configure(&store, "creates-only", "*", true, None, Some(&["created"]));
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
 
@@ -232,7 +239,7 @@ fn an_event_type_not_listed_in_the_config_is_not_recorded() {
 #[test]
 fn caller_capability_is_omitted_when_it_equals_capability() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
     write(&store, &rec, &path, "v1");
@@ -253,7 +260,7 @@ fn caller_capability_is_omitted_when_it_equals_capability() {
 #[test]
 fn the_recorders_own_head_write_is_guarded() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
     let path = format!("/{PEER}/app/doc");
     write(&store, &rec, &path, "v1");
@@ -285,7 +292,7 @@ fn the_recorders_own_head_write_is_guarded() {
 #[test]
 fn a_config_write_is_recorded_not_guarded() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let rec = HistoryRecorder::new(identity());
 
     let cfg = config_path(PEER, "everything");
@@ -315,7 +322,7 @@ fn a_config_write_is_recorded_not_guarded() {
 #[test]
 fn a_remote_peers_history_path_is_tracked_not_guarded() {
     let store = Store::new();
-    configure(&store, "all-peers", "*/system/history/*", true, None);
+    configure(&store, "all-peers", "*/system/history/*", true, None, None);
     let rec = HistoryRecorder::new(identity());
 
     let remote = format!("/{OTHER}/{HEAD_PREFIX}/{OTHER}/app/doc");
@@ -340,7 +347,7 @@ fn a_remote_peers_history_path_is_tracked_not_guarded() {
 #[test]
 fn every_transition_uses_the_autonomous_fallback_and_says_so() {
     let store = Store::new();
-    configure(&store, "everything", "*", true, None);
+    configure(&store, "everything", "*", true, None, None);
     let id = identity();
     let rec = HistoryRecorder::new(id.clone());
     let path = format!("/{PEER}/app/doc");
@@ -398,7 +405,7 @@ fn a_carried_context_is_used_and_marked_as_such() {
 #[test]
 fn a_malformed_config_is_skipped_and_counted() {
     let store = Store::new();
-    configure(&store, "good", "*", true, None);
+    configure(&store, "good", "*", true, None, None);
     // `enabled` missing: §2.2 types it as a required bool, so this entity is malformed.
     store.bind(
         &config_path(PEER, "broken"),
@@ -443,7 +450,7 @@ fn the_real_seam_records_a_transition() {
 
     peer.store.bind(
         &config_path(&local, "everything"),
-        &history_config("*", true, None, None),
+        &history_config("*", true, None, None, None),
     );
 
     let install = install_history_recorder(
@@ -492,4 +499,118 @@ fn the_real_seam_records_a_transition() {
         2,
         "a no-op re-bind must be silent"
     );
+}
+
+// ── §2.2 v1.10 exclusions — HIST-R16 ─────────────────────────────────────────
+//
+// The MUST is the ORDER, not the matching. §2.2: exclusion is checked AFTER the most
+// specific matching configuration is selected and BEFORE the event-type filter, and an
+// excluded path "does not fall through to a less specific configuration -- an exclusion
+// is a decision, not a failure to match." Two conformant readings exist without that
+// sentence and they differ on a path two configurations cover, so
+// `an_excluded_path_does_not_fall_through` is the one that discriminates; the other
+// reading passes every other test in this block.
+//
+// ABSOLUTE COUNTS ARE CORRECT HERE and they are NOT in the other two ports. This rig
+// binds configs through `configure` BEFORE the recorder exists and drives it explicitly
+// through `write`, so the recorder never observes a config write. `python` and
+// `typescript` install onto a live peer, where a `pattern: "*"` config records its own
+// write (§3.2 keeps config paths out of the self-guard on purpose), so their versions of
+// these tests assert DELTAS. Same requirement, three rigs, and the difference is the rig.
+
+#[test]
+fn an_excluded_path_is_not_recorded() {
+    let store = Store::new();
+    configure(
+        &store,
+        "all-but-machinery",
+        "*",
+        true,
+        Some(&["system/capability/*"]),
+        None,
+    );
+    let rec = HistoryRecorder::new(identity());
+    let path = format!("/{PEER}/system/capability/grant-1");
+
+    write(&store, &rec, &path, "v1");
+    assert_eq!(rec.stats().recorded, 0);
+    assert!(store.hash_at(&head_path(&path)).is_none());
+}
+
+/// Without this, the test above passes for a recorder that records nothing at all.
+#[test]
+fn control_the_same_path_is_recorded_without_the_exclusion() {
+    let store = Store::new();
+    configure(&store, "all", "*", true, None, None);
+    let rec = HistoryRecorder::new(identity());
+    let path = format!("/{PEER}/system/capability/grant-1");
+
+    write(&store, &rec, &path, "v1");
+    assert_eq!(rec.stats().recorded, 1);
+    assert!(store.hash_at(&head_path(&path)).is_some());
+}
+
+/// §2.2's `[MUST]`, and the only test here that separates the two readings.
+///
+/// `docs/*` is selected (more literal segments) and excludes the path. A reading that
+/// treated the exclusion as a NON-MATCH would continue the search, select `*`, and record
+/// the write — auditing a path the operator excluded, under a config they wrote to be
+/// more permissive elsewhere.
+#[test]
+fn an_excluded_path_does_not_fall_through_to_a_less_specific_config() {
+    let store = Store::new();
+    configure(&store, "everything", "*", true, None, None);
+    configure(&store, "docs", "docs/*", true, Some(&["docs/secret/*"]), None);
+    let rec = HistoryRecorder::new(identity());
+
+    let secret = format!("/{PEER}/docs/secret/salaries");
+    write(&store, &rec, &secret, "v1");
+    assert_eq!(rec.stats().recorded, 0, "fell through to the `*` config");
+    assert!(store.hash_at(&head_path(&secret)).is_none());
+
+    // And the selected config still records everything it did not exclude.
+    let public = format!("/{PEER}/docs/public/readme");
+    write(&store, &rec, &public, "v1");
+    assert_eq!(rec.stats().recorded, 1);
+}
+
+/// Order, the second half: an excluded path is excluded for EVERY event type. The second
+/// assertion carries the weight — it shows the config is live, so the first is not passing
+/// because nothing was recorded at all.
+#[test]
+fn exclusion_is_checked_before_the_event_filter() {
+    let store = Store::new();
+    configure(
+        &store,
+        "creates",
+        "*",
+        true,
+        Some(&["docs/secret/*"]),
+        Some(&["created"]),
+    );
+    let rec = HistoryRecorder::new(identity());
+
+    let secret = format!("/{PEER}/docs/secret/x");
+    write(&store, &rec, &secret, "v1");
+    assert_eq!(rec.stats().recorded, 0);
+
+    let open = format!("/{PEER}/docs/open/x");
+    write(&store, &rec, &open, "v1");
+    assert_eq!(rec.stats().recorded, 1);
+}
+
+/// §2.2: exclusions "use the same core §5.4 pattern syntax as `pattern`; this field does
+/// not define a matcher of its own." So `canonicalize_pattern`'s bare-`*` rule — the one
+/// v1.8 corrected — applies here too. A port that canonicalized `pattern` and matched
+/// `pattern_exclude` RAW would silently exclude nothing, which reads exactly like a
+/// deployment that configured no exclusions.
+#[test]
+fn a_bare_star_exclusion_is_canonicalized_like_a_pattern() {
+    let store = Store::new();
+    configure(&store, "self-negating", "*", true, Some(&["*"]), None);
+    let rec = HistoryRecorder::new(identity());
+    let path = format!("/{PEER}/docs/report");
+
+    write(&store, &rec, &path, "v1");
+    assert_eq!(rec.stats().recorded, 0);
 }

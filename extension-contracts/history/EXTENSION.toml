@@ -28,15 +28,31 @@
 [extension]
 name     = "HISTORY"
 spec     = "EXTENSION-HISTORY.md"
-version  = "1.8"
-snapshot = "history-v1.8"
+version  = "1.10"
+snapshot = "history-v1.10"
 grade    = "active"                  # spec header "**Status**: Active". NOTE: this spec has no
                                      # "Conformance grade:" line at all — CONTENT and TYPE are the
                                      # only two that do. `active` is the Status value, and it is a
                                      # DIFFERENT axis from GUIDE §9's grade. Recorded as the
                                      # document's own word rather than mapped onto CONTENT's scale.
 
-# ── [contract] — DERIVED. Every field names its section. ────────────────────────────────
+# ── [contract] — TRANSCRIBED at v1.10. Every field is the spec's own declaration. ──────
+#
+# WAS DERIVED THROUGH v1.8. Arch's §3.3 declaration header (GI-5) closed at 26 of 26 on
+# 2026-09-08 and EXTENSION-HISTORY carries the full seven fields, so this block stops
+# being our reading of the body text and becomes a transcription of a declaration.
+# `[contract.derived_from]` below is KEPT, retitled, and is now a RECONCILIATION rather
+# than a justification — it records where each value was read from when we had to derive
+# it, beside the landed declaration, because the comparison is the finding.
+#
+# SIX OF SEVEN AGREED. `points_consumed` DID NOT, and it is the one that names another
+# extension: we derived `emit.tree_change` alone; the header declares the emit pathway
+# AND the extension-contributed context field `clock`, owned by EXTENSION-CLOCK and typed
+# `system/clock/state` (SYSTEM-COMPOSITION §1.5). A derivation cannot see a field another
+# document contributes -- absence of a mention here is evidence about THIS spec's text and
+# none at all about what CLOCK says it gives us (D12 / L8). Nothing breaks today: no port
+# consumes `clock`, and `[substrate]` already records that no peer delivers a context at
+# all. See `shared/spec-data/history-v1.10/MANIFEST.md`.
 [contract]
 depends          = []                # §"Depends": ENTITY-CORE-PROTOCOL v7.19+ only. No extension
                                      # prerequisite — see [core_depends]. §1.2 discusses TREE,
@@ -55,20 +71,21 @@ owned_types      = [
 ]
 owned_kinds      = []
 points_exposed   = []
-points_consumed  = ["emit.tree_change"]
+points_consumed  = ["emit.tree_change", "context.clock"]
 
 [contract.derived_from]
-# Every [contract] field above, and the section it was read out of. Checkable against the
-# snapshot digest — which is the property that makes a derivation worth as much as a
-# transcription, and the reason this block exists rather than a sentence in a README.
+# HISTORICAL, and deliberately not deleted. Every [contract] field as we DERIVED it through
+# v1.8, and the section it was read out of. Kept beside the landed header so the one field
+# that disagreed stays visible: a derivation that was six-for-seven reads as vindication
+# unless the seventh is written down next to it.
 depends          = "the `**Depends**` header line + §8.3 Independence"
 owned_namespaces = "§3.1 (head pointers at `system/history/head/{path}`), §6.1 (config at `system/history/config/{name}`), §4.1 (handler at pattern `system/history`)"
 owned_ops        = "§4.1 handler manifest + §9.3 Handler Registered — `query` and `rollback`, with input/output types"
 owned_types      = "§9.2 Types Installed — an explicit six-entry list. The per-type section cites are §2.1, §2.2, §2.3, §2.4, §4.3.2, §4.3.2"
-points_consumed  = "§5.1 Recording Transitions + SYSTEM-COMPOSITION §2.2 position 4. HISTORY does not register a hook; it IS one"
+points_consumed  = "§5.1 Recording Transitions + SYSTEM-COMPOSITION §2.2 position 4. HISTORY does not register a hook; it IS one. ** INCOMPLETE, measured 2026-09-09 against the landed §3.3 header: this derivation found the emit pathway and MISSED `context.clock`. Both are now in [contract]. **"
 # ↓ the two that are readings rather than readings-off
-points_exposed   = "INFERRED FROM ABSENCE. Nothing in the document exposes a registration hook for another extension to plug into. §8.3 says extensions share the emit pathway as the integration point, which is the CORE's hook and not one HISTORY owns. If arch's header says otherwise this field is wrong and the gate that would have caught it does not exist."
-owned_kinds      = "INFERRED FROM ABSENCE. No `properties.kind` value appears anywhere in the document (`grep -c 'properties.kind' EXTENSION-HISTORY.md` -> 0). Same caveat as above."
+points_exposed   = "INFERRED FROM ABSENCE. Nothing in the document exposes a registration hook for another extension to plug into. §8.3 says extensions share the emit pathway as the integration point, which is the CORE's hook and not one HISTORY owns. If arch's header says otherwise this field is wrong and the gate that would have caught it does not exist. ** CONFIRMED 2026-09-09: the landed header reads `Extension points exposed: none.` The inference-from-absence held HERE -- and the sentence above named the right risk, it just named it for the wrong field. **"
+owned_kinds      = "INFERRED FROM ABSENCE. No `properties.kind` value appears anywhere in the document (`grep -c 'properties.kind' EXTENSION-HISTORY.md` -> 0). Same caveat as above. ** CONFIRMED 2026-09-09: `Owned properties.kind values: none.` **"
 
 [core_depends]
 protocol = ">=7.19"                  # §"Depends". The emit pathway HISTORY consumes is §6.10 /
@@ -162,7 +179,7 @@ default_events   = { value = ["created", "updated", "deleted"], cite = "§2.2 'D
 
 default_limit    = { value = 50, cite = "§2.3 'Maximum transitions to return. Default: 50'" }
 timestamp_source = { value = "wall-clock ms since epoch, from the host", cite = "§2.1 timestamp + §5.1 system_clock_ms()", note = "§2.1's `clock` field is ABSENT in our transitions: it is `optional: true` and explicitly 'Absent when the clock extension is not installed'. CLOCK is not in this composition. The oracle's `transition_clock_structured` check is therefore expected to SKIP or pass vacuously -- recorded so a pass is not read as evidence we implemented it." }
-specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.8 MUST (H-R13/H-R14)", note = """NO LONGER AN ASSUMPTION -- v1.8 settled it, and settled it the way our own test docstring had already derived. At v1.7 we implemented the tuple, implemented HIST-CONFIG-SPECIFICITY-1 as a unit test in both insertion orders, and recorded in that test that v1.7's worked pair (`a/b/c/d` vs `a/*/c/*/e`) names no path both patterns match -- because a mid-path `*` is not one of core §5.4's three wildcard forms -- and that consequently "scalar and tuple can never disagree on a pair core §5.4 can express". v1.8 RETRACTS that pair for that reason, proves the same non-constructibility by cases over §5.4's three admissible families, and keeps the MUST as forward-looking: "A specification that claimed otherwise would be asking implementers to defend against a case they cannot write a test for." It replaces the vector with `a/b/*` vs `a/*` at `a/b/c` (key 1 separates) and ADDS HIST-CONFIG-SPECIFICITY-2, `*` vs `/*/a/*` at `a/b`, where key 1 ties at 1 and ONLY KEY 2 SEPARATES -- the case v1.7 had no equivalent of. Both are now unit tests in all three ports, both insertion orders, and all three passed on the first run with no code change. Still measured by nothing upstream: see [conformance] H-R13.""" }
+specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.8 MUST (HIST-R13/HIST-R14)", note = """NO LONGER AN ASSUMPTION -- v1.8 settled it, and settled it the way our own test docstring had already derived. At v1.7 we implemented the tuple, implemented HIST-CONFIG-SPECIFICITY-1 as a unit test in both insertion orders, and recorded in that test that v1.7's worked pair (`a/b/c/d` vs `a/*/c/*/e`) names no path both patterns match -- because a mid-path `*` is not one of core §5.4's three wildcard forms -- and that consequently "scalar and tuple can never disagree on a pair core §5.4 can express". v1.8 RETRACTS that pair for that reason, proves the same non-constructibility by cases over §5.4's three admissible families, and keeps the MUST as forward-looking: "A specification that claimed otherwise would be asking implementers to defend against a case they cannot write a test for." It replaces the vector with `a/b/*` vs `a/*` at `a/b/c` (key 1 separates) and ADDS HIST-CONFIG-SPECIFICITY-2, `*` vs `/*/a/*` at `a/b`, where key 1 ties at 1 and ONLY KEY 2 SEPARATES -- the case v1.7 had no equivalent of. Both are now unit tests in all three ports, both insertion orders, and all three passed on the first run with no code change. Still measured by nothing upstream: see [conformance] HIST-R13.""" }
 
 # ── [substrate] — MUSTs whose satisfiability differs per peer, measured per peer ─────────
 #
@@ -266,20 +283,36 @@ typescript = "THE PEER'S OWN FUNCTION"
                                      # `Permissions.checkPathPermission(operation, path,
                                      # capability, handlerPattern, localPeerId)` is public
                                      # and is exactly §4.2's named primitive. Called directly.
-python     = "REBUILT FROM check_permission"
-                                     # THERE IS NO `check_path_permission` ON THIS PEER.
-                                     # `entity_core.peer.capability` exposes
-                                     # `check_permission(local, granter, exec, token,
-                                     # handler_pattern)`, and every scope helper it uses --
-                                     # `_grants_of_token`, `_matches_scope`, `_covered`,
-                                     # `_canon` -- is leading-underscore.
+python     = "THE PEER'S OWN FUNCTION"
+                                     # CHANGED 2026-09-09, and the change is H9 CLOSING on
+                                     # this peer rather than anything we learned about our
+                                     # own code. Keystone made `check_path_permission`
+                                     # public in `d9713a9b` IN RESPONSE TO OUR H9 ROUTING --
+                                     # `check_path_permission(operation, path, token,
+                                     # handler_pattern, local_peer)`, signature deliberately
+                                     # mirroring `typescript`'s so a spec-literal
+                                     # implementation ports between the two unchanged.
                                      #
-                                     # The port SYNTHESISES an EXECUTE entity describing the
-                                     # TARGET access (operation get/put, uri and resource =
-                                     # the target path) and calls the peer's own
-                                     # `check_permission` with `system/tree` as the pattern.
-                                     # Never signed, never dispatched -- an argument shaped
-                                     # the way the peer's predicate expects.
+                                     # SO THIS ROW WAS TRUE WHEN WRITTEN AND WENT STALE
+                                     # WITHOUT ANYTHING IN THIS TREE NOTICING. It was caught
+                                     # by keystone VERIFYING a packet we routed, not by us.
+                                     # That is AP-2's mechanism on a substrate row: a
+                                     # measured per-peer fact outliving the peer.
+                                     #
+                                     # Was: SYNTHESISED an EXECUTE describing the target
+                                     # access and called `check_permission` with
+                                     # `system/tree`. Correct on the oracle, but it resolved
+                                     # a GRANTER frame to do it -- §5.5a's chain-attenuation
+                                     # surface -- where §6.3 matches resources against the
+                                     # LOCAL peer. A subtly WIDER question than §4.2 asks,
+                                     # while reading stricter. The parameter list no longer
+                                     # carries `included`, so there is nothing left to
+                                     # resolve a frame from.
+                                     #
+                                     # Verified: 5 unit controls (3 deny arms, which the
+                                     # oracle never drives), a planted-defect run in which
+                                     # 3 of them go red, and conformance unchanged at
+                                     # 0 reg / 32 imp on a REBUILT stage.
 rust       = "REBUILT FROM check_permission"
                                      # PORTED 2026-09-07. Same answer as `python`, and the
                                      # agreement is the finding: THERE IS NO
@@ -324,6 +357,20 @@ that answers the question; it just did not have the one §4.2 names.
 **AND THIS IS A ROUTING ITEM, NOT A COMPLAINT.** §4.2 names `check_path_permission` as core
 §6.3's function. One peer exports it and one does not, so an extension author following §4.2
 literally can implement it on one substrate and not the other. Routed to keystone.
+
+**H9 CLOSED ON `python` 2026-09-09; `rust` IS THE OPEN HALF.** Keystone answered the routing
+by making the primitive public on `python` (`d9713a9b`), so two of three ports now call the
+function §4.2 names and this row reads `2 of 3`, not `1 of 3`.
+
+**Two corrections came back with it, and both are ours.** Keystone VERIFIED the facade packet
+rather than filing it, and found (a) `typescript`'s `checkPathPermission` IS reachable across
+the npm packaging boundary -- `exports["."]` -> `index.ts` -> `capability/index.ts` -- which
+our packet reported as not reachable, a D13 ACCESS-layer miss in the under-claiming direction;
+and (b) that `python` was calling the wrong function. **(b) is right about the defect and
+wrong about its shape, and the cause is ours**: they read `matches_pattern`, which is what
+this port's MODULE DOCSTRING still described, while the code had moved to `check_permission`
+a revision earlier. A stale docstring is what a verifier reads when the code is longer than
+the claim. Both are in the return packet.
 """
 
 # ── [substrate.handler_grant] — the row the THIRD port added ────────────────────────
@@ -427,11 +474,11 @@ one is the second.
 # §6.2's MUST exists BECAUSE of this row, which is why it belongs here: "an implementation that
 # returns the first match rather than the most specific one passes exactly one order, by luck",
 # and the order it would be lucky about is the peer's, not ours. The extension has no say in it
-# and cannot observe it directly. Measured 2026-09-08 while authoring H-R13's two checks, by
+# and cannot observe it directly. Measured 2026-09-08 while authoring HIST-R13's two checks, by
 # reading each peer's own listing implementation and then constructing the two scenarios that
 # invert enumeration on all three at once.
 [substrate.config_enumeration_order]
-must = "§6.2 `find_history_config` iterates `list_entities(system/history/config/)`. The spec leaves that ORDER unspecified and MUSTs the selection be independent of it (H-R13)."
+must = "§6.2 `find_history_config` iterates `list_entities(system/history/config/)`. The spec leaves that ORDER unspecified and MUSTs the selection be independent of it (HIST-R13)."
 typescript = "INSERTION ORDER"     # `EntityTree.list` returns a `Map` built by iterating the
                                    # tree index, which is a `Map` in first-write order. So the
                                    # config written first is enumerated first, forever, and a
@@ -804,14 +851,31 @@ note = "rust exports the §4.1 op list as a module const; ts carries it as an in
 [conformance]
 spec_file       = "EXTENSION-HISTORY.md"
 section         = "9.1"
-shape           = "level-table"
+shape           = "id-level-table"   # v1.9+. WAS `level-table` through v1.8; §9.1 gained an `id`
+                                     # column when SPECIFICATION-FORMAT v1.3 §8.5a landed and
+                                     # EXTENSION-HISTORY became its worked reference. The old
+                                     # parser returned ZERO rows and the tool REFUSED rather than
+                                     # reporting clean coverage over nothing — which is the whole
+                                     # argument for declaring the shape instead of sniffing it.
 oracle_category = "history"
 
-# ── MUST ────────────────────────────────────────────────────────────────────────────────
+# ── THE ROWS, IN ARCH'S ID ORDER ────────────────────────────────────────────────────────
+#
+# ORDERED BY `HIST-R<n>`, NOT GROUPED BY LEVEL. Through v1.8 this block was grouped
+# MUST / SHOULD / MAY, because our own `H-R<n>` ids were allocated in that order and the
+# grouping was the only structure available. v1.9's §9.1 allocates ids in ONE sequence that
+# interleaves the levels, and `id` is the join key `tools/req-coverage.py` uses -- so the
+# file now reads in the order the spec numbers them and every row carries its own `level`.
+#
+# The three group headers that used to live here are GONE rather than moved. They were a
+# second encoding of a fact each row already states, and after the re-key two of the three
+# were sitting above rows of a different level.
 
 [[conformance.requirement]]
-id     = "H-R1"
-text   = "Store transition entities in content store"
+id     = "HIST-R1"
+text   = "Store transition entities in the content store"
+level  = "MUST"
+section = "§3.1"
 oracle = ["transition_recorded", "transition_hash_matches"]
 gap    = """PARTIAL — neither check reads WHERE the transition is stored. `transition_recorded` \
 counts transitions returned by `system/history:query`; `transition_hash_matches` compares the \
@@ -820,8 +884,10 @@ that materialised transitions in the entity tree would pass both. `grep content_
 executed corpus returns 0."""
 
 [[conformance.requirement]]
-id     = "H-R2"
+id     = "HIST-R2"
 text   = "Store head pointers at `system/history/head/{path}`"
+level  = "MUST"
+section = "§3.1"
 oracle = ["head_pointer_set"]
 gap    = """PARTIAL — the check reads the head pointer out of the QUERY RESULT ("head pointer set \
 in query result"), not out of the tree at `system/history/head/{path}`. The path clause is the \
@@ -830,8 +896,10 @@ going through this extension's handler, and on `rust` — where the handler face
 — it is the ONLY way. Unmeasured."""
 
 [[conformance.requirement]]
-id     = "H-R3"
+id     = "HIST-R3"
 text   = "Record `author`, `capability`, `timestamp` in transitions"
+level  = "MUST"
+section = "§2.1"
 oracle = ["context_author_present", "context_capability_present", "transition_has_timestamp"]
 gap    = """PARTIAL, and this is the row we routed. All three are presence checks — `IsZero()` / \
 `== ""` — and none compares a value to anything. A peer that records §2.1's AUTONOMOUS reading for \
@@ -842,46 +910,10 @@ landed and all three ports began consuming a real execution context. \
 `ROUTING-2026-09-07-b-core-go-the-context-checks-assert-presence-not-provenance.md`."""
 
 [[conformance.requirement]]
-id     = "H-R4"
-text   = "Exclude local peer's `system/history/*` from history recording"
-oracle = []
-ours   = ["extension-contracts/history/checks/local-namespace-excluded.toml"]
-note   = """NOTHING UPSTREAM MEASURES THIS, and it is a MUST. `grep -i recurs` over the executed \
-corpus returns 0. §3.2 is the recursion-prevention clause: the recorder writes head pointers into \
-`system/history/head/...`, so a port that failed to exclude its own namespace would record a \
-transition per head-pointer write, whose head-pointer write records another. Our three ports \
-assert it in their own unit tests, which is our code checking our code (L18). **AUTHORED \
-2026-09-07** over the wire instead, with both halves in one run: the ordinary path HAS a \
-transition and the head-pointer path has NONE, so a peer that records nothing fails it too. \
-Routed to `entity-core-go` as G-5 — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
-
-[[conformance.requirement]]
-id     = "H-R5"
-text   = "Dual capability check on all operations"
-oracle = []
-note   = """NOTHING MEASURES THIS, and it is a MUST. `grep -i dual` over the executed corpus \
-returns 0. §4.2 and §7.1 require BOTH the caller's grant for the history operation AND the \
-underlying path's read grant; the `history` category drives `query` and `rollback` with a grant \
-that satisfies both, and never drives the case that separates them — a caller authorized for \
-`system/history:query` but not for the path whose history it asks for. That is the case §7.5 calls \
-exfiltration. Routed alongside H-R4."""
-
-[[conformance.requirement]]
-id     = "H-R6"
-text   = "Validate rollback target is in path history"
-oracle = ["rollback_invalid_hash_rejected"]
-gap    = """PARTIAL, in two directions. The check plants a syntactically invalid hash and requires \
-a non-200; §7.5's requirement is that the target be in THIS PATH's history, and a hash that is \
-perfectly valid but belongs to a DIFFERENT path is the exfiltration case the clause exists for. It \
-is not exercised. And this is the single check that PASSES on a peer with NO history handler at \
-all, because `404 handler_not_found` is not 200 — 1 of 34 in the bare arm on every target. Routed \
-as G-1 in `ROUTING-2026-09-07-core-go-the-history-category-on-a-peer-that-has-the-types-and-not-the-handler.md`."""
-
-# ── SHOULD ──────────────────────────────────────────────────────────────────────────────
-
-[[conformance.requirement]]
-id     = "H-R7"
+id     = "HIST-R4"
 text   = "Record `caller_capability` when it differs from `capability`"
+level  = "SHOULD"
+section = "§2.1"
 oracle = ["w6_caller_cap_absent"]
 gap    = """The only check in this category that COMPARES rather than asserts presence, and the \
 only one measuring the negative half of the row — §5.1: when `caller_capability` would equal \
@@ -892,27 +924,56 @@ recorded — is driven by nothing. **This check is FAILING on `typescript` and `
 the same day; see docs/status/HANDOFF-2026-09-07-c-*."""
 
 [[conformance.requirement]]
-id     = "H-R8"
+id     = "HIST-R5"
 text   = "Record `handler`, `operation`, `chain_id` in transitions"
+level  = "SHOULD"
+section = "§2.1"
 oracle = ["context_handler_present", "context_operation_present"]
 gap    = """PARTIAL — the row names three fields and two are checked, both for presence only \
-(H-R3's mechanism). Nothing reads `chain_id`, which is the field §5.3 makes the multi-path \
+(HIST-R3's mechanism). Nothing reads `chain_id`, which is the field §5.3 makes the multi-path \
 correlation key, so a port that omitted it entirely, or emitted a fresh one per write instead of \
 propagating the chain's, scores identically."""
 
 [[conformance.requirement]]
-id     = "H-R9"
-text   = "Support `max_depth` pruning"
+id     = "HIST-R6"
+text   = 'Support the `"accessed"` event type'
+level  = "MAY"
+section = "§2.1"
+oracle = []
+note   = """Nothing measures it: `grep -i accessed` over the executed corpus returns 0, and \
+`event_filter_only_created` filters on `created`. MAY, so this is reported and never failed — \
+§5.2's audit mode is optional by the spec's own word. Recorded because "no check" and "no \
+requirement" are different facts and only one of them is a gap."""
+
+[[conformance.requirement]]
+id     = "HIST-R7"
+text   = "Retain at least `max_depth` entries per path"
+level  = "SHOULD"
+section = "§3.3"
 oracle = []
 note   = """NOTHING MEASURES THIS. `grep -i 'prun|depth'` over the executed corpus returns only \
-`resource_bounds/r2_chain_depth_over_limit`, which is the core capability-chain depth and \
-unrelated. §3.3 is also one of the four defects we routed to arch on 2026-09-06 — it describes an \
-IN-PLACE MUTATION of immutable content-addressed entities — so this row is unmeasured upstream and \
-unimplementable as written. Our ports implement the reachable reading and say so."""
+`resource_bounds/r2_chain_depth_over_limit`, which is the core capability-chain depth and unrelated.
 
-# ── MAY ─────────────────────────────────────────────────────────────────────────────────
+**THIS ROW CHANGED MEANING AT v1.9 AND IT IS THE ONE TO READ TWICE ON THE NEXT RE-PIN.** Through \
+v1.8 it read "support `max_depth` pruning", and our note called §3.3 unimplementable as written — \
+one of the four defects routed 2026-09-06, because it described an IN-PLACE MUTATION of immutable \
+content-addressed entities. **Arch ruled for us (A-4) and v1.8 rewrote §3.3: `max_depth` is a \
+RETENTION FLOOR, not a truncation instruction; pruning is collection-side; the chain is never \
+rewritten and the head is never re-pointed** — re-pointing orphans the NEWEST entries, which is the \
+opposite of the intent. v1.9 restated the requirement to match, which is why the text now reads \
+"retain at least `max_depth` entries per path".
 
-# ── FIVE ROWS ARRIVED WITH v1.8. §9.1 went from 10 requirements to 15. ──────────────────
+**Our implementation did not move and did not need to: we implemented nothing and said so, and v1.8 \
+makes exactly that conformant** — "a peer that collects nothing is conformant", a query MAY return \
+entries older than `max_depth`, and a caller MUST NOT read their absence as pruning. The decision \
+that looked like a gap is the ruling.
+
+**Worth noticing: a row can be RENUMBERED and RE-WORDED in one re-pin and the diff still reads \
+clean.** This was our `H-R9` and is arch's `HIST-R7`; neither the id nor the text survived. \
+`tools/req-coverage.py` fails on an undeclared or stale row, which is what forced this note to be \
+rewritten rather than carried — without the id join it would have been a paragraph nobody re-read."""
+
+# ── SIX ROWS ARRIVED WITH v1.8 AND v1.10. §9.1 went 10 -> 15 -> 16. ────────────────────
 #
 # This is the event `[conformance]` exists for (D16, fourth instance): a re-pin that adds
 # binding rows without anyone deciding what measures them. `tools/req-coverage.py` refuses an
@@ -926,8 +987,52 @@ unimplementable as written. Our ports implement the reachable reading and say so
 # complaint: three of the five are new text as of today.
 
 [[conformance.requirement]]
-id     = "H-R11"
-text   = "Refuse a rollback target absent from the chain with `404 not_in_history` (Appendix A, §7.5)"
+id     = "HIST-R8"
+text   = "Record the local peer's own `system/history/*` writes"
+level  = "MUST NOT"
+section = "§3.2"
+oracle = []
+ours   = ["extension-contracts/history/checks/local-namespace-excluded.toml"]
+note   = """NOTHING UPSTREAM MEASURES THIS, and it is a MUST. `grep -i recurs` over the executed \
+corpus returns 0. §3.2 is the recursion-prevention clause: the recorder writes head pointers into \
+`system/history/head/...`, so a port that failed to exclude its own namespace would record a \
+transition per head-pointer write, whose head-pointer write records another. Our three ports \
+assert it in their own unit tests, which is our code checking our code (L18). **AUTHORED \
+2026-09-07** over the wire instead, with both halves in one run: the ordinary path HAS a \
+transition and the head-pointer path has NONE, so a peer that records nothing fails it too. \
+Routed to `entity-core-go` as G-5 — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
+
+[[conformance.requirement]]
+id     = "HIST-R9"
+text   = "Apply the dual capability check on all operations"
+level  = "MUST"
+section = "§4.2, §7.1"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is a MUST. `grep -i dual` over the executed corpus \
+returns 0. §4.2 and §7.1 require BOTH the caller's grant for the history operation AND the \
+underlying path's read grant; the `history` category drives `query` and `rollback` with a grant \
+that satisfies both, and never drives the case that separates them — a caller authorized for \
+`system/history:query` but not for the path whose history it asks for. That is the case §7.5 calls \
+exfiltration. Routed alongside HIST-R8."""
+
+[[conformance.requirement]]
+id     = "HIST-R10"
+text   = "Validate that a rollback target is in the path's history"
+level  = "MUST"
+section = "§4.3"
+oracle = ["rollback_invalid_hash_rejected"]
+gap    = """PARTIAL, in two directions. The check plants a syntactically invalid hash and requires \
+a non-200; §7.5's requirement is that the target be in THIS PATH's history, and a hash that is \
+perfectly valid but belongs to a DIFFERENT path is the exfiltration case the clause exists for. It \
+is not exercised. And this is the single check that PASSES on a peer with NO history handler at \
+all, because `404 handler_not_found` is not 200 — 1 of 34 in the bare arm on every target. Routed \
+as G-1 in `ROUTING-2026-09-07-core-go-the-history-category-on-a-peer-that-has-the-types-and-not-the-handler.md`."""
+
+[[conformance.requirement]]
+id     = "HIST-R11"
+text   = "Refuse a rollback target absent from the chain with `404 not_in_history`"
+level  = "MUST"
+section = "§7.5, Appendix A"
 oracle = ["rollback_invalid_hash_rejected"]
 gap    = """PARTIAL. The check drives the scenario and asserts the STATUS; it does not read the \
 `code`. So a port emitting `404 handler_not_found` — §3.3's 404 default, which is what a peer \
@@ -937,8 +1042,10 @@ The half v1.8 added is exactly the half the check does not measure. All three po
 (L18); over the wire it is unasserted."""
 
 [[conformance.requirement]]
-id     = "H-R12"
-text   = "Emit error codes from Appendix A's set; no other more-specific spelling"
+id     = "HIST-R12"
+text   = "Emit error codes from Appendix A's set and no other, more specific spelling"
+level  = "MUST"
+section = "Appendix A"
 oracle = []
 note   = """NOTHING MEASURES THIS, and **we do not currently satisfy it.** Appendix A's 403 row is \
 `access_denied`; all three ports emit `capability_denied`, which is `ENTITY-CORE-PROTOCOL` §3.3's \
@@ -951,8 +1058,10 @@ docs/status/ROUTING-2026-09-08-arch-the-code-set-names-a-403-core-does-not-defin
 mint an authorization code core declines to define, in a cohort, on our own authority."""
 
 [[conformance.requirement]]
-id     = "H-R13"
-text   = "Select the most specific matching config, independent of enumeration order (§6.2)"
+id     = "HIST-R13"
+text   = "Select the most specific matching config, independent of enumeration order"
+level  = "MUST"
+section = "§6.2"
 oracle = []
 ours   = [
   "extension-contracts/history/checks/config-specificity-key1.toml",
@@ -979,8 +1088,10 @@ scenario and first in the other on every peer, and a third scenario inverts `ena
 404s are attributable to the config selected rather than to the pattern never having matched."""
 
 [[conformance.requirement]]
-id     = "H-R14"
-text   = "Compare specificity as the §6.2 tuple, not a collapsed scalar (§6.2)"
+id     = "HIST-R14"
+text   = "Compare specificity as the §6.2 tuple, never as a collapsed scalar"
+level  = "MUST"
+section = "§6.2"
 oracle = []
 note   = """Satisfied by construction in all three ports — `pattern_specificity` returns an ordered \
 `(literals, depth, canonical)` and `compare_specificity` walks the keys — and **v1.8 says out loud \
@@ -993,8 +1104,10 @@ UNMEASURABLE BY CONSTRUCTION today and is filed that way rather than as a gap: a
 for it would mean authoring one that cannot fail."""
 
 [[conformance.requirement]]
-id     = "H-R15"
-text   = "Canonicalize a leading-`*` config pattern to `/*/` + remainder (§2.2)"
+id     = "HIST-R15"
+text   = "Canonicalize a leading-`*` config pattern to `/*/` + remainder"
+level  = "MUST"
+section = "§2.2"
 oracle = []
 note   = """**This row is our own routed reading, landed as spec text.** At v1.7 §2.2's pseudocode \
 returned a leading-`*` pattern unchanged while §2.2's table said it meant "any peer's namespace", \
@@ -1004,13 +1117,55 @@ nothing. All three ports implement the TABLE (`*/rest` -> `/*/rest`, and bare `*
 it cannot be read as a degenerate peer wildcard), declared as a deviation and routed. v1.8 makes \
 both the pseudocode and the table read that way and corrects §2.2's own example from \
 `*/project/*` to `/*/project/*`. The deviation is closed; no port changes. Unmeasured upstream — \
-a config-selection scenario would reach it, which is H-R13's vector."""
+a config-selection scenario would reach it, which is HIST-R13's vector."""
 
 [[conformance.requirement]]
-id     = "H-R10"
-text   = 'Support `"accessed"` event type'
+id     = "HIST-R16"
+text   = "Apply `pattern_exclude` against the selected config only, after selection and before the event filter; an excluded path does not fall through to a less specific config"
+level  = "MUST"
+section = "§2.2, §5.1"
 oracle = []
-note   = """Nothing measures it: `grep -i accessed` over the executed corpus returns 0, and \
-`event_filter_only_created` filters on `created`. MAY, so this is reported and never failed — \
-§5.2's audit mode is optional by the spec's own word. Recorded because "no check" and "no \
-requirement" are different facts and only one of them is a gap."""
+ours   = [
+  "languages/python/extensions/history/test/test_recorder.py",
+  "languages/typescript/extensions/history/test/recorder.test.ts",
+  "languages/rust/extensions/history/tests/recorder.rs",
+]
+note   = """
+NEW AT v1.10, and it is OUR OWN ROUTED FINDING COMING BACK AS SPEC — \
+`ROUTING-2026-09-07-arch-the-default-config-audits-the-peers-own-protocol-writes`. We measured, on \
+real loopback, that one `system/tree:put` under §6.3's worked `pattern: "*"` produces THREE consumer \
+events, two of them the peer's own §3.5 signature bookkeeping, accruing one transition per served \
+request forever in a store §3.3 says cannot be pruned.
+
+ARCH REVERSED ITS OWN RECORDED LEAN, and that is the part worth carrying. `ROUTING-2026-09-08-e` \
+said the lean was to widen §3.2's self-exclusion guard to "local, engine-written protocol paths" \
+with the set enumerated, rather than add a config field. What landed is the config field, because \
+core §1.9 makes those paths a CONVENTION -- so the spec does not know the set it would have been \
+defaulting, and §6.3's list is "an example for the recommended path convention and deliberately not \
+a normative set." A lean is not a ruling, and we recorded it as a lean.
+
+**THE NORMATIVE CONTENT IS THE ORDER, NOT THE MATCHING**, which is why this row is a MUST while the \
+exclusion list itself is an example. §2.2 states both halves and says why: two conformant readings \
+exist without the sentence, and THEY DIFFER ON A PATH TWO CONFIGURATIONS COVER. The other reading \
+folds exclusion into `find_history_config` as a non-match, which continues the search and selects a \
+LESS SPECIFIC config -- auditing a path the operator excluded, under a config they wrote to be more \
+permissive elsewhere.
+
+MEASURED BY NOTHING UPSTREAM, and the oracle could not reach it today: `grep -i pattern_exclude` \
+over the executed corpus returns 0, and the `history` category never writes a config at all -- it \
+drives an unconfigured peer, which is also why HIST-R13/HIST-R14 are ours. Routed to `entity-core-go` \
+with the config-selection scenario those two already ask for; the same scenario reaches all three.
+
+OURS, in all three ports, five cases each, and ONE OF THE FIVE IS THE ONLY ONE THAT DISCRIMINATES: \
+`..._does_not_fall_through_to_a_less_specific_config`. The other four pass under BOTH readings. Each \
+port also carries an explicit no-exclusion CONTROL, because every other assertion in the block is \
+"nothing was recorded" and that is what a peer recording nothing at all also looks like. Verified by \
+planting a defect (the exclusion check disabled) and observing 4 of 5 go red on every port, with the \
+control staying green -- D15.
+
+THE THREE RIGS DISAGREE ABOUT ABSOLUTE COUNTS AND THAT IS DECLARED, NOT DRIFT. `python` and \
+`typescript` install onto a live peer where a `pattern: "*"` config RECORDS ITS OWN WRITE (§3.2 keeps \
+config paths out of the self-guard on purpose), so those two assert DELTAS taken after setup. `rust` \
+binds configs before the recorder exists and drives it explicitly, so absolute counts are correct \
+there. The first python draft asserted absolute counts and failed -- correctly.
+"""

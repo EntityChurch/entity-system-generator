@@ -153,6 +153,11 @@ def history_type_defs() -> list[tuple[str, dict[str, Any]]]:
                 [
                     ("pattern", _ref("system/tree/path")),
                     ("enabled", _ref("primitive/bool")),
+                    # v1.10. Field ORDER follows §2.2's block, which places
+                    # `pattern_exclude` between `enabled` and `events` — see
+                    # types.ts/types.rs, where the same order is load-bearing for
+                    # `make type-parity`.
+                    ("pattern_exclude", _opt(_array(_ref("system/tree/path")))),
                     ("events", _opt(_array(_ref("primitive/string")))),
                     ("max_depth", _opt(_ref("primitive/uint"))),
                 ],

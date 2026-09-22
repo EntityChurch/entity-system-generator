@@ -1,7 +1,7 @@
 ## CHECK — HISTORY §6.2 `HIST-CONFIG-SPECIFICITY-1`: selection is by specificity, not by
 ## enumeration order
 ##
-## Kind C. The other half of H-R13's pair; read `config-specificity-key2.toml` first — it
+## Kind C. The other half of HIST-R13's pair; read `config-specificity-key2.toml` first — it
 ## carries the argument about faces, about how a head pointer is observed without a handler,
 ## and about what "both insertion orders" turned out to mean on three peers. This file states
 ## only what differs.
@@ -17,11 +17,11 @@
 ## separately because the SPEC declares both REQUIRED and neither is measured by anything
 ## upstream: the unit of coverage on this axis is the spec's own conformance vector, and
 ## folding two into one would report one row where the spec wrote two. `[conformance]`
-## H-R13 names both files.
+## HIST-R13 names both files.
 
 [check]
 id          = "history/config_specificity_key1"
-requirement = "H-R13"
+requirement = "HIST-R13"
 spec        = "EXTENSION-HISTORY §6.2 (HIST-CONFIG-SPECIFICITY-1)"
 snapshot    = "history-v1.8"
 level       = "MUST"

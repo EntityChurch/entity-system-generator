@@ -277,3 +277,115 @@ def test_the_most_specific_matching_config_wins():
     assert config is not None
     assert config.pattern == "docs/*"
     assert config.events == (EVENT_CREATED,)
+
+
+# ── §2.2 v1.10 exclusions — HIST-R16 ────────────────────────────────────────────
+#
+# The MUST is the ORDER, not the matching. §2.2: exclusion is checked AFTER the most
+# specific matching configuration is selected and BEFORE the event-type filter, and an
+# excluded path "does not fall through to a less specific configuration -- an exclusion
+# is a decision, not a failure to match." The spec says two conformant readings exist
+# without that sentence and that they differ on a path two configurations cover, so
+# `test_an_excluded_path_does_not_fall_through` is the one that discriminates: the other
+# reading (fold exclusion into matching, treat it as a non-match) passes every other test
+# in this block.
+#
+# EVERY ASSERTION HERE IS A DELTA, and the first draft's were absolute — which failed,
+# correctly, because a `pattern: "*"` config RECORDS ITS OWN WRITE. §3.2 keeps config
+# paths out of the self-guard on purpose ("SHOULD be recorded as normal transitions for
+# audit purposes"), so setup is not free and a count taken before it is not a baseline.
+
+
+def _armed(peer, install, *configs):
+    """Bind the configs, then return the recorded count — the baseline AFTER setup.
+
+    Every config write is itself a tracked write under a `*` pattern, so this is the only
+    honest place to take the reading.
+    """
+    for name, cfg in configs:
+        peer.store.bind(config_path(peer.local_peer, name), cfg)
+    return install.recorder.stats.recorded
+
+
+def test_an_excluded_path_is_not_recorded():
+    peer = Peer(bytes([0x28] * 32), open_grants=True)
+    install = install_history(peer)
+    before = _armed(
+        peer,
+        install,
+        ("all-but-machinery", history_config(pattern="*", pattern_exclude=["system/capability/*"])),
+    )
+    peer.store.bind("/" + peer.local_peer + "/system/capability/grant-1", payload("v1"))
+    assert install.recorder.stats.recorded == before
+
+
+def test_the_control_the_same_path_IS_recorded_without_the_exclusion():
+    """Without this, the test above passes for a peer that records nothing at all."""
+    peer = Peer(bytes([0x29] * 32), open_grants=True)
+    install = install_history(peer)
+    before = _armed(peer, install, ("all", history_config(pattern="*")))
+    peer.store.bind("/" + peer.local_peer + "/system/capability/grant-1", payload("v1"))
+    assert install.recorder.stats.recorded == before + 1
+
+
+def test_an_excluded_path_does_not_fall_through_to_a_less_specific_config():
+    """§2.2's `[MUST]`, and the only test here that separates the two readings.
+
+    `docs/*` is selected (more literal segments) and excludes the path. A reading that
+    treated the exclusion as a NON-MATCH would continue the search, select `*`, and record
+    the write — auditing a path the operator excluded, under a config they wrote to be
+    more permissive elsewhere.
+    """
+    peer = Peer(bytes([0x2A] * 32), open_grants=True)
+    install = install_history(peer)
+    before = _armed(
+        peer,
+        install,
+        ("everything", history_config(pattern="*")),
+        ("docs", history_config(pattern="docs/*", pattern_exclude=["docs/secret/*"])),
+    )
+
+    peer.store.bind("/" + peer.local_peer + "/docs/secret/salaries", payload("v1"))
+    assert install.recorder.stats.recorded == before, "fell through to the `*` config"
+
+    # And the selected config still records everything it did not exclude.
+    peer.store.bind("/" + peer.local_peer + "/docs/public/readme", payload("v1"))
+    assert install.recorder.stats.recorded == before + 1
+
+
+def test_exclusion_is_checked_BEFORE_the_event_filter():
+    """Order, the second half. An excluded path is excluded for EVERY event type, so a
+    `created`-only config must not record an excluded path's create either. The second
+    assertion is the one that carries the weight: it shows the config is live and the
+    first assertion is not passing because nothing was recorded at all."""
+    peer = Peer(bytes([0x2B] * 32), open_grants=True)
+    install = install_history(peer)
+    before = _armed(
+        peer,
+        install,
+        (
+            "creates",
+            history_config(
+                pattern="*", pattern_exclude=["docs/secret/*"], events=[EVENT_CREATED]
+            ),
+        ),
+    )
+    peer.store.bind("/" + peer.local_peer + "/docs/secret/x", payload("v1"))
+    assert install.recorder.stats.recorded == before
+    peer.store.bind("/" + peer.local_peer + "/docs/open/x", payload("v1"))
+    assert install.recorder.stats.recorded == before + 1
+
+
+def test_a_bare_star_exclusion_is_canonicalized_like_a_pattern():
+    """§2.2: exclusions "use the same core §5.4 pattern syntax as `pattern`; this field
+    does not define a matcher of its own." So `canonicalize_pattern`'s bare-`*` rule — the
+    one v1.8 corrected and this port already implements — applies here too. A port that
+    canonicalized `pattern` and matched `pattern_exclude` RAW would silently exclude
+    nothing, which reads exactly like a deployment that configured no exclusions."""
+    peer = Peer(bytes([0x2C] * 32), open_grants=True)
+    install = install_history(peer)
+    before = _armed(
+        peer, install, ("self-negating", history_config(pattern="*", pattern_exclude=["*"]))
+    )
+    peer.store.bind("/" + peer.local_peer + "/" + TRACKED, payload("v1"))
+    assert install.recorder.stats.recorded == before

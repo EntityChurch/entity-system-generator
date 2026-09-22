@@ -95,15 +95,32 @@ ROOT = Path(__file__).resolve().parent.parent
 # twenty-seven rows are in the tree today; a run that parses fewer than this has lost a parser.
 MIN_REQUIREMENTS = 8
 
-# Levels a requirement row may carry. `IMPL-DEFINED` is CONTENT §11.4 and is a real level: it
+# `SPECIFICATION-FORMAT` v1.3 §8.5a's CLOSED SIX, verbatim. `IMPL-DEFINED` is a real level: it
 # says the spec declines to constrain the row, which is a different fact from "nothing checks it"
 # and must not be reported as a gap.
-LEVELS = ("MUST", "SHOULD", "MAY", "IMPL-DEFINED")
+#
+# THE PROHIBITIONS WERE MISSING AND THAT COST US A ROW. Through the HISTORY v1.10 re-pin this
+# tuple was `("MUST", "SHOULD", "MAY", "IMPL-DEFINED")` — written before §8.5a existed, from the
+# levels the two specs we had happened to use. `HIST-R8` ("record the local peer's own
+# `system/history/*` writes", MUST NOT, §3.2) parsed and was then DROPPED by the `level not in
+# LEVELS` filter, so §9.1's sixteen rows arrived as fifteen and the missing one was a
+# PROHIBITION — the recursion guard, and the row this repo authored its own wire check for.
+#
+# It did not refuse, because 15 of 16 matched: a vacuity refusal bounds a parser that stops
+# matching and does nothing about one that matches the boring half. That gap is named in
+# AGENTS.md under D15 and this is its second instance, which is why `assert_contiguous_ids`
+# below exists — the levels tuple is now correct and the NEXT thing arch adds to it will be
+# wrong here too, so the defence has to be structural rather than a longer list.
+LEVELS = ("MUST", "MUST NOT", "SHOULD", "SHOULD NOT", "MAY", "IMPL-DEFINED")
 
 # A requirement at these levels is expected to have an instrument. The rest are reported and
 # never failed: `MAY` and `IMPL-DEFINED` rows are, by the spec's own words, not requirements on
 # an implementation, so an "uncovered MAY" is a category error rather than a finding.
-BINDING = ("MUST", "SHOULD")
+#
+# `MUST NOT` and `SHOULD NOT` ARE BINDING. §8.5a says it in the table: a prohibition is "a
+# requirement, and as checkable as a MUST". Reading a negative obligation as non-binding is how
+# a recursion guard ends up in nobody's coverage tally.
+BINDING = ("MUST", "MUST NOT", "SHOULD", "SHOULD NOT")
 
 
 # ── the spec side ───────────────────────────────────────────────────────────────────────
@@ -188,6 +205,108 @@ def parse_level_table(md: str, section: str) -> list[dict]:
     return rows
 
 
+def parse_id_level_table(md: str, section: str) -> list[dict]:
+    """Shape `id-level-table`: `SPECIFICATION-FORMAT` v1.3 §8.5a's addressable inventory.
+
+    `| id | Requirement | Level | § |`, one row per independently failable obligation, with a
+    `<PREFIX>-R<n>` id allocated once and never reused or renumbered. HISTORY §9.1 from v1.9.
+
+    A SEPARATE SHAPE RATHER THAN A WIDENED `level-table`, and that is the point. The old shape
+    is `| Requirement | Level | § |`; widening one parser to accept either would mean guessing
+    which column is which from its contents, and a table that changed shape upstream would then
+    parse as SOMETHING rather than refuse. The shape is declared in `[conformance].shape`, so a
+    re-pin that changes it fails loudly — which is exactly what happened here: v1.9 added the id
+    column and this file's `level-table` parser returned ZERO rows and REFUSED (D15), instead of
+    reporting clean coverage over an empty inventory.
+    """
+    m = re.search(rf"^#+\s+{re.escape(section)}\s+.*$", md, re.M)
+    if not m:
+        return []
+    body = md[m.end():]
+    nxt = re.search(r"^#+\s", body, re.M)
+    if nxt:
+        body = body[: nxt.start()]
+
+    rows: list[dict] = []
+    header_seen = False
+    for line in body.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        if not header_seen:
+            # ASSERTED, not assumed — same rule as `parse_level_table`. A table whose first
+            # three columns are not (id, Requirement, Level) is a different table.
+            if cells[0].lower() == "id" and cells[2].lower().startswith("level"):
+                header_seen = True
+            continue
+        if set(cells[0]) <= set("-: "):
+            continue
+        level = cells[2].upper().strip()
+        if level not in LEVELS:
+            continue
+        rid = cells[0].strip().strip("`")
+        rows.append({
+            "id": rid,
+            "text": cells[1],
+            "level": level,
+            "section": cells[3] if len(cells) > 3 else "",
+        })
+    return rows
+
+
+def assert_contiguous_ids(rows: list[dict], spec_file, section: str) -> None:
+    """A CORPUS ASSERTION on the id sequence: `<PREFIX>-R1..RN`, no holes (D15 clause 2).
+
+    §8.5a allocates ids "once and never reused or renumbered", starting at 1 — so a parsed set
+    missing an interior number means THIS PARSER dropped a row, not that the spec skipped one.
+
+    WHY THIS AND NOT A LONGER FILTER LIST. The tool already refuses when a parser yields zero
+    rows, and that refusal is the wrong instrument for the failure it actually had: v1.9's
+    `MUST NOT` row parsed correctly and was then discarded by a level filter, leaving 15 of 16 —
+    a result too healthy to refuse and too small to be right. A count check would need a number
+    to compare against, which is a second place to update at every re-pin; the id sequence is
+    self-describing and arrives with the data. **The requirement it recovered was a prohibition,
+    which is the class a coverage tally can least afford to lose**, because "nothing checks that
+    we do not do X" reads identically to "X is not required".
+    """
+    ids = [r["id"] for r in rows if r.get("id")]
+    if not ids:
+        return
+    nums, prefixes = [], set()
+    for rid in ids:
+        m = re.match(r"^(.*?-R)(\d+)$", rid)
+        if not m:
+            raise SystemExit(
+                f"req-coverage: REFUSING — {_rel(spec_file)} §{section} row id {rid!r} is not "
+                f"`<PREFIX>-R<n>` (SPECIFICATION-FORMAT v1.3 §8.5a). The id shape is the join "
+                f"key; a row that does not carry one cannot be mapped."
+            )
+        prefixes.add(m.group(1))
+        nums.append(int(m.group(2)))
+    if len(prefixes) > 1:
+        raise SystemExit(
+            f"req-coverage: REFUSING — {_rel(spec_file)} §{section} mixes id prefixes "
+            f"{sorted(prefixes)}. §8.5a declares ONE prefix per inventory."
+        )
+    missing = sorted(set(range(1, max(nums) + 1)) - set(nums))
+    if missing:
+        pfx = prefixes.pop()
+        raise SystemExit(
+            f"req-coverage: REFUSING — {_rel(spec_file)} §{section} parsed "
+            f"{len(nums)} rows with holes at {', '.join(pfx + str(n) for n in missing)}.\n"
+            f"    §8.5a ids are contiguous from 1, so a hole is a row THIS PARSER dropped — "
+            f"most likely a `Level` value not in LEVELS. Do not proceed: a coverage tally over "
+            f"an inventory missing a row reads as coverage."
+        )
+    if len(set(nums)) != len(nums):
+        raise SystemExit(
+            f"req-coverage: REFUSING — {_rel(spec_file)} §{section} has duplicate row ids."
+        )
+
+
 def parse_level_sections(md: str, section: str, level_map: dict[str, str]) -> list[dict]:
     """Shape `level-sections`: `### <section>.<n> <title>` subsections, each a bullet list.
 
@@ -219,7 +338,10 @@ def load_requirements(contract: dict, snapshot_dir: Path) -> tuple[list[dict], P
     spec_file = snapshot_dir / conf["spec_file"]
     md = spec_file.read_text()
     shape = conf["shape"]
-    if shape == "level-table":
+    if shape == "id-level-table":
+        rows = parse_id_level_table(md, conf["section"])
+        assert_contiguous_ids(rows, spec_file, conf["section"])
+    elif shape == "level-table":
         rows = parse_level_table(md, conf["section"])
     elif shape == "level-sections":
         rows = parse_level_sections(md, conf["section"], conf.get("levels", {}))
@@ -320,12 +442,48 @@ def evaluate(contract: dict, snapshot: Path, corpus: dict, res: Result) -> dict 
         )
         return None
 
-    declared = {_norm(r["text"]): r for r in conf.get("requirement", [])}
-    seen_spec = {_norm(r["text"]) for r in rows}
+    # THE JOIN KEY IS THE SPEC'S ID WHERE THE SPEC HAS ONE, AND THE TEXT OTHERWISE.
+    #
+    # `SPECIFICATION-FORMAT` §8.5a allocates `<PREFIX>-R<n>` once and never renumbers, which
+    # makes it a stabler key than the requirement's prose — and the difference is not cosmetic.
+    # HISTORY's `HIST-R7` was RE-WORDED at v1.9 (v1.8's "support `max_depth` pruning" became
+    # "retain at least `max_depth` entries per path", after arch's own ruling changed what §3.3
+    # requires). Under a text join that is ONE STALE row plus ONE UNDECLARED row — two failures
+    # describing one row that moved, and the natural fix for a reader in a hurry is to add the
+    # new text and delete the old mapping, silently dropping whatever the old row declared.
+    # Under an id join it is what it is: a row whose text changed, reported once.
+    #
+    # CONTENT's §11 has no ids and falls back to text, which is the shape that motivated the
+    # original filing. When arch re-issues it under §8.5a this branch stops being reachable for
+    # it, and nothing else has to change.
+    spec_has_ids = all(r.get("id") for r in rows) and bool(rows)
+
+    def _key(r: dict) -> str:
+        return r["id"] if spec_has_ids and r.get("id") else _norm(r["text"])
+
+    declared = {_key(r): r for r in conf.get("requirement", [])}
+    seen_spec = {_key(r) for r in rows}
+
+    # Rule 0 — when the spec carries ids, a declared row's TEXT must still match the spec's, or
+    # the id is being used to carry a mapping onto a requirement that now says something else.
+    # Reported as its own failure rather than folded into "stale": the id is right and the
+    # obligation moved under it, which is the case a re-pin has to make somebody look at.
+    if spec_has_ids:
+        by_id = {r["id"]: r for r in rows}
+        for d in conf.get("requirement", []):
+            spec_row = by_id.get(d.get("id"))
+            if spec_row is not None and _norm(d["text"]) != _norm(spec_row["text"]):
+                res.failures.append(
+                    f"{name}: RE-WORDED requirement {d['id']} — the id is unchanged and the "
+                    f"obligation is not.\n"
+                    f"    [conformance]: {d['text']!r}\n"
+                    f"    {_rel(spec_file)} §{conf['section']}: {spec_row['text']!r}\n"
+                    f"    Re-read what measures it before copying the new wording across."
+                )
 
     # Rule 1 — every row the spec declares is declared here.
     for r in rows:
-        k = _norm(r["text"])
+        k = _key(r)
         if k not in declared:
             res.failures.append(
                 f"{name}: UNDECLARED requirement ({r['level']}) — {r['text']!r}\n"
@@ -351,7 +509,7 @@ def evaluate(contract: dict, snapshot: Path, corpus: dict, res: Result) -> dict 
              for lv in LEVELS}
     detail = []
     for r in rows:
-        d = declared.get(_norm(r["text"]))
+        d = declared.get(_key(r))
         if d is None:
             continue
         lv = r["level"]
@@ -455,6 +613,23 @@ SELF_TEST_SPEC = """# Fake Extension
 | Delta the widget | MAY |
 """
 
+# §8.5a's shape, with a PROHIBITION in it. `FAKE-R3` is `MUST NOT` deliberately: the v1.10 re-pin
+# lost exactly such a row to a levels tuple written before the closed six existed, and a fixture
+# whose every level is positive could not have caught it.
+SELF_TEST_SPEC_IDS = """# Fake Extension
+
+## 9. Conformance
+
+### 9.1 Requirements
+
+| id | Requirement | Level | § |
+|---|---|---|---|
+| `FAKE-R1` | Alpha the widget | MUST | §2.1 |
+| `FAKE-R2` | Beta the widget | SHOULD | §2.2 |
+| `FAKE-R3` | Never widget the alpha | MUST NOT | §2.3 |
+| `FAKE-R4` | Delta the widget | MAY | §2.4 |
+"""
+
 
 def self_test() -> int:
     """Every gate rule and both refusals, driven over synthetic inputs and observed firing.
@@ -485,6 +660,35 @@ def self_test() -> int:
     wrong = SELF_TEST_SPEC.replace("| Requirement | Level |", "| Requirement | Owner |")
     expect("level-table REFUSES a table with no Level column", parse_level_table(wrong, "9.1") == [])
 
+    # id-level-table (§8.5a), clean — and the PROHIBITION survives.
+    irows = parse_id_level_table(SELF_TEST_SPEC_IDS, "9.1")
+    expect("id-level-table parses 4 rows", len(irows) == 4)
+    expect("id-level-table reads the ids", [r["id"] for r in irows] ==
+           ["FAKE-R1", "FAKE-R2", "FAKE-R3", "FAKE-R4"])
+    expect("id-level-table keeps a MUST NOT row", [r["level"] for r in irows] ==
+           ["MUST", "SHOULD", "MUST NOT", "MAY"])
+    expect("MUST NOT is BINDING", "MUST NOT" in BINDING and "SHOULD NOT" in BINDING)
+
+    # Parser corpus assertion: the id column is asserted, not assumed.
+    wrong_id = SELF_TEST_SPEC_IDS.replace("| id | Requirement | Level | § |",
+                                          "| ref | Requirement | Level | § |")
+    expect("id-level-table REFUSES a table with no id column",
+           parse_id_level_table(wrong_id, "9.1") == [])
+
+    # The contiguity assertion — the control for the defect that motivated it. Dropping the
+    # MUST NOT row is exactly what the old levels tuple did, so this plants that same hole.
+    holed = [r for r in irows if r["id"] != "FAKE-R3"]
+    try:
+        assert_contiguous_ids(holed, Path("FAKE.md"), "9.1")
+        expect("contiguity REFUSES an interior hole", False)
+    except SystemExit as e:
+        expect("contiguity REFUSES an interior hole", "FAKE-R3" in str(e))
+    try:
+        assert_contiguous_ids(irows, Path("FAKE.md"), "9.1")
+        expect("contiguity does NOT fire on a complete set", True)
+    except SystemExit:
+        expect("contiguity does NOT fire on a complete set", False)
+
     # level-sections, and its declared level map.
     sect = ("## 11. Conformance\n\n### 11.1 MUST Implement\n\n- One thing (§2.1)\n"
             "- Two thing (§2.2)\n\n### 11.2 SHOULD Implement\n\n- Three thing (§3.1)\n")
@@ -499,13 +703,15 @@ def self_test() -> int:
         snap = Path(td) / "snap"
         snap.mkdir()
         (snap / "EXTENSION-FAKE.md").write_text(SELF_TEST_SPEC)
+        (snap / "EXTENSION-FAKE-IDS.md").write_text(SELF_TEST_SPEC_IDS)
 
-        def run(reqs, corpus_checks, section="9.1", category="fake"):
+        def run(reqs, corpus_checks, section="9.1", category="fake",
+                shape="level-table", spec_file="EXTENSION-FAKE.md"):
             """Drives `evaluate()` — the function `check_extension` calls — not a copy of it."""
             contract = {
                 "extension": {"name": "FAKE", "snapshot": "snap"},
-                "conformance": {"spec_file": "EXTENSION-FAKE.md", "section": section,
-                                "shape": "level-table", "oracle_category": category,
+                "conformance": {"spec_file": spec_file, "section": section,
+                                "shape": shape, "oracle_category": category,
                                 "requirement": reqs},
             }
             corpus = {"categories": {"fake": {c: {"PASS"} for c in corpus_checks}},
@@ -533,6 +739,34 @@ def self_test() -> int:
         r = run(full + [{"id": "Z", "text": "Epsilon the widget", "note": "x"}],
                 ["alpha_check", "beta_check"])
         expect("rule 2: a row not in the spec FAILS", failed(r, "STALE requirement"))
+
+        # Rule 0 — the id join, and the case it exists for. Same id, re-worded obligation:
+        # HISTORY's `HIST-R7` at the v1.9 re-pin. Under the old TEXT join this was one STALE
+        # plus one UNDECLARED — two failures for one row that moved, whose obvious fix silently
+        # drops what the old row declared.
+        ids_full = [
+            {"id": "FAKE-R1", "text": "Alpha the widget", "oracle": ["alpha_check"]},
+            {"id": "FAKE-R2", "text": "Beta the widget", "oracle": ["beta_check"]},
+            {"id": "FAKE-R3", "text": "Never widget the alpha", "ours": ["gates/fake"]},
+            {"id": "FAKE-R4", "text": "Delta the widget", "note": "nothing measures it"},
+        ]
+        kw = dict(shape="id-level-table", spec_file="EXTENSION-FAKE-IDS.md")
+        r = run(ids_full, ["alpha_check", "beta_check"], **kw)
+        expect("id join: a clean id-keyed mapping passes", not r.failures)
+
+        reworded = [dict(x) for x in ids_full]
+        reworded[1]["text"] = "Beta the widget, but differently now"
+        r = run(reworded, ["alpha_check", "beta_check"], **kw)
+        expect("rule 0: same id, re-worded obligation FAILS", failed(r, "RE-WORDED requirement"))
+        expect("rule 0: and it is reported ONCE, not as stale+undeclared",
+               not failed(r, "STALE requirement") and not failed(r, "UNDECLARED requirement"))
+
+        # And the prohibition is BINDING end to end: uncovered, with no note, it must FAIL.
+        bare_prohibition = [dict(x) for x in ids_full]
+        bare_prohibition[2] = {"id": "FAKE-R3", "text": "Never widget the alpha"}
+        r = run(bare_prohibition, ["alpha_check", "beta_check"], **kw)
+        expect("rule 4: an uncovered MUST NOT with no note FAILS",
+               any("FAKE-R3" in f or "Never widget" in f for f in r.failures))
 
         r = run(full, ["beta_check"])
         expect("rule 3: an oracle check not in the corpus FAILS",

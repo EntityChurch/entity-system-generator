@@ -34,11 +34,11 @@ import { Paths } from "entity-core-protocol-typescript";
  *
  * We implement the TABLE (the stated meaning), by rewriting `*\/rest` → `/*\/rest`, which
  * is the spelling core §5.4 names as correct for exactly this intent. Recorded in
- * `EXTENSION.toml` (`[conformance]` H-R15) and routed to arch.
+ * `EXTENSION.toml` (`[conformance]` HIST-R15) and routed to arch.
  *
  * CLOSED AT THE v1.8 RE-PIN (2026-09-08). v1.8's pseudocode emits `"/*\/" + rest`,
  * corrects the table's example from `*\/project/*` to `/*\/project/*`, and adds a §9.1
- * MUST for it (H-R15). The bare-`*` case is now tested FIRST in the spec's own pseudocode
+ * MUST for it (HIST-R15). The bare-`*` case is now tested FIRST in the spec's own pseudocode
  * for our reason — the first-segment check "would otherwise read it as a peer wildcard and
  * emit the degenerate `/*\/`". The code below is unchanged; only this comment is.
  */

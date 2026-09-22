@@ -66,6 +66,11 @@ class HistoryConfig:
     pattern: str
     canonical_pattern: str
     enabled: bool
+    #: §2.2 v1.10, ALREADY CANONICALIZED — the raw spelling is not kept, because the only
+    #: consumer is `matches_pattern` and §2.2 says these use the same core §5.4 syntax as
+    #: `pattern`. Canonicalizing at parse time rather than per-write also means the bare
+    #: `*` rule is applied by the one function that knows it (`canonicalize_pattern`).
+    canonical_pattern_exclude: tuple[str, ...]
     events: tuple[str, ...]
     max_depth: int | None
     config_path: str
@@ -103,6 +108,15 @@ def _parse_config(path: str, ent: Entity, local_peer: str) -> HistoryConfig | No
         # would turn an unreadable config into an ENABLED one, which is the wrong
         # direction to fail in for an audit switch.
         return None
+    # §2.2 v1.10. An EMPTY list is kept as empty (no exclusions), unlike `events` below
+    # where empty falls back to the default set — `events` has a spec-stated default and
+    # this field's absent-value is "no exclusions", which an empty list already says.
+    raw_exclude = ent.field("pattern_exclude")
+    canonical_pattern_exclude = (
+        tuple(canonicalize_pattern(str(p), local_peer) for p in raw_exclude)
+        if isinstance(raw_exclude, list)
+        else ()
+    )
     raw_events = ent.field("events")
     events = (
         tuple(str(e) for e in raw_events)
@@ -115,6 +129,7 @@ def _parse_config(path: str, ent: Entity, local_peer: str) -> HistoryConfig | No
         pattern=pattern,
         canonical_pattern=canonicalize_pattern(pattern, local_peer),
         enabled=enabled,
+        canonical_pattern_exclude=canonical_pattern_exclude,
         events=events,
         max_depth=max_depth,
         config_path=path,
@@ -185,6 +200,17 @@ def record_transition(
     config, _considered, _skipped = find_history_config(peer, path, identity.local_peer)
     if config is None or not config.enabled:
         return None
+
+    # §2.2 v1.10 exclusions, and the ORDER is the MUST (HIST-R16), not the matching.
+    # AFTER selection: checked against the SELECTED config only. An excluded path does
+    # NOT fall through to a less specific configuration — "an exclusion is a decision,
+    # not a failure to match." Folding this into `find_history_config` as a non-match
+    # would be the other conformant-looking reading, and the two differ on exactly the
+    # paths two configs cover, which is where an audit gap would hide.
+    # BEFORE the event filter: so an excluded path is excluded for every event type.
+    if any(pattern_matches(path, excl) for excl in config.canonical_pattern_exclude):
+        return None
+
     if event not in config.events:
         return None
 

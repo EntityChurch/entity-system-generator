@@ -140,7 +140,7 @@ fn main() {
     // config paths "SHOULD be recorded as normal transitions for audit purposes".
     peer.store.bind(
         &config_path(&local, "everything"),
-        &history_config("*", true, None, None),
+        &history_config("*", true, None, None, None),
     );
 
     let listener = transport::listen(port).unwrap_or_else(|e| die(&format!("listen failed: {e}")));

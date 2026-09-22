@@ -6,6 +6,78 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**Re-pinned to `EXTENSION-HISTORY` v1.10, two versions in one step, and the reason it was two is
+the finding.** v1.9 and v1.10 both landed 2026-09-08 and **nothing in this tree could notice.**
+Every pin mechanism we have — the snapshot manifest's digests, the `[extension].snapshot` key,
+`req-coverage`'s undeclared/stale rules, the citation gate — is a statement about the **copy**. A
+snapshot cannot observe that the original moved, which is what makes it a snapshot, and it is why
+*"the pin is green"* and *"the pin is current"* read identically in a status log. `req-coverage`
+exists so that *"a re-pin cannot add or re-word a requirement unnoticed"*, and it is entirely
+correct about that: it gates the re-pin, and nothing gated the **decision** to re-pin. Catalogued
+as **AP-27**, recorded rather than fixed — the cheapest correct answer is to read the upstream
+spec at the start of any session that touches an extension, which is a procedure, not a gate.
+
+**Both versions are our own routed findings coming back as spec.** v1.10's `pattern_exclude` is
+`ROUTING-2026-09-07-arch-*` — the measurement that §6.3's worked `pattern: "*"` makes a peer audit
+its own protocol bookkeeping, one or more transitions per served request, permanently, in a store
+§3.3 says cannot be pruned. **Arch reversed its own recorded lean and said why**: their reply had
+leaned toward widening §3.2's self-guard to *"local, engine-written protocol paths"*; what landed
+is the config field, because core §1.9 makes those paths a **convention**, so the spec does not
+know the set it would have been defaulting. A lean is not a ruling.
+
+**The normative content of `pattern_exclude` is the ORDER, not the matching** — `HIST-R16`, MUST.
+Exclusion is checked after the most-specific config is selected and before the event filter, and
+an excluded path **does not fall through** to a less specific one: *"an exclusion is a decision,
+not a failure to match."* §2.2 says two conformant readings exist without that sentence and that
+they differ on a path two configurations cover. All three ports implement the ordered form, each
+with five tests, and **one of the five is the only one that discriminates** — the other four pass
+under both readings. Verified by planting a defect and observing 4 of 5 go red on every port.
+
+**v1.9 made §9.1 an addressable inventory** (`SPECIFICATION-FORMAT` v1.3 §8.5a) — stable
+`HIST-R<n>` ids, which is `ROUTING-2026-09-07-d` landing. Our own `H-R1…H-R15` were a local
+invention filling an upstream gap, and the moment the gap closed they became a second numbering
+for one set of obligations. They are retired; every `[conformance]` row is re-keyed upstream.
+
+**Re-keying found a defect in our own instrument, and it is the sharper half of the re-pin.**
+`req-coverage`'s `LEVELS` predated §8.5a and omitted the two **negative** levels, so §9.1's
+sixteen rows parsed and then a filter threw away **`HIST-R8` — the `MUST NOT` recursion guard**,
+the one row in that inventory this repo authored its own wire check for. The tally printed fifteen
+and was internally consistent. **A missing prohibition reads as "the spec forbids nothing here."**
+The vacuity refusal fires at zero and fifteen is not zero; a count-based corpus assertion clears
+any floor worth setting. **So D15's clause 2 is sharpened — a corpus assertion names the PROPERTY
+the input must have, not a count of units** — this being its second instance in a different shape
+(AP-28). The defence is `assert_contiguous_ids`: §8.5a ids are contiguous from 1, so a hole means
+the parser dropped a row. The longer level list fixes today; the property fixes the next one.
+
+**And `[contract]` is a transcription now, not a derivation** — GI-5's header arrived at 26 of 26.
+Six of our seven derived fields matched. `points_consumed` did not: we had `emit.tree_change`
+alone, and the header declares the `clock` execution-context field too. **A derivation from one
+document cannot see the fields another document contributes.** We had argued the missing header
+cost us presentation rather than content; measured, it was one field in seven.
+
+**And the conformance axis grew by three checks that were always there — we had never passed the
+flag.** We report the core profile as **776**; keystone reports **778**, at the **same oracle
+commit**. Neither was wrong: `origination` needs a second live peer, and without one
+`validate-peer` collapses the whole category into a single `origination/skipped` sentinel. Three
+checks behind one entry, for the life of this repo.
+
+**D14 was satisfied and did not help, which is the finding.** *"A number cites the artifact that
+produced it"* — and `776` did: counted by command out of the report beside the bytes, never off a
+maintained table. **The artifact was cited correctly and the artifact was incomplete**, because a
+report is a function of the FLAGS and nothing recorded which flags produced it. *"776 checks"*
+reads as a fact about the oracle; it is a fact about the oracle **as we invoke it**. And it failed
+in D14's own asymmetry — a missing check makes the total *smaller*, and nothing downstream asks
+whether a number should be bigger. **AP-29.**
+
+Fixed in `tools/host-launch`: `entity-core-go`'s own `entity-peer` on `PORT+2` for the oracle path.
+All three now PASS in **both** arms, so they add nothing to any differential — the value is that
+the reports stop carrying a skipped category, and **a skip is a failure**. A missing reference
+binary **exits 3** rather than degrading to the old behaviour, verified by pointing `REFPEER` at a
+nonexistent path. `make expectation` then refused all six baselines on the changed check set —
+D21 working, second event of that kind and the first we caused ourselves.
+
+---
+
 **`EXTENSION-HISTORY` v1.8 landed and we re-pinned to it, and three of the changes are readings
 this repo routed.** All three were shipped as *declared deviations* from v1.7's own pseudocode —
 a bare `*` canonicalizing to the local namespace and tested before the first-segment check;
@@ -32,32 +104,37 @@ outside its corpus entirely. The gate now reads both directions.
 
 ---
 
-**Latest: the oracle grew by 19 checks and every one of our baselines is stale — and the gate
-that noticed refused to compare rather than reporting movement that was not ours.**
-`entity-core-go`'s `validate-peer` core profile went 756 → 775. Confirmed in their tree:
+**Latest: the oracle grew by 20 checks, we re-based on it, and the tree is green end to end.**
+`entity-core-go`'s `validate-peer` core profile went 756 → 776 entries. Confirmed in their tree:
 `tree_put_error_codes.go` and `connectivity_conn_errors.go`, added for `EXTENSION-TREE`
-Appendix A v4.4/v4.5 and connection error handling — **19 added, 0 removed**, measured by
-diffing check-name sets between a 09-07 report and a 09-09 one.
+Appendix A v4.4/v4.5 and connection error handling. **The oracle got stronger**, which is what we
+want from a tool that is the oracle because it is not the thing under test. The new checks pass in
+*both* arms, so none of it is a statement about our compositions.
 
-**This is the oracle getting stronger, which is what we want from a tool that is the oracle
-because it is not the thing under test.** The 19 pass in *both* arms (composed PASS 320→338,
-bare 314→332), so they say nothing about our compositions and nothing regressed.
+**The count is +20 ENTRIES and this log first said 19 — the correction is the reusable part.**
+`category.name` is the unique key (776 entries, 776 distinct composite keys); bare `name` is not,
+because `skipped` is a sentinel appearing once per category, 40 times in all, so a bare-name diff
+collapses it. AP-8's mechanism in an analysis rather than in an instrument. Honest statement:
+**+20 entries, 19 newly-named** (`connectivity` 13, `tree_operations` 6), **plus one a bare-name
+diff cannot identify** because its name already exists in another category.
 
-**What matters is that `make expectation` REFUSED.** Its message is the right one — *the check
-SET changed; nothing below is comparable until this is understood.* A gate that had silently
-diffed across a changed check set would have reported movement that belonged to the oracle. That
-is D21's temporal baseline doing exactly the job it was ratified for, on the first event of this
-kind since it was built.
+**`make expectation` REFUSED rather than compared** — *the check SET changed; nothing below is
+comparable until this is understood.* D21's temporal baseline doing exactly its job on the first
+event of this kind since it was ratified. A gate that had silently diffed across a changed check
+set would have reported movement belonging to the oracle as though it were ours.
 
-**Owed: a deliberate re-bless of `[gate.baseline]` on all six compositions**, from fresh
-reports, one at a time, with the `improved` NAME sets confirmed unchanged. Re-blessing is
-legitimate here because the set demonstrably changed for a reason verified in the oracle's own
-tree; **re-blessing because a number moved is how a baseline stops meaning anything**, and a
-lost improvement must never be absorbed into a total that also moved for an unrelated reason.
+**All six compositions re-measured and re-blessed: 0 regressions, 0 build failures**, and 0
+containers stranded across ~40 minutes of continuous peer launching. Every improvement NAME set
+was verified unchanged before anything was blessed, because a total that moves for one reason must
+never absorb a change that happened for another.
 
-Verified against the new oracle: `typescript` × `content-history` — build OK, 34 unit tests,
-**0 regressions · 32 improvements · 0 flaky** on the extension categories and **0 · 6 · 1** on
-the core profile.
+**One exception, and it was the finding.** `typescript/content` declared
+`concurrency.t1_1_concurrent_demux` in `improved` and it stopped improving.
+`typescript/content-history` had declared that same check as a `[[gate.straddle]]` the day before
+with exactly this reasoning; **the composition written first never got it** — AP-10's shape on a
+declaration rather than on a driver, where a correction lands in compositions N..last and never in
+1..N-1 because N+1 is written by copying N. Fixed by declaring the straddle, not by dropping the
+name, which is the silent version of the same thing.
 
 ---
 

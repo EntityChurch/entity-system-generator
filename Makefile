@@ -214,8 +214,15 @@ conformance:
 #
 # COST, measured rather than quoted from the first driver: ~35 s per arm per round on
 # `typescript` and `python`, and **~2.5 min on `rust`**. The peer is not slower; the
-# oracle drives the same 756 checks. A `make check TARGET=rust` is a ten-minute command,
+# oracle drives the same check set. A `make check TARGET=rust` is a ten-minute command,
 # and knowing that before running it is the difference between waiting and assuming it hung.
+#
+# THE SET IS 778 UNDER `-profile core`, AND THAT NUMBER IS A PROPERTY OF THE INVOCATION,
+# not of the oracle (AP-29). It was 776 here until 2026-09-09 because `tools/host-launch`
+# never passed `-reference-peer`, which collapses the whole `origination` category into one
+# `skipped` sentinel. Three checks, hidden behind one entry, for the life of this repo —
+# found by diffing our executed set against keystone's at the SAME oracle commit. When
+# quoting a count, quote the flags with it.
 ROUNDS ?= 2
 
 regression:

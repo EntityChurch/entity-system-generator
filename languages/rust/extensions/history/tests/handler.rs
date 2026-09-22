@@ -113,7 +113,7 @@ fn seeded() -> (Store, HistoryRecorder) {
     let store = Store::new();
     store.bind(
         &config_path(PEER, "everything"),
-        &history_config("*", true, None, None),
+        &history_config("*", true, None, None, None),
     );
     let rec = HistoryRecorder::new(RecorderIdentity {
         local_identity_hash: vec![0xAA; 33],

@@ -92,6 +92,13 @@ export interface HistoryConfig {
   readonly pattern: string;
   readonly canonicalPattern: string;
   readonly enabled: boolean;
+  /**
+   * §2.2 v1.10, ALREADY CANONICALIZED — the raw spelling is not kept, because the only
+   * consumer is `patternMatches` and §2.2 says these use the same core §5.4 syntax as
+   * `pattern`. Canonicalizing at parse time also means the bare-`*` rule is applied by
+   * the one function that knows it (`canonicalizePattern`).
+   */
+  readonly canonicalPatternExclude: readonly string[];
   readonly events: readonly string[];
   readonly maxDepth: number | null;
   readonly configPath: string;
@@ -104,6 +111,14 @@ function parseConfig(path: string, entity: Entity, localPeerId: string): History
   try {
     const pattern = Ecf.requireText(entity.data, "pattern");
     const enabled = Ecf.asBool(Ecf.require(entity.data, "enabled"));
+    // §2.2 v1.10. An EMPTY list stays empty (no exclusions), unlike `events` below where
+    // absent falls back to the default set — `events` has a spec-stated default, and this
+    // field's absent-value is "no exclusions", which an empty list already says.
+    const rawExclude = Ecf.field(entity.data, "pattern_exclude");
+    const canonicalPatternExclude =
+      rawExclude === null
+        ? []
+        : Ecf.asArray(rawExclude).map((p) => canonicalizePattern(Ecf.asText(p), localPeerId));
     const rawEvents = Ecf.field(entity.data, "events");
     const events =
       rawEvents === null ? DEFAULT_EVENTS : Ecf.asArray(rawEvents).map((e) => Ecf.asText(e));
@@ -113,6 +128,7 @@ function parseConfig(path: string, entity: Entity, localPeerId: string): History
       pattern,
       canonicalPattern: canonicalizePattern(pattern, localPeerId),
       enabled,
+      canonicalPatternExclude,
       events,
       maxDepth,
       configPath: path,
@@ -213,6 +229,16 @@ export function recordTransition(
   if (config === null || !config.enabled) {
     return null; // §2.2: "If history is not configured for a path, no transitions are recorded"
   }
+  // §2.2 v1.10 exclusions, and the ORDER is the MUST (HIST-R16), not the matching.
+  // AFTER selection: checked against the SELECTED config only. An excluded path does NOT
+  // fall through to a less specific configuration — "an exclusion is a decision, not a
+  // failure to match." Folding this into `findHistoryConfig` as a non-match is the other
+  // conformant-looking reading, and the two differ on exactly the paths two configs
+  // cover. BEFORE the event filter: so an excluded path is excluded for every event type.
+  if (config.canonicalPatternExclude.some((excl) => patternMatches(ev.path, excl))) {
+    return null;
+  }
+
   if (!config.events.includes(event)) {
     return null; // §5.1: "event type not configured"
   }

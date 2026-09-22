@@ -59,7 +59,12 @@ fn the_public_route_exists_at_the_signatures_the_boundary_claims() {
     let _: fn(&str) -> Option<&'static str> = from_core_event_type;
     let _: fn(&Store, &str) -> Vec<String> = publish_history_types;
     let _: fn(&str, &str) -> String = config_path;
-    let _: fn(&str, bool, Option<&[&str]>, Option<u64>) -> Entity = history_config;
+    // v1.10 added `pattern_exclude` in §2.2's field position, between `enabled` and
+    // `events` — so this is a POSITIONAL break, and this pin is what named every call
+    // site. Kept positional rather than widened to a builder: the arity is the thing
+    // being asserted.
+    let _: fn(&str, bool, Option<&[&str]>, Option<&[&str]>, Option<u64>) -> Entity =
+        history_config;
     let _ = history_type_defs();
     let _ = history_type_entities();
     let _ = history_entity(TRANSITION, entity_core_protocol::value::Value::Map(vec![]));
@@ -184,7 +189,7 @@ fn the_constant_surface_is_the_specs_values() {
 #[test]
 fn the_accessed_event_is_configurable_and_unreachable() {
     assert!(!DEFAULT_EVENTS.contains(&EVENT_ACCESSED));
-    let cfg = history_config("*", true, Some(&[EVENT_ACCESSED]), None);
+    let cfg = history_config("*", true, None, Some(&[EVENT_ACCESSED]), None);
     assert_eq!(cfg.typ, CONFIG);
     // It parses and stores; there is simply no event that can ever match it.
     assert!(from_core_event_type("accessed").is_none());
@@ -200,7 +205,7 @@ fn the_named_shapes_are_constructible_and_readable() {
     let store = Store::new();
     store.bind(
         &config_path(PEER, "everything"),
-        &history_config("*", true, None, None),
+        &history_config("*", true, None, None, None),
     );
     let lookup: ConfigLookup = resolve_config(&store, &format!("/{PEER}/app/doc"), PEER);
     let cfg: HistoryConfig = lookup.config.expect("configured");

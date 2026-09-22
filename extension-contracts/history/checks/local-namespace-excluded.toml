@@ -1,6 +1,6 @@
 ## CHECK — HISTORY §3.2: the recorder's own writes are not recorded
 ##
-## Kind C. `req-coverage` reports H-R4 — a §9.1 MUST — measured by nothing in a 764-check
+## Kind C. `req-coverage` reports HIST-R8 — a §9.1 MUST — measured by nothing in a 764-check
 ## corpus (`grep -i recurs` returns 0).
 ##
 ## WHY IT MATTERS MORE THAN ITS SIZE. §3.2 is a recursion guard, and the failure it prevents
@@ -11,7 +11,7 @@
 
 [check]
 id          = "history/local_namespace_excluded"
-requirement = "H-R4"
+requirement = "HIST-R8"
 spec        = "EXTENSION-HISTORY §3.2"
 snapshot    = "history-v1.7"
 level       = "MUST"

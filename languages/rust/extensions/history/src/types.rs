@@ -211,6 +211,10 @@ pub fn history_type_defs() -> Vec<(&'static str, Value)> {
                 vec![
                     ("pattern", fref("system/tree/path")),
                     ("enabled", fref("primitive/bool")),
+                    // v1.10. Field ORDER follows §2.2's block, which places
+                    // `pattern_exclude` between `enabled` and `events` — the same order
+                    // as types.py/types.ts, which is what `make type-parity` compares.
+                    ("pattern_exclude", opt(farray(fref("system/tree/path")))),
                     ("events", opt(farray(fref("primitive/string")))),
                     ("max_depth", opt(fref("primitive/uint"))),
                 ],

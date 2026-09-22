@@ -318,3 +318,104 @@ test("§6.2: the most specific matching config wins over a general one", () => {
   assert.equal(resolved.config.pattern, "docs/*", "the more literal pattern wins (§6.2 key 1)");
   assert.deepEqual(resolved.config.events, [HistoryEvent.Created]);
 });
+
+// ── §2.2 v1.10 exclusions — HIST-R16 ──────────────────────────────────────────────
+//
+// The MUST is the ORDER, not the matching. §2.2: exclusion is checked AFTER the most
+// specific matching configuration is selected and BEFORE the event-type filter, and an
+// excluded path "does not fall through to a less specific configuration -- an exclusion
+// is a decision, not a failure to match." Two conformant readings exist without that
+// sentence and they differ on a path two configurations cover, so the fall-through test
+// is the one that discriminates: the other reading passes every other test in this block.
+//
+// EVERY ASSERTION IS A DELTA. A `pattern: "*"` config RECORDS ITS OWN WRITE — §3.2 keeps
+// config paths out of the self-guard on purpose — so setup is not free and a count taken
+// before it is not a baseline. (The python port's first draft of these asserted absolute
+// counts and failed for exactly this reason.)
+
+/** Bind the configs, then read the recorded count — the baseline AFTER setup. */
+function armed(
+  peer: Peer,
+  install: { recorder: { stats: { recorded: number } } },
+  configs: readonly (readonly [string, Entity])[],
+): number {
+  for (const [name, cfg] of configs) {
+    peer.tree.put(configPath(peer.localPeerId, name), cfg);
+  }
+  return install.recorder.stats.recorded;
+}
+
+test("§2.2: an excluded path is not recorded", () => {
+  const peer = new Peer({ debugOpenGrants: true });
+  const install = installHistory(peer);
+  const before = armed(peer, install, [
+    ["all-but-machinery", historyConfig({ pattern: "*", patternExclude: ["system/capability/*"] })],
+  ]);
+  peer.tree.put("/" + peer.localPeerId + "/system/capability/grant-1", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before);
+});
+
+test("§2.2 CONTROL: the same path IS recorded without the exclusion", () => {
+  // Without this, the test above passes for a peer that records nothing at all.
+  const peer = new Peer({ debugOpenGrants: true });
+  const install = installHistory(peer);
+  const before = armed(peer, install, [["all", historyConfig({ pattern: "*" })]]);
+  peer.tree.put("/" + peer.localPeerId + "/system/capability/grant-1", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before + 1);
+});
+
+test("§2.2 [MUST]: an excluded path does not fall through to a less specific config", () => {
+  // The only test here that separates the two readings. `docs/*` is selected (more
+  // literal segments) and excludes the path. A reading that treated the exclusion as a
+  // NON-MATCH would continue the search, select `*`, and record the write — auditing a
+  // path the operator excluded, under a config they wrote to be more permissive.
+  const peer = new Peer({ debugOpenGrants: true });
+  const install = installHistory(peer);
+  const before = armed(peer, install, [
+    ["everything", historyConfig({ pattern: "*" })],
+    ["docs", historyConfig({ pattern: "docs/*", patternExclude: ["docs/secret/*"] })],
+  ]);
+
+  peer.tree.put("/" + peer.localPeerId + "/docs/secret/salaries", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before, "fell through to the `*` config");
+
+  peer.tree.put("/" + peer.localPeerId + "/docs/public/readme", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before + 1);
+});
+
+test("§2.2: exclusion is checked BEFORE the event filter", () => {
+  // Order, the second half. An excluded path is excluded for EVERY event type. The second
+  // assertion carries the weight: it shows the config is live, so the first is not passing
+  // because nothing was recorded at all.
+  const peer = new Peer({ debugOpenGrants: true });
+  const install = installHistory(peer);
+  const before = armed(peer, install, [
+    [
+      "creates",
+      historyConfig({
+        pattern: "*",
+        patternExclude: ["docs/secret/*"],
+        events: [HistoryEvent.Created],
+      }),
+    ],
+  ]);
+  peer.tree.put("/" + peer.localPeerId + "/docs/secret/x", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before);
+  peer.tree.put("/" + peer.localPeerId + "/docs/open/x", payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before + 1);
+});
+
+test("§2.2: a bare-`*` exclusion is canonicalized like a pattern", () => {
+  // §2.2: exclusions "use the same core §5.4 pattern syntax as `pattern`; this field does
+  // not define a matcher of its own." So `canonicalizePattern`'s bare-`*` rule — the one
+  // v1.8 corrected — applies here too. A port that canonicalized `pattern` and matched
+  // `pattern_exclude` RAW would silently exclude nothing, which reads exactly like a
+  // deployment that configured no exclusions.
+  const peer = new Peer({ debugOpenGrants: true });
+  const install = installHistory(peer);
+  const before = armed(peer, install, [
+    ["self-negating", historyConfig({ pattern: "*", patternExclude: ["*"] })],
+  ]);
+  peer.tree.put("/" + peer.localPeerId + "/" + TRACKED, payload("v1"));
+  assert.equal(install.recorder.stats.recorded, before);
+});

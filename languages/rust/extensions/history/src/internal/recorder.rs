@@ -94,6 +94,11 @@ pub struct HistoryConfig {
     pub pattern: String,
     pub canonical_pattern: String,
     pub enabled: bool,
+    /// §2.2 v1.10, ALREADY CANONICALIZED — the raw spelling is not kept, because the only
+    /// consumer is `pattern_matches` and §2.2 says these use the same core §5.4 syntax as
+    /// `pattern`. Canonicalizing at parse time also means the bare-`*` rule is applied by
+    /// the one function that knows it (`canonicalize_pattern`).
+    pub canonical_pattern_exclude: Vec<String>,
     pub events: Vec<String>,
     pub max_depth: Option<u64>,
     pub config_path: String,
@@ -141,6 +146,19 @@ fn parse_config(path: &str, ent: &Entity, local_peer: &str) -> Option<HistoryCon
         Some(Value::Bool(b)) => *b,
         _ => return None,
     };
+    // §2.2 v1.10. An EMPTY list stays empty (no exclusions), unlike `events` below where
+    // empty falls back to the default set — `events` has a spec-stated default, and this
+    // field's absent-value is "no exclusions", which an empty list already says.
+    let canonical_pattern_exclude = match ent.field("pattern_exclude") {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|v| match v {
+                Value::Text(t) => Some(canonicalize_pattern(t, local_peer)),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     let events = match ent.field("events") {
         Some(Value::Array(items)) if !items.is_empty() => items
             .iter()
@@ -155,6 +173,7 @@ fn parse_config(path: &str, ent: &Entity, local_peer: &str) -> Option<HistoryCon
         canonical_pattern: canonicalize_pattern(&pattern, local_peer),
         pattern,
         enabled,
+        canonical_pattern_exclude,
         events,
         max_depth: ent.uint_field("max_depth"),
         config_path: path.to_string(),
@@ -258,6 +277,20 @@ pub fn record_transition(
         // §2.2: "If history is not configured for a path, no transitions are recorded."
         return None;
     }
+    // §2.2 v1.10 exclusions, and the ORDER is the MUST (HIST-R16), not the matching.
+    // AFTER selection: checked against the SELECTED config only. An excluded path does
+    // NOT fall through to a less specific configuration — "an exclusion is a decision,
+    // not a failure to match." Folding this into `find_history_config` as a non-match is
+    // the other conformant-looking reading, and the two differ on exactly the paths two
+    // configs cover. BEFORE the event filter: excluded for every event type.
+    if config
+        .canonical_pattern_exclude
+        .iter()
+        .any(|excl| pattern_matches(ev.path, excl))
+    {
+        return None;
+    }
+
     if !config.events.iter().any(|e| e == event) {
         return None; // §5.1: "event type not configured"
     }

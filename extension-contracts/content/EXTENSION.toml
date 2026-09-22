@@ -501,11 +501,32 @@ note = "ts constructor options object; the other two take positional/keyword arg
 # what `gap` means. Two things are specific to CONTENT.
 #
 # **The inventory has a different SHAPE here, and that is itself the finding routed to arch.**
-# HISTORY declares §9.1 as one table with a `Level` column; CONTENT declares §11.1-§11.4 as four
+# HISTORY declared §9.1 as one table with a `Level` column; CONTENT declares §11.1-§11.4 as four
 # level-named subsections of bullets. Both are machine-readable and neither is machine-readable
-# the same way, so `tools/req-coverage.py` carries two parsers for two specs. At twenty-six
-# extensions that is a parser per author's taste. Neither shape gives a row a STABLE ID either,
-# so `H-R4` and `C-R7` below are OUR invention and cannot be cited by anyone else.
+# the same way, so `tools/req-coverage.py` carries a parser per spec. At twenty-six extensions
+# that is a parser per author's taste. Neither shape gave a row a STABLE ID either, so `C-R7`
+# below is OUR invention and cannot be cited by anyone else.
+#
+# **HALF OF THAT IS FIXED, AND THE HALF THAT IS FIXED IS NOT THIS ONE `[2026-09-09]`.** We filed
+# it (`ROUTING-2026-09-07-d`); arch ruled it (GI-11) and landed `SPECIFICATION-FORMAT` v1.3
+# §8.5a — a declared id prefix, a `Level` from a closed six, and a `<PREFIX>-R<n>` allocated once
+# and never renumbered. **`EXTENSION-HISTORY` v1.9 is the worked reference and now carries real
+# `HIST-R<n>` ids**, so this tree's HISTORY rows are keyed to the spec's numbering and our
+# `H-R<n>` inventions are retired. A third parser shape, `id-level-table`, was added for it.
+#
+# **CONTENT IS NOW THE ONE WITHOUT UPSTREAM IDS**, and that is a scheduling fact rather than a
+# gap in the standard: §8.5a binds, and §11 has not been re-issued under it. `C-R<n>` stays ours
+# until it is. **Note what that costs, because HISTORY just paid it:** without ids the join is by
+# requirement TEXT, so a re-worded row at a CONTENT re-pin arrives as one STALE plus one
+# UNDECLARED failure rather than as one row that moved — and the quickest way to make that green
+# is to paste the new wording over the old mapping, which silently keeps whatever the old row
+# claimed was measuring it. Do not do that; `req-coverage`'s rule 0 cannot protect this spec yet.
+#
+# Also worth carrying: our filing's FIRST CLAUSE WAS WRONG and arch said so. "No declared shape"
+# is false — §5.1 has prescribed the section's form since the format standard was written and 19
+# of 26 specs follow it. It was a declared shape with NO ENFORCEMENT POINT. "No stable ids" was
+# the whole cost. Restating a correct rule changes nothing; giving it a gate changes everything,
+# which is D16 stated from the other side.
 #
 # **The strongest and the weakest rows in this tree are both here.** C-R1/C-R2's
 # `type_system_content_*_match` renders the type from `entity-core-go`'s own independent
@@ -570,7 +591,7 @@ id     = "C-R4"
 text   = "Content entities stored in content store, not entity tree (§3.1)"
 oracle = []
 note   = """NOTHING MEASURES THIS, and it is a MUST whose whole content is a negative — "not \
-entity tree". `grep -i content_store` over the executed corpus returns 0. HISTORY's H-R1 is the \
+entity tree". `grep -i content_store` over the executed corpus returns 0. HISTORY's HIST-R1 is the \
 same clause in a second spec with the same absence, which makes it a shape rather than an \
 oversight: the corpus has no vocabulary for asserting WHERE an entity lives, because every check \
 reaches it through a path that resolves either way."""
@@ -602,7 +623,7 @@ oracle = []
 note   = """NOTHING MEASURES THIS, and it is the SECURITY MUST of this extension. `grep -i \
 ownership` over the executed corpus returns 0. §4.4 is what stops a caller with a grant on one \
 blob's path fetching chunks belonging to another; the `content` category drives `get` twice and \
-both times on its error path (`get_path_required`). Same shape as HISTORY's H-R5."""
+both times on its error path (`get_path_required`). Same shape as HISTORY's HIST-R9."""
 
 [[conformance.requirement]]
 id     = "C-R8"

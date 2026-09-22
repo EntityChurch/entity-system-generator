@@ -251,6 +251,7 @@ export class HistoryRecorder implements EmitConsumer {
 export function historyConfig(options: {
   readonly pattern: string;
   readonly enabled?: boolean;
+  readonly patternExclude?: readonly string[];
   readonly events?: readonly string[];
   readonly maxDepth?: number | null;
 }): Entity {
@@ -264,6 +265,16 @@ export function historyConfig(options: {
       // SKIPPED by `parseConfig` and would silently RE-ENABLE history for the path it was
       // written to turn off. Asserted in `test/config.test.ts`.
       ["enabled", Ecf.bool(options.enabled ?? true)],
+      // v1.10. Written only when non-empty, so a caller that does not use it produces
+      // the same bytes as before the field existed. Field ORDER matches §2.2's block —
+      // between `enabled` and `events` — and `Ecf.map` preserves insertion order, so this
+      // position is load-bearing for the entity's content hash.
+      [
+        "pattern_exclude",
+        options.patternExclude === undefined || options.patternExclude.length === 0
+          ? null
+          : Ecf.array(options.patternExclude.map((p) => Ecf.text(p))),
+      ],
       [
         "events",
         options.events === undefined

@@ -1,7 +1,7 @@
 ## CHECK — HISTORY §6.2 `HIST-CONFIG-SPECIFICITY-2`: key 2 is load-bearing
 ##
 ## Kind C. The spec wrote this vector FOR an implementer and marked it REQUIRED; nothing
-## upstream runs it. `req-coverage` reports H-R13 — a §9.1 MUST — measured by nothing in a
+## upstream runs it. `req-coverage` reports HIST-R13 — a §9.1 MUST — measured by nothing in a
 ## 764-check corpus, and no check in that corpus configures two overlapping patterns at all.
 ##
 ## THE FIRST AUTHORED CHECK WHOSE SUBJECT IS THE RECORDER RATHER THAN THE HANDLER, and that
@@ -20,7 +20,7 @@
 
 [check]
 id          = "history/config_specificity_key2"
-requirement = "H-R13"
+requirement = "HIST-R13"
 spec        = "EXTENSION-HISTORY §6.2 (HIST-CONFIG-SPECIFICITY-2)"
 snapshot    = "history-v1.8"
 level       = "MUST"

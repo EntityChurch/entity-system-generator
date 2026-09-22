@@ -169,6 +169,10 @@ export function historyTypeDefs(): readonly TypeDef[] {
     new TypeDef(HistoryTypes.Config)
       .f("pattern", ref("system/tree/path"))
       .f("enabled", ref("primitive/bool"))
+      // v1.10. Field ORDER follows §2.2's block, which places `pattern_exclude` between
+      // `enabled` and `events` — the same order as types.py/types.rs, which is what
+      // `make type-parity` compares.
+      .f("pattern_exclude", arrayOf(ref("system/tree/path")).opt())
       .f("events", arrayOf(ref("primitive/string")).opt())
       .f("max_depth", ref("primitive/uint").opt()),
 

@@ -307,9 +307,16 @@ fn now_ms() -> u64 {
 /// a required `primitive/bool`, and a config that decoded as malformed would be SKIPPED
 /// by the recorder's parser and would silently RE-ENABLE history for the path it was
 /// written to turn off.
+///
+/// `pattern_exclude` (v1.10) is written only when non-empty, so a caller that does not
+/// use it produces the same bytes as before the field existed. **The parameter sits after
+/// `enabled` to match §2.2's field order**, which is a positional break for every existing
+/// call site — taken deliberately, because a parameter list that disagrees with the entity
+/// it builds is worse, and `rustc` names every site.
 pub fn history_config(
     pattern: &str,
     enabled: bool,
+    pattern_exclude: Option<&[&str]>,
     events: Option<&[&str]>,
     max_depth: Option<u64>,
 ) -> Entity {
@@ -317,6 +324,14 @@ pub fn history_config(
         (Key::Text("pattern".into()), Value::Text(pattern.to_string())),
         (Key::Text("enabled".into()), Value::Bool(enabled)),
     ];
+    // Insertion order IS the field order of the entity, so this block must stay between
+    // `enabled` and `events` — the content hash depends on it (`make type-parity`).
+    if let Some(excl) = pattern_exclude.filter(|e| !e.is_empty()) {
+        pairs.push((
+            Key::Text("pattern_exclude".into()),
+            Value::Array(excl.iter().map(|p| Value::Text((*p).to_string())).collect()),
+        ));
+    }
     if let Some(evs) = events {
         pairs.push((
             Key::Text("events".into()),
