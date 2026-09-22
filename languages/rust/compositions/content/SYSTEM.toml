@@ -112,3 +112,61 @@ predicted   = "0 regressions. The composition's only writes are seven tree bindi
 measured    = "0 regressions, 6 improvements, 0 flaky (ROUNDS=2, 756 checks per arm). The 6 improvements are the type_system checks above; --profile core includes that category."
 verdict     = "RIGHT."
 # Our second failure mode is one keystone never has -- the peer was right and we broke it.
+
+
+# ══ [gate.baseline] — THE TEMPORAL BASELINE (AP-18) ═══════════════════════════════════
+#
+# NOT the pre-registration in [gate.expectation] above, and the separation is the whole
+# point. A PREDICTION is written before the run and never edited afterwards — `rs-content`
+# predicted 0 and measured 3, and that miss is kept, because a pre-registered expectation
+# whose misses get edited away is not a pre-registration. A BASELINE is what we last
+# MEASURED, and it is updated deliberately, with a reason, whenever it legitimately
+# changes. Two quantities were living in one block; asserting against the prediction would
+# have made the gate permanently red on a preserved miss, and the locally-reasonable fix
+# for that is to edit the prediction — which destroys the artifact.
+#
+# `improved` is a set of NAMES, not a count: the two-arm diff is blind to a LOST
+# improvement (bare fails it too, so the comparison reads "no difference"), and a count
+# that shrinks by one understates a capability with nothing re-checking in that direction.
+# `history/w6_caller_cap_absent` went PASS -> FAIL on two targets with every gate green.
+#
+# Checked by `tools/check-expectation.py`, in `make check`. Regenerate with `--bless`.
+
+[gate.baseline.type_system]
+measured = "2026-09-07"   # 2 round(s)
+total    = 446
+composed = { PASS = 118, WARN = 11, FAIL = 317 }
+bare     = { PASS = 112, WARN = 11, FAIL = 323 }
+improved = [
+  "type_system.type_system_content_blob_fetch",
+  "type_system.type_system_content_blob_match",
+  "type_system.type_system_content_chunk_fetch",
+  "type_system.type_system_content_chunk_match",
+  "type_system.type_system_content_descriptor_fetch",
+  "type_system.type_system_content_descriptor_match",
+]
+
+[gate.baseline.content]
+measured = "2026-09-07"   # 2 round(s)
+total    = 13
+composed = { PASS = 7, FAIL = 2, SKIP = 4 }
+bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
+improved = [
+  "content.type_blob",
+  "content.type_chunk",
+  "content.type_descriptor",
+]
+
+[gate.baseline.core]
+measured = "2026-09-07"   # 2 round(s)
+total    = 756
+composed = { PASS = 319, WARN = 331, SKIP = 106 }
+bare     = { PASS = 313, WARN = 337, SKIP = 106 }
+improved = [
+  "type_system.type_system_content_blob_fetch",
+  "type_system.type_system_content_blob_match",
+  "type_system.type_system_content_chunk_fetch",
+  "type_system.type_system_content_chunk_match",
+  "type_system.type_system_content_descriptor_fetch",
+  "type_system.type_system_content_descriptor_match",
+]

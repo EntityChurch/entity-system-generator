@@ -1,0 +1,84 @@
+## CHECK — CONTENT §6.3: `root` in envelope mode, and ABSENT in entity mode
+##
+## Kind C. `req-coverage` reports C-R8 measured by nothing.
+##
+## This is the check in the first batch with a NEGATIVE HALF THE SPEC ITSELF STATES, which
+## makes it the strongest of the three: §6.3's type block says `root` is present "in envelope
+## mode with non-null envelope.root" and "Absent in entity mode (no envelope wrapper to
+## pass)". A port that always emitted `root`, or never did, satisfies one clause and breaks
+## the other, and only a check that drives both modes can tell them apart.
+
+[check]
+id          = "content/ingest_returns_root"
+requirement = "C-R8"
+spec        = "EXTENSION-CONTENT §6.3"
+snapshot    = "content-v3.7"
+level       = "MUST"
+kind        = "independent"
+# The FACE this check drives (D13, amended). All three authored so far are handler-face:
+# they EXECUTE against an installed body. On a target whose composition declares
+# `handler = "not-installable"` the check does not apply and is reported N/A rather than
+# failed -- and if it PASSES there anyway, that is a contradiction and a failure.
+face        = "handler"
+
+reading = """
+`system/content/ingest-result.root` is `{type_ref: "core/entity", optional: true}` and §6.3
+states both halves of when it is populated: in ENVELOPE mode with a non-null `envelope.root`
+it is that root, inlined, so a downstream chain step can navigate the wrapper's fields
+without dereferencing the content store; in ENTITY mode it is absent, because there is no
+wrapper to pass. `root_hash` and `ingested_count` are present in both modes.
+"""
+
+[[check.step]]
+op = "connect"
+
+[[check.step]]
+op        = "execute"
+uri       = "system/content"
+operation = "ingest"
+capture   = "envelope_mode"
+resource  = ["system/content"]
+params    = { type = "system/content/ingest-request", data = { envelope = { "$envelope" = { root = { type = "system/content/probe", data = { marker = "ingest-returns-root-envelope" } } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/content"
+operation = "ingest"
+capture   = "entity_mode"
+resource  = ["system/content"]
+params    = { type = "system/content/ingest-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "ingest-returns-root-entity" } } } } }
+
+[[check.assert]]
+kind    = "status"
+capture = "envelope_mode"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "entity_mode"
+equals  = 200
+
+[[check.assert]]
+kind    = "result_field_present"
+capture = "envelope_mode"
+field   = "root"
+why     = "THE REQUIREMENT, positive half — envelope mode with a non-null root MUST inline it"
+
+[[check.assert]]
+kind    = "result_field_absent"
+capture = "entity_mode"
+field   = "root"
+why     = """THE REQUIREMENT, negative half — entity mode has no wrapper to pass, so `root` \
+is absent. Without this an implementation that always emits `root` passes, and the field \
+stops carrying the information §6.3 gives it."""
+
+[[check.assert]]
+kind    = "result_field_present"
+capture = "entity_mode"
+field   = "root_hash"
+why     = "`root_hash` is non-optional in both modes; it distinguishes 'absent root' from 'empty result'"
+
+[check.arms]
+composed = "pass"
+bare     = "fail"
+bare_why = "no `system/content` handler is installed; both ingests return 404 handler_not_found"

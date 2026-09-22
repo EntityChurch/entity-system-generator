@@ -1,0 +1,89 @@
+## CHECK — CONTENT §5.2 / §6.2: the resolved entity travels in `included`, not just its hash
+##
+## Kind C (independent check) per keystone's VERIFICATION-ARCHITECTURE: authored from the
+## SPEC at the same normative target as the oracle, never from the oracle's source, and
+## never a conformance verdict. Where `validate-peer` has a vector it is the measurement.
+## Here it has none — `req-coverage` reports C-R6 measured by nothing in a 764-check corpus.
+##
+## WHY THIS ONE FIRST. §5.2 is the clause behind one of the three findings we routed to
+## keystone on 2026-09-05: the peer dropped the `included` map at THREE call sites, not the
+## one we named (AP-5). A MUST another team fixed in three places, on our report, with
+## nothing anywhere that would have caught it or will catch the next regression.
+
+[check]
+id          = "content/get_includes_blob_entity"
+requirement = "C-R6"
+spec        = "EXTENSION-CONTENT §5.2, §6.2"
+snapshot    = "content-v3.7"
+level       = "MUST"
+kind        = "independent"
+# The FACE this check drives (D13, amended). All three authored so far are handler-face:
+# they EXECUTE against an installed body. On a target whose composition declares
+# `handler = "not-installable"` the check does not apply and is reported N/A rather than
+# failed -- and if it PASSES there anyway, that is a contradiction and a failure.
+face        = "handler"
+
+reading = """
+§5.2: "When a handler returns a result entity that references a content blob, the handler
+MUST include the blob entity in the response envelope's `included` map." §6.2 is that rule
+made concrete for this handler: `handle_get` calls `ctx.include(hash, entity)` for each
+resolved hash and returns `{found, missing}` as ARRAYS OF HASHES, with the entities
+themselves delivered via the envelope. So a conforming `get` of a stored hash produces the
+hash in `found` AND the entity in `included`; a response carrying `found` alone satisfies
+neither section and leaves the caller with no way to obtain the blob — §5.2's own stated
+reason, since the blob is in the content store and there is no separate by-hash operation.
+"""
+
+[[check.step]]
+op   = "connect"
+note = "dial + §4.1 handshake. The peer's open debug grant; this check does not exercise capability scoping."
+
+# Put a known entity into the content store so there is something to resolve. Entity mode:
+# §6.3's `entity` field, "stored as-is".
+[[check.step]]
+op        = "execute"
+uri       = "system/content"
+operation = "ingest"
+capture   = "ingest"
+resource  = ["system/content"]
+params    = { type = "system/content/ingest-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "get-includes-blob-entity" } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/content"
+operation = "get"
+capture   = "get"
+resource  = ["system/content"]
+params    = { type = "system/content/get-request", data = { hashes = ["$ingest.result.root_hash"] } }
+
+[[check.assert]]
+kind    = "status"
+capture = "ingest"
+equals  = 200
+why     = "precondition — nothing is in the store to resolve if the ingest did not land"
+
+[[check.assert]]
+kind    = "status"
+capture = "get"
+equals  = 200
+why     = "precondition — a get that did not succeed says nothing about §5.2"
+
+[[check.assert]]
+kind    = "result_array_contains"
+capture = "get"
+field   = "found"
+value   = "$ingest.result.root_hash"
+why     = "§6.2: `found` is the index of hashes the receiver resolved, and it is an array of hashes rather than a counter (v3.6 F4)"
+
+[[check.assert]]
+kind    = "included_has"
+capture = "get"
+value   = "$ingest.result.root_hash"
+why     = """THE REQUIREMENT. §5.2's MUST: the entity itself must be in `included`. This is \
+the assertion that goes red if the port or the peer drops the map, which has happened once \
+already at three call sites."""
+
+[check.arms]
+composed = "pass"
+bare     = "fail"
+bare_why = "no `system/content` handler is installed, so the ingest returns 404 handler_not_found and the first assertion fails"

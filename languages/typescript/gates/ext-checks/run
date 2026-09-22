@@ -1,0 +1,6 @@
+#!/bin/sh
+# languages/typescript/gates/ext-checks/run — the uniform entry point for this arm.
+# `gates/README.md`: one entry point per (gate x target). Invoked by `tools/host-launch`
+# as $CLIENT, with the host booted and its COMPOSED line asserted.
+set -eu
+exec node "$(dirname "$0")/exec.mjs" "$@"

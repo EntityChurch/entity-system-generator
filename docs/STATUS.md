@@ -6,6 +6,47 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**The first authored extension checks are running, and the rule that admits them is the point.**
+`make ext-checks`, three checks on three MUSTs the oracle reaches with nothing —
+`EXTENSION-CONTENT` §5.2/§6.2 (the resolved entity travels in `included`, not just its hash),
+§6.3 (`root` present in envelope mode and **absent** in entity mode, both halves), and
+`EXTENSION-HISTORY` §3.2 (the recorder's own head-pointer write is not itself recorded). **All six ADMITTED — three checks × two targets** (`python`, `typescript`): pass composed,
+fail bare. `rust` joins by adding a `run`.
+
+**An authored check is not admitted until it has been seen producing a different answer against a
+peer with the extension not installed.** A check that reports the same verdict either way is
+measuring something else — which is not hypothetical, because four of the thirteen checks in the
+oracle's own `content` category do exactly that (AP-19). A vacuous check is worse than a missing
+one: it occupies the requirement row that would otherwise honestly read `none`.
+
+**These are Kind C and they are never a conformance verdict.** Authored from the spec at the
+oracle's own normative target, never from its source; where `validate-peer` has a vector,
+`validate-peer` is the measurement; divergence is routed, never carried privately. The standing
+condition is the one the operator set for keystone the same day and it is adopted unchanged:
+**an official green requires the suite we do not author.**
+
+**The definitions are language-neutral data.** `extension-contracts/<ext>/checks/*.toml` — seven
+verbs, seven assertion kinds, one indirection — validated once by the neutral half and emitted as
+JSON for the arms. `languages/<t>/gates/ext-checks/run` is a transport binding that names no
+extension, because a wire client is per-language even though the wire is not (`entity_core.peer`
+needs `cryptography`, absent from two of the three toolchain images — measured). Adding an
+extension adds data; adding a target adds one arm.
+
+**And the second arm corrected the format rather than itself**, which is this repo's pattern
+arriving on a new axis: TOML is not parseable in every image, the URI form is per-peer, and an
+embedded entity travels in its wire form — the last of which **both** arms got wrong on their
+first run, in different languages. A design at n=1 has not been tested.
+
+**Two instrument defects, both on the second arm's first run.** The comparer printed
+`EXT-CHECKS: OK` over the one arm that survived while the other died before writing anything —
+every word true, the verdict wrong, and the *"no silent caps"* rule was already written in
+`gates/README.md` and implemented twice next door (AP-20). And the `typescript` arm answered
+all three checks correctly and then never exited, because the peer's client holds a socket with
+no exported close: **a hang after the measurement is indistinguishable from a hang before it**,
+and only one of them is a real problem (AP-21).
+
+---
+
 **The requirement map exists, and the answer it gives is an assignment of work rather than a
 score.** `tools/req-coverage.py` joins two inventories that both already existed — each
 extension spec's own conformance section (`EXTENSION-HISTORY` §9.1, `EXTENSION-CONTENT`

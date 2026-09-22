@@ -167,10 +167,29 @@ else
   echo "BASELINE arm=bare (no extensions installed)"
 fi
 
-[ "$#" -eq 0 ] && set -- -category content
-
 mkdir -p "$TARGET_DIR/output/$COMP/reports"
-"$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
+
+# WHO DRIVES THE BOOTED HOST. Default: the oracle, which is why this script exists.
+#
+# `CLIENT` points it at something else -- today `languages/<t>/gates/ext-checks/exec`, the
+# authored extension checks. The boot protocol is the SAME protocol either way (port,
+# keypair, spawn, readiness wait, COMPOSED assertion, reap-before-surfacing), and the one
+# thing this repo has already paid for twice is N copies of one protocol: `host-launch`
+# exists because three targets each held a transcription of it and two had drifted.
+# A second driver copying the boot sequence to run a different client would be that
+# mistake in a new direction.
+#
+# The client is exec'd with $ADDR in the environment and receives "$@" verbatim, so it
+# never has to know how the host got there. `|| true` matches the oracle's treatment: a
+# non-zero client is a RESULT to be read from its output, not a launcher failure -- the
+# launcher's own failures are the exits above, which are loud.
+if [ -n "${CLIENT:-}" ]; then
+  [ -x "$CLIENT" ] || { echo "host-launch: CLIENT is not executable: $CLIENT" >&2; exit 2; }
+  ADDR="127.0.0.1:$PORT" ARM="$ARM" TARGET="$TARGET" COMP="$COMP" "$CLIENT" "$@" || true
+else
+  [ "$#" -eq 0 ] && set -- -category content
+  "$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
+fi
 
 # REAP BEFORE SURFACING, and the order is the whole point.
 #

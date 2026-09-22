@@ -143,3 +143,100 @@ internal/recorder.ts's `pruneHistory`, which walks and reports rather than prete
 # author/capability MUST is satisfied. The distinction is exactly the one D13 was amended
 # for, one level up: a green check is evidence about the check, not about the property.
 # Routed as H8. See extension-contracts/history/EXTENSION.toml [substrate.execution_context].
+
+
+# ══ [gate.baseline] — THE TEMPORAL BASELINE (AP-18) ═══════════════════════════════════
+#
+# NOT the pre-registration in [gate.expectation] above, and the separation is the whole
+# point. A PREDICTION is written before the run and never edited afterwards — `rs-content`
+# predicted 0 and measured 3, and that miss is kept, because a pre-registered expectation
+# whose misses get edited away is not a pre-registration. A BASELINE is what we last
+# MEASURED, and it is updated deliberately, with a reason, whenever it legitimately
+# changes. Two quantities were living in one block; asserting against the prediction would
+# have made the gate permanently red on a preserved miss, and the locally-reasonable fix
+# for that is to edit the prediction — which destroys the artifact.
+#
+# `improved` is a set of NAMES, not a count: the two-arm diff is blind to a LOST
+# improvement (bare fails it too, so the comparison reads "no difference"), and a count
+# that shrinks by one understates a capability with nothing re-checking in that direction.
+# `history/w6_caller_cap_absent` went PASS -> FAIL on two targets with every gate green.
+#
+# Checked by `tools/check-expectation.py`, in `make check`. Regenerate with `--bless`.
+
+[gate.baseline.content]
+measured = "2026-09-07"   # 2 round(s)
+total    = 13
+composed = { PASS = 12, SKIP = 1 }
+bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
+improved = [
+  "content.get_path_required",
+  "content.handler_manifest",
+  "content.handler_op_get",
+  "content.handler_op_ingest",
+  "content.ingest_path_required",
+  "content.type_blob",
+  "content.type_chunk",
+  "content.type_descriptor",
+]
+
+# `history.w6_caller_cap_absent` IS DELIBERATELY ABSENT from `improved` below, and this
+# comment is the reason a re-bless needs. It PASSED at 13:05 and FAILED at 17:41 on
+# 2026-09-07 (AP-18) — our `build_context` selects between `caller_capability` and
+# `handler_grant`, which EXTENSION-HISTORY §5.1 forbids, and we cannot comply because the
+# peer carries no `capability` field. Routed as ROUTING-2026-09-07-e-keystone-*; not
+# patched, because inverting the precedence turns the check green and is still the
+# interpretation §5.1 forbids. **Putting this name back into `improved` is the acceptance
+# test for whatever keystone or arch answers.**
+[gate.baseline.history]
+measured = "2026-09-07"   # 2 round(s)
+total    = 34
+composed = { PASS = 32, WARN = 1, FAIL = 1 }
+bare     = { PASS = 1, FAIL = 29, SKIP = 4 }
+improved = [
+  "history.chain_latest_event_updated",
+  "history.chain_latest_hash",
+  "history.chain_linked",
+  "history.chain_previous_hash",
+  "history.chain_two_transitions",
+  "history.context_author_present",
+  "history.context_capability_present",
+  "history.context_handler_present",
+  "history.context_operation_present",
+  "history.event_filter_only_created",
+  "history.first_transition_no_previous",
+  "history.handler_manifest_decode",
+  "history.handler_manifest_present",
+  "history.handler_op_query",
+  "history.handler_op_rollback",
+  "history.head_pointer_set",
+  "history.limit_has_more",
+  "history.limit_returns_1",
+  "history.rollback_new_transition",
+  "history.rollback_restored_hash",
+  "history.rollback_verify_binding",
+  "history.transition_clock_structured",
+  "history.transition_event_created",
+  "history.transition_has_timestamp",
+  "history.transition_hash_matches",
+  "history.transition_recorded",
+  "history.type_config",
+  "history.type_query_params",
+  "history.type_query_result",
+  "history.type_rollback_params",
+  "history.type_rollback_result",
+  "history.type_transition",
+]
+
+[gate.baseline.core]
+measured = "2026-09-07"   # 2 round(s)
+total    = 756
+composed = { PASS = 320, WARN = 330, SKIP = 106 }
+bare     = { PASS = 314, WARN = 336, SKIP = 106 }
+improved = [
+  "type_system.type_system_content_blob_fetch",
+  "type_system.type_system_content_blob_match",
+  "type_system.type_system_content_chunk_fetch",
+  "type_system.type_system_content_chunk_match",
+  "type_system.type_system_content_descriptor_fetch",
+  "type_system.type_system_content_descriptor_match",
+]

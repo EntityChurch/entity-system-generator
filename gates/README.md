@@ -27,6 +27,7 @@ assertion we wrote ourselves has nothing watching it.
 | **`type-parity`** | **OURS, and the gap is measured rather than assumed.** The oracle spends six `history` checks and seven `content` checks on `client.TreeGet(path)` — it asserts the type path **RESOLVES** and never reads what is at it. Routed as **G-3** (`ROUTING-2026-09-07-core-go-*`); the consistency half is ours (D16) | each arm's `<ext>_type_entities()` through the packaging boundary → the neutral `gates/type-parity/compare.py`. **Two independent measurements**: the peer's own content hash, and our normalisation of the field map | `make type-parity`, a double `wildcard` over arms × `extension-contracts/*`; both counts echoed before each verdict | **built 2026-09-07.** HISTORY: 3 ports agree on all 6. CONTENT: 2 ports agree on all 7, `typescript` **`unknown`** (exit 3 — its stage cannot be rebuilt while keystone is mid-edit on the peer). Negative control executed |
 | **`glue`** | **OURS, and the only axis here whose authority is an OPERATOR REQUIREMENT rather than an incident** — *"the glue code should be pretty stable; we don't want big if blocks of oh, if it's this container and this extension."* D20 | `tools/check-glue.py` — identity leakage, not mass: `make scale` cannot see a 46-way branch because it is still one file in the `neutral` column | `make glue`, in `make check`; `make glue-control` runs both planted directions | **built 2026-09-07.** First run found `tools/sdk-parity.py` holding three per-target extractors behind a `{target: fn}` dispatch. Factored; output verified identical. Per-target→extension is a printed CENSUS, not a verdict — see D20 |
 | **`req-coverage`** | **the SPEC's own conformance section** — `EXTENSION-HISTORY` §9.1, `EXTENSION-CONTENT` §11.1–§11.4. The only axis here whose authority is the requirement inventory itself rather than a check somebody wrote | `tools/req-coverage.py` — the spec's rows × the oracle's executed check set, joined through `EXTENSION.toml [conformance]` | `make req-coverage`, in `make check`; `make req-coverage-control` runs the 15 planted-defect and refusal controls | **built 2026-09-07.** 38 rows, 24 binding: **0 fully oracle-measured · 11 partial · 2 ours · 11 nothing.** Its first real run failed on a §11.4 row missed while transcribing the inventory by hand |
+| **`ext-checks`** | **OURS, authored from the SPEC** — Kind C. `EXTENSION-CONTENT` §5.2/§6.2/§6.3, `EXTENSION-HISTORY` §3.2, each a MUST `req-coverage` reports as measured by nothing in a 764-check corpus. **Never a conformance verdict** | definitions are language-neutral TOML under `extension-contracts/<ext>/checks/`, validated once and emitted as JSON; `languages/<t>/gates/ext-checks/run` is a transport binding that names no extension; `gates/ext-checks/compare.py` decides | `make ext-checks`, a `wildcard` over arms × BOTH ARMS, with `--expect-arms` so a dead arm REFUSES; `make ext-checks-control` | **built 2026-09-07.** 3 checks × 2 arms (`python`, `typescript`), **6 admitted** — composed pass, bare fail. `rust` joins by adding a `run` |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
 
@@ -51,9 +52,33 @@ standard rather than a local exception:**
 |---|---|---|---|
 | **A · probe** | a finding about a cohort, with per-peer evidence | gate; enter a published number | `host-seam` |
 | **B · transcription** | that a port agrees with one pinned reading | that the reading is right | — none yet |
-| **C · independent check** | that our ports satisfy our reading of the spec | override the oracle; be published | — **none, deliberately** |
+| **C · independent check** | that our ports satisfy our reading of the spec | override the oracle; be published | `ext-checks` — 3 authored 2026-09-07, on three MUSTs nothing upstream reaches |
 | **D · cross-port coherence** | that N of **our own** ports agree with each other | **anything about correctness** — N agreeing is N agreeing (L18) | `chunking-parity` · `type-parity` · `sdk-parity` |
 | **E · instrument coverage** | what the measuring apparatus does and does not reach | that an unmeasured requirement is unmet | `req-coverage` |
+
+**The second arm corrected the FORMAT, not the arm, which is this repo's pattern arriving on
+schedule.** `ext-checks` was designed at one target and three of its decisions were wrong in
+ways only a second language could show: the definitions were TOML that `node` cannot parse
+offline (so the neutral half now validates once and emits JSON, and the arms consume one
+artifact instead of each re-deriving the corpus); the URI is a bare pattern on one peer's
+client and a full `entity://<peer>/…` on the other (so the definition names the PATTERN and
+each arm renders — D17's procedure/value split); and an entity embedded in another entity's
+data must travel in its `{type, data, content_hash}` wire form, which **both** arms got wrong
+on their first run, in different languages, which is what makes it a property of the format
+rather than one arm's slip. *The third port changed the model, not the column* — same
+sentence, second axis.
+
+**Kind C carries the heaviest gate obligation here, not the lightest**, and the rule that
+discharges it is the arm rule: **an authored check is admitted only once it has been seen
+producing a DIFFERENT answer against a peer with the extension not installed.** That is not a
+style preference. Four of the thirteen checks in the oracle's own `content` category pass in the
+bare arm — they measure `entity-core-go`'s in-process library while `summary.self_checks` reads
+`0` (AP-19) — and a check that cannot tell those apart is worse than a missing one, because a
+vacuous check occupies the `[conformance]` row that would otherwise honestly read `none`.
+`gates/ext-checks/compare.py` enforces it; `EXTENSION.toml [conformance]` is where the claim
+lands; and the three constraints that keep Kind C from becoming a second authority are keystone's
+and are adopted verbatim: authored from the SPEC and never from the oracle's source, the oracle is
+the measurement wherever it has a vector, and divergence is ROUTED rather than carried privately.
 
 **D is the one keystone's taxonomy has no room for, and the gap is real rather than a naming
 quibble.** Their Kind A explicitly may not gate; ours *do* gate, and correctly — because what

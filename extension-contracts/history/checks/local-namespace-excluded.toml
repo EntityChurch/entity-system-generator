@@ -1,0 +1,122 @@
+## CHECK — HISTORY §3.2: the recorder's own writes are not recorded
+##
+## Kind C. `req-coverage` reports H-R4 — a §9.1 MUST — measured by nothing in a 764-check
+## corpus (`grep -i recurs` returns 0).
+##
+## WHY IT MATTERS MORE THAN ITS SIZE. §3.2 is a recursion guard, and the failure it prevents
+## is not a wrong field in a transition: the recorder writes head pointers INTO
+## `system/history/head/…`, so a port that fails to exclude its own namespace records a
+## transition for each head-pointer write, whose head-pointer write records another. Our
+## three ports assert it in their own unit tests, which is our code checking our code (L18).
+
+[check]
+id          = "history/local_namespace_excluded"
+requirement = "H-R4"
+spec        = "EXTENSION-HISTORY §3.2"
+snapshot    = "history-v1.7"
+level       = "MUST"
+kind        = "independent"
+# The FACE this check drives (D13, amended). All three authored so far are handler-face:
+# they EXECUTE against an installed body. On a target whose composition declares
+# `handler = "not-installable"` the check does not apply and is reported N/A rather than
+# failed -- and if it PASSES there anyway, that is a contradiction and a failure.
+face        = "handler"
+
+reading = """
+§3.2: "Writing to the local peer's `system/history/` paths MUST NOT trigger history
+recording. This prevents infinite recursion: the history recorder writes head pointers to
+`system/history/head/...`, which are local-namespace system paths." So after an ordinary
+tree write to a recorded path P, two things must both hold: a transition exists for P (the
+recorder ran at all — without this the check passes vacuously on a peer that records
+nothing), and querying the history of the head-pointer path for P returns none (the
+recorder's own write was excluded).
+"""
+
+[[check.step]]
+op = "connect"
+
+# An ordinary write to a recorded path. This is what makes the recorder write a head pointer,
+# which is the write §3.2 says must not itself be recorded.
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "put"
+resource  = ["system/history/probe/local-namespace-excluded"]
+params    = { type = "system/tree/put-params", data = { path = "system/history/probe/local-namespace-excluded", entity = { "$entity" = { type = "system/content/probe", data = { marker = "local-namespace-excluded" } } } } }
+
+# The POSITIVE half. Without it, "the head-pointer path has no history" passes on a peer
+# that records nothing at all — which is the vacuity this check's own [check.control] block
+# named before the check was first run, and it was one step to close.
+[[check.step]]
+op        = "execute"
+uri       = "system/history"
+operation = "query"
+capture   = "history_of_path"
+resource  = ["system/history/probe/local-namespace-excluded"]
+params    = { type = "system/history/query-params", data = { path = "system/history/probe/local-namespace-excluded" } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/history"
+operation = "query"
+capture   = "history_of_head"
+resource  = ["system/history/head/system/history/probe/local-namespace-excluded"]
+params    = { type = "system/history/query-params", data = { path = "system/history/head/system/history/probe/local-namespace-excluded" } }
+
+[[check.assert]]
+kind    = "status"
+capture = "put"
+equals  = 200
+why     = "precondition — no write, no head pointer, nothing for §3.2 to be about"
+
+[[check.assert]]
+kind    = "status"
+capture = "history_of_head"
+equals  = 200
+why     = "precondition — the query itself must be answerable, or 'no transitions' is a 404 in disguise"
+
+[[check.assert]]
+kind    = "status"
+capture = "history_of_path"
+equals  = 200
+
+[[check.assert]]
+kind    = "result_array_nonempty"
+capture = "history_of_path"
+field   = "transitions"
+why     = """THE POSITIVE CONTROL, inside the check. The ordinary write MUST have produced \
+a transition, or the emptiness assertion below is satisfied by a recorder that does not \
+work rather than by §3.2's exclusion."""
+
+[[check.assert]]
+kind    = "result_array_empty"
+capture = "history_of_head"
+field   = "transitions"
+why     = """THE REQUIREMENT. The head-pointer path is in the local peer's \
+`system/history/` namespace, so the recorder's write to it MUST NOT have produced a \
+transition of its own."""
+
+[check.arms]
+composed = "pass"
+bare     = "fail"
+bare_why = "no `system/history` handler is installed, so the query returns 404 handler_not_found and the second assertion fails"
+
+# ── the honest limit, stated in the check rather than discovered by a reader ─────────────
+#
+# The bare arm fails for the RIGHT reason but not for §3.2's reason: it fails because there
+# is no handler, not because the namespace was recorded. So the vacuity rule is satisfied and
+# the check is admitted, while the strongest control available — a port that DOES record its
+# own namespace — cannot be built without mutating a port, which this repo does not do to
+# make a check go red. Recorded as a known-weaker control; the fix is a fault-injection arm,
+# and it is not worth one until a second check needs it.
+[check.control]
+strength = "arm-differential + an in-check positive control"
+missing  = """a FAULT-INJECTION control — a port that DOES record its own namespace, which \
+would prove the emptiness assertion can go red for §3.2's reason rather than for any other. \
+Building it means mutating a port to make a check fail, which this repo does not do."""
+mitigation = """the check now asserts BOTH halves in one run: the ordinary path HAS a \
+transition (the recorder ran) and the head-pointer path has NONE (its own write was \
+excluded). A peer that records nothing fails the first; a peer that records everything \
+fails the second. That is what the [check.control] block asked for when this check was \
+written, closed before its first bare-arm run."""

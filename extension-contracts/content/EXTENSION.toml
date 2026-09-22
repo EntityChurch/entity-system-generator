@@ -552,10 +552,13 @@ assembles a blob from its chunks and compares total_size, and none plants a miss
 id     = "C-R6"
 text   = "Handlers returning content refs **MUST** include the blob entity in the response envelope (§5.2)"
 oracle = []
-note   = """NOTHING MEASURES THIS. It is also the clause behind one of the three findings we \
-routed to keystone on 2026-09-05: the peer dropped the `included` map at three call sites, not \
-the one we named (AP-5). A MUST that another team fixed in three places, on our report, with no \
-check anywhere that would have caught the regression or will catch the next one."""
+ours   = ["extension-contracts/content/checks/get-includes-blob-entity.toml"]
+note   = """NOTHING UPSTREAM MEASURES THIS, and it is the clause behind one of the three \
+findings we routed to keystone on 2026-09-05: the peer dropped the `included` map at three call \
+sites, not the one we named (AP-5). A MUST another team fixed in three places, on our report, \
+with nothing that would have caught the regression. **AUTHORED 2026-09-07** — Kind C, admitted \
+by the arm rule (composed=pass, bare=fail), and it is NOT a conformance verdict: where the \
+oracle has a vector the oracle is the measurement, and here it has none."""
 
 [[conformance.requirement]]
 id     = "C-R7"
@@ -570,9 +573,12 @@ both times on its error path (`get_path_required`). Same shape as HISTORY's H-R5
 id     = "C-R8"
 text   = "`content:ingest` result **MUST** include `root` when called in envelope mode with non-null `envelope.root` (§6.3)"
 oracle = []
-note   = """NOTHING MEASURES THIS. `ingest_path_required` drives `ingest` with no resource and \
-asserts the error code; nothing drives a successful envelope-mode ingest and reads the result. \
-This is one of the two rows where a wrong answer is invisible to the caller until a later fetch."""
+ours   = ["extension-contracts/content/checks/ingest-returns-root.toml"]
+note   = """NOTHING UPSTREAM MEASURES THIS: `ingest_path_required` drives `ingest` with no \
+resource and asserts an error code; nothing drives a successful envelope-mode ingest and reads \
+the result. **AUTHORED 2026-09-07**, and it is the strongest of the first batch because §6.3 \
+states BOTH halves — `root` present in envelope mode, ABSENT in entity mode — so the check \
+drives both and a port that always emits `root` fails it. A presence check could not."""
 
 # ── §11.2 SHOULD ────────────────────────────────────────────────────────────────────────
 

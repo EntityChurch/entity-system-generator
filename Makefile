@@ -8,9 +8,10 @@
 #   make test             the extension cells' unit tests
 #   make conformance      validate-peer -category <ext> against the composed peer
 #   make regression       the two-arm core-profile diff (bare vs composed)
-#   make check            build + test + conformance + regression + plan-check + sdk-parity
-#                         + structure + drivers + error-codes + citations + glue
-#                         + req-coverage + scale --check
+#   make expectation      the composition's declared baseline vs the report beside it
+#   make check            build + test + conformance + regression + expectation + plan-check
+#                         + sdk-parity + structure + drivers + error-codes + citations
+#                         + glue + req-coverage + scale --check
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
@@ -19,6 +20,7 @@
 #   make error-codes      every wire code a port emits is declared with an authority (D16)
 #   make citations        every path a declaration file cites resolves (D18)
 #   make req-coverage     every requirement the spec declares is mapped to an instrument
+#   make ext-checks       the authored extension checks, both arms (Kind C -- never a verdict)
 #   make clean            remove every target's output/
 #
 # THE LAYOUT IS TARGET-MAJOR. A target is a unified bundle:
@@ -79,6 +81,7 @@ RUN     = $(PODMAN_RUN) $(IMAGE)
 TDIR    = languages/$(TARGET)
 REPORTS = $(TDIR)/output/$(COMPOSITION)/reports
 PLAN    = $(TDIR)/output/$(COMPOSITION)/PLAN.json
+SYSTEM  = $(TDIR)/compositions/$(COMPOSITION)/SYSTEM.toml
 
 # The gate categories are the COMPOSITION'S, read from the resolved plan, not a constant.
 # They were `content` for the first two compositions and that was fine until a third one
@@ -91,7 +94,8 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
 .PHONY: all build test conformance regression check check-all plan plan-check probe \
         parity clean sdk-parity structure drivers error-codes error-codes-control \
         scale scale-control type-parity glue glue-control \
-        req-coverage req-coverage-control \
+        req-coverage req-coverage-control ext-checks ext-checks-control \
+        expectation expectation-control diff-arms-control \
         citations citations-control \
         build-native test-native \
         conformance-native probe-native
@@ -125,9 +129,18 @@ test:
 # here and it is not only a regression guard: the rust composition moves 6 checks in
 # `type_system` and 3 in `content`, and without a baseline "6 of 446 pass" would be
 # indistinguishable from "the peer already passed them".
+#
+# THE ROUND SET IS CLEARED FIRST, and that `rm -f` is the structural half of AP-22. A
+# report is identified by its FILENAME and written in place, so a `ROUNDS=1` run left the
+# previous run's `-2.json` on disk and the next `ROUNDS=2` diff read a report hours older
+# than round 1 as a round of this run. Twelve of the tree's thirty-four round-sets were in
+# that state when it was found, and the check it hid -- `history/w6_caller_cap_absent` --
+# was reported as FLAKY rather than as a regression. `diff-arms.py` refuses the shape as
+# well; deleting is what makes it unconstructible.
 conformance:
 	@mkdir -p $(REPORTS)
 	@for c in $(CATEGORIES); do \
+		rm -f $(REPORTS)/bare-$$c-*.json $(REPORTS)/composed-$$c-*.json; \
 		for r in $$(seq 1 $(ROUNDS)); do \
 			echo "conformance: $$c round $$r/$(ROUNDS) composed"; \
 			$(RUN) ./tools/host-launch $(TARGET) $(COMPOSITION) \
@@ -139,7 +152,7 @@ conformance:
 				>/dev/null 2>&1 || exit 1; \
 		done; \
 		echo "=== $$c: bare vs composed ==="; \
-		./tools/diff-arms.py \
+		./tools/diff-arms.py --straddle $(SYSTEM) \
 			--bare $$(for r in $$(seq 1 $(ROUNDS)); do echo $(REPORTS)/bare-$$c-$$r.json; done) \
 			--composed $$(for r in $$(seq 1 $(ROUNDS)); do echo $(REPORTS)/composed-$$c-$$r.json; done) \
 			|| exit 1; \
@@ -161,6 +174,7 @@ ROUNDS ?= 2
 
 regression:
 	@mkdir -p $(REPORTS)
+	@rm -f $(REPORTS)/bare-core-*.json $(REPORTS)/composed-core-*.json
 	@for r in $$(seq 1 $(ROUNDS)); do \
 		echo "regression: round $$r/$(ROUNDS) bare"; \
 		$(PODMAN_RUN) -e BARE=1 $(IMAGE) ./tools/host-launch $(TARGET) $(COMPOSITION) \
@@ -169,7 +183,7 @@ regression:
 		$(RUN) ./tools/host-launch $(TARGET) $(COMPOSITION) \
 			-profile core -json-out /church/$(REPO)/$(REPORTS)/composed-core-$$r.json >/dev/null 2>&1; \
 	done
-	./tools/diff-arms.py \
+	./tools/diff-arms.py --straddle $(SYSTEM) \
 		--bare $$(for r in $$(seq 1 $(ROUNDS)); do echo $(REPORTS)/bare-core-$$r.json; done) \
 		--composed $$(for r in $$(seq 1 $(ROUNDS)); do echo $(REPORTS)/composed-core-$$r.json; done)
 
@@ -221,7 +235,76 @@ req-coverage:
 req-coverage-control:
 	./tools/req-coverage.py --self-test
 
-check: build test conformance regression plan-check sdk-parity structure drivers error-codes citations glue req-coverage
+# ── the authored extension checks ───────────────────────────────────────────────
+# Kind C under keystone's VERIFICATION-ARCHITECTURE: authored from the SPEC at the oracle's
+# own normative target, never from its source, and NEVER a conformance verdict -- the
+# operator's standing condition is that an official green requires the suite we do not
+# author. These exist because `make req-coverage` names 11 binding requirements measured by
+# nothing, and a gap that is a list is worth more than a gap that is an argument.
+#
+# The definitions are LANGUAGE-NEUTRAL DATA (`extension-contracts/<ext>/checks/*.toml`);
+# the arm is a transport binding that knows no extension by name. Adding an extension adds
+# data; adding a target adds one arm. Check logic in an arm would be the per-cell quadrant,
+# which `make scale` measures at 96% of the projection.
+#
+# BOTH ARMS ALWAYS. The rule that admits a check is that composed passes and bare does not:
+# a check that reports the same verdict with the extension absent is measuring something
+# else, which is exactly the shape of four of the thirteen checks in the oracle's own
+# `content` category (AP-19). The arms are a `wildcard`, so a new target joins by adding
+# `languages/<t>/gates/ext-checks/run` and never by editing this file.
+EXTCHECK_TARGETS = $(patsubst languages/%/gates/ext-checks/run,%,$(wildcard languages/*/gates/ext-checks/run))
+EXTCHECK_OUT     = output/ext-checks
+EXTCHECK_COMP   ?= content-history
+
+ext-checks:
+	@echo "ext-checks arms: $(EXTCHECK_TARGETS)  composition: $(EXTCHECK_COMP)"
+	@mkdir -p $(EXTCHECK_OUT)
+	./gates/ext-checks/schema.py --emit $(EXTCHECK_OUT)/checks.json
+	@for t in $(EXTCHECK_TARGETS); do \
+		img=$$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])"); \
+		for arm in composed bare; do \
+			echo "=== ext-checks: $$t / $(EXTCHECK_COMP) / $$arm ==="; \
+			bare_env=""; [ "$$arm" = bare ] && bare_env="-e BARE=1"; \
+			$(PODMAN_RUN) $$bare_env \
+				-e CLIENT=./languages/$$t/gates/ext-checks/run \
+				-e EXT_CHECKS_DEFS=/church/$(REPO)/$(EXTCHECK_OUT)/checks.json \
+				-e EXT_CHECKS_OUT=/church/$(REPO)/$(EXTCHECK_OUT)/$$t-$$arm.json \
+				$$img ./tools/host-launch $$t $(EXTCHECK_COMP) || exit 1; \
+		done; \
+	done
+	./gates/ext-checks/compare.py \
+		--expect-arms "$(shell echo '$(EXTCHECK_TARGETS)' | tr ' ' ',')" \
+		--all-targets "$(shell echo '$(TARGETS)' | tr ' ' ',')" \
+		--composition $(EXTCHECK_COMP) \
+		$(EXTCHECK_OUT)/*-composed.json $(EXTCHECK_OUT)/*-bare.json
+
+ext-checks-control:
+	./gates/ext-checks/compare.py --self-test
+
+# ── the temporal baseline ───────────────────────────────────────────────────────
+# AP-18's owed enforcement point. `conformance` and `regression` are two-arm diffs and
+# their baseline is in the ARM, never in TIME -- so a composition that STOPS doing
+# something it used to do reads as `bare FAIL vs composed FAIL`, which is no difference,
+# which is not a regression. `history/w6_caller_cap_absent` went PASS -> FAIL on two
+# targets with every gate in this tree green.
+#
+# `--require` is the no-silent-caps rule, said by the caller that knows: the composition
+# `make check` just ran MUST have reports, or the gate refuses rather than reporting a
+# clean verdict over the other five. A composition with no reports at all is normal on a
+# clean checkout and is reported and counted, never failed -- a false red costs the
+# instrument.
+expectation:
+	./tools/check-expectation.py --require $(TDIR)/compositions/$(COMPOSITION)
+
+expectation-control:
+	./tools/check-expectation.py --self-test
+
+# D15's control for the regression differ itself, which had none until AP-22: it plants
+# an out-of-order round pair (the live 17:41/13:05 shape) and requires the refusal.
+diff-arms-control:
+	./tools/diff-arms.py --self-test
+
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations glue req-coverage
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every

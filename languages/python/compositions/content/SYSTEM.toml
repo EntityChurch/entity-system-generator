@@ -36,3 +36,52 @@ measures_us        = 8
 inattributable     = 4
 declared_skips     = ["frame-limit-respected"]
 skip_cause         = "needs a local/files root to seed >16 MiB of content; not installed in this composition"
+
+
+# ══ [gate.baseline] — THE TEMPORAL BASELINE (AP-18) ═══════════════════════════════════
+#
+# NOT the pre-registration in [gate.expectation] above, and the separation is the whole
+# point. A PREDICTION is written before the run and never edited afterwards — `rs-content`
+# predicted 0 and measured 3, and that miss is kept, because a pre-registered expectation
+# whose misses get edited away is not a pre-registration. A BASELINE is what we last
+# MEASURED, and it is updated deliberately, with a reason, whenever it legitimately
+# changes. Two quantities were living in one block; asserting against the prediction would
+# have made the gate permanently red on a preserved miss, and the locally-reasonable fix
+# for that is to edit the prediction — which destroys the artifact.
+#
+# `improved` is a set of NAMES, not a count: the two-arm diff is blind to a LOST
+# improvement (bare fails it too, so the comparison reads "no difference"), and a count
+# that shrinks by one understates a capability with nothing re-checking in that direction.
+# `history/w6_caller_cap_absent` went PASS -> FAIL on two targets with every gate green.
+#
+# Checked by `tools/check-expectation.py`, in `make check`. Regenerate with `--bless`.
+
+[gate.baseline.content]
+measured = "2026-09-07"   # 2 round(s)
+total    = 13
+composed = { PASS = 12, SKIP = 1 }
+bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
+improved = [
+  "content.get_path_required",
+  "content.handler_manifest",
+  "content.handler_op_get",
+  "content.handler_op_ingest",
+  "content.ingest_path_required",
+  "content.type_blob",
+  "content.type_chunk",
+  "content.type_descriptor",
+]
+
+[gate.baseline.core]
+measured = "2026-09-07"   # 2 round(s)
+total    = 756
+composed = { PASS = 320, WARN = 330, SKIP = 106 }
+bare     = { PASS = 314, WARN = 336, SKIP = 106 }
+improved = [
+  "type_system.type_system_content_blob_fetch",
+  "type_system.type_system_content_blob_match",
+  "type_system.type_system_content_chunk_fetch",
+  "type_system.type_system_content_chunk_match",
+  "type_system.type_system_content_descriptor_fetch",
+  "type_system.type_system_content_descriptor_match",
+]

@@ -1,0 +1,8 @@
+#!/bin/sh
+# languages/python/gates/ext-checks/run — the uniform entry point for this arm.
+#
+# `gates/README.md`: one entry point per (gate x target), the incantation inside the arm
+# where it is one target's business. Invoked by `tools/host-launch` as $CLIENT, with the
+# host already booted and its COMPOSED line already asserted.
+set -eu
+exec python3 "$(dirname "$0")/exec.py" "$@"

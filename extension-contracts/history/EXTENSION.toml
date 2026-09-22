@@ -699,13 +699,15 @@ landed and all three ports began consuming a real execution context. \
 id     = "H-R4"
 text   = "Exclude local peer's `system/history/*` from history recording"
 oracle = []
-note   = """NOTHING MEASURES THIS, and it is a MUST. `grep -i recurs` over the executed corpus \
-returns 0; no check in `history` or any other category writes to a `system/history/*` path and \
-asserts that no transition was recorded for it. §3.2 is the recursion-prevention clause: the \
-recorder writes head pointers into `system/history/head/...`, so a port that failed to exclude its \
-own namespace would record a transition for each head-pointer write, whose head-pointer write \
-records another. Our three ports assert it in their own unit tests, which is our code checking our \
-code (L18). Routed to `entity-core-go` — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
+ours   = ["extension-contracts/history/checks/local-namespace-excluded.toml"]
+note   = """NOTHING UPSTREAM MEASURES THIS, and it is a MUST. `grep -i recurs` over the executed \
+corpus returns 0. §3.2 is the recursion-prevention clause: the recorder writes head pointers into \
+`system/history/head/...`, so a port that failed to exclude its own namespace would record a \
+transition per head-pointer write, whose head-pointer write records another. Our three ports \
+assert it in their own unit tests, which is our code checking our code (L18). **AUTHORED \
+2026-09-07** over the wire instead, with both halves in one run: the ordinary path HAS a \
+transition and the head-pointer path has NONE, so a peer that records nothing fails it too. \
+Routed to `entity-core-go` as G-5 — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
 
 [[conformance.requirement]]
 id     = "H-R5"
