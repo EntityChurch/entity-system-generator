@@ -36,10 +36,21 @@ The two also differ in a way that matters more than input scope:
 
 ## Status
 
-**Bring-up.** Nothing is generated yet. The current work is the install seam — the mechanism by
-which a generated extension handler is bound into a generated peer — which is specified
-(`SDK-OPERATIONS` §11.6) and one delta away from usable. See `docs/DESIGN-THE-GENERATION-MODEL.md`
-and `docs/STATUS.md`.
+**Bring-up.** Nothing is generated yet. The install seam — the mechanism by which a generated
+extension handler is bound into a generated peer — is specified (`SDK-OPERATIONS` §11.6) and has now
+been measured working end to end on one peer; the current work is the structure the generated output
+has to hold.
+
+| | |
+|---|---|
+| `docs/DESIGN-THE-GENERATION-MODEL.md` | how a build runs — the phase model, the dependency graph, the conformance surface |
+| `docs/DESIGN-THE-SYSTEM-STRUCTURE.md` | how 26 extensions × N languages × M compositions stay separable, and the isolation invariants |
+| `docs/DESIGN-THE-COMPOSITION-LOADER.md` | what composition emits: the resolve/refuse algorithm and the init program |
+| `docs/DESIGN-THE-SDK-LAYER.md` | the layer above the handler — the three install models, the four faces of an extension, and what varies by platform |
+| `docs/DESIGN-THE-COMPUTE-TRACK.md` | whether an extension can be written once as a compute expression and run everywhere — what the specification bounds, and what a probe measured |
+| `docs/DESIGN-WHERE-THE-LINE-IS.md` | whose requirement is whose |
+| `gates/README.md` | every gate, and the authority its checks derive from |
+| `docs/STATUS.md` | where this actually is |
 
 ## Licence
 

@@ -5,9 +5,12 @@ an extension actually consists of, how the pieces get wired together, and what h
 
 ---
 
-> **Companion:** `DESIGN-WHERE-THE-LINE-IS.md` — the four-way responsibility split (core protocol ·
+> **Companions.** `DESIGN-WHERE-THE-LINE-IS.md` — the four-way responsibility split (core protocol ·
 > arch · keystone · here · the profile), the consumption modes, and the routing test for gaps. Read
 > that one first if the question is *"whose requirement is this."*
+> `DESIGN-THE-SYSTEM-STRUCTURE.md` — where things live across the three axes, and the ten isolation
+> invariants with their enforcement points. `DESIGN-THE-COMPOSITION-LOADER.md` — what S3.5′ actually
+> emits: the resolve/refuse algorithm, the init program's exact order, and its failure semantics.
 
 ## 1. What we generate is a **system**, not an extension
 
