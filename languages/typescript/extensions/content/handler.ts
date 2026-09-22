@@ -12,6 +12,7 @@ import {
   Entity,
   Envelope,
   HandlerResult,
+  Permissions,
   Status,
   errorResult,
   type ContentStore,
@@ -29,6 +30,9 @@ import { ContentTypes, CONTENT_PATTERN } from "./types.js";
  * both for any batch a caller can request within one frame.
  */
 const FRAME_RESERVE_BYTES = 4096;
+
+/** One `system/hash` in a `found` or `missing` array: 33 bytes plus a 2-byte CBOR header. */
+const HASH_ENTRY_BYTES = 35;
 
 export interface ContentHandlerOptions {
   /**
@@ -104,6 +108,25 @@ export class ContentHandler implements Handler {
         `resource target '${outside}' is outside namespace '${this.#namespace}' (§6.4)`,
       );
     }
+    // §6.4 step 2 — the PATH-SCOPE check, "using `check_path_permission`" against the caller's
+    // capability with handler pattern `system/content`. The prefix compare above is the namespace
+    // this instance serves; it never read the capability, and until 2026-09-12 (cross-port review)
+    // it was the whole of step 2 in all three ports. The peer's own predicate now runs as well.
+    // With no caller capability — an in-process call no wire request can make — there is no grant
+    // to check, as for COMPUTE's eval.
+    const capability = ctx.callerCapability;
+    if (capability !== null) {
+      const uncovered = ctx.resource.targets.find(
+        (t) => !Permissions.checkPathPermission(ctx.operation, t, capability, CONTENT_PATTERN, ctx.peer.localPeerId),
+      );
+      if (uncovered !== undefined) {
+        return errorResult(
+          Status.Forbidden,
+          "capability_denied",
+          `capability does not cover ${ctx.operation} on '${uncovered}' (§6.4 path scope)`,
+        );
+      }
+    }
 
     switch (ctx.operation) {
       case "get":
@@ -133,7 +156,13 @@ export class ContentHandler implements Handler {
     // response-construction time, not a hardcoded 16 MiB literal. `frameBudget()`
     // prefers `connection.maxFrameBytes` and falls back to the peer default only
     // for an in-process dispatch, which has no connection and still needs a number.
-    let remaining = ctx.frameBudget() - FRAME_RESERVE_BYTES;
+    //
+    // EVERY requested hash lands in exactly one of `found` / `missing`, so the two lists together cost
+    // one hash-list entry per request hash — charged here, up front. Until 2026-09-12 (cross-port review)
+    // only a packed entity was charged (its bytes plus its `included` key); the `found` entry beside it and
+    // every `missing` entry rode on the fixed reserve, which a request of ~120 hashes outgrows, so a
+    // response packed close to the budget could exceed the frame §6.2 MUSTs it fit.
+    let remaining = ctx.frameBudget() - FRAME_RESERVE_BYTES - hashes.length * HASH_ENTRY_BYTES;
 
     const found: Uint8Array[] = [];
     const missing: Uint8Array[] = [];

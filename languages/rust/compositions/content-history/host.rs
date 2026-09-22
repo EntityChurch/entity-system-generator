@@ -1,8 +1,7 @@
 //! rust / content-history — the composition host. **The wiring program.**
 //!
 //! One core peer (`entity-core-protocol-rust`, keystone, read-only), two extensions
-//! (CONTENT v3.7 and HISTORY v1.7), and the wiring program that installs what CAN be
-//! installed.
+//! (CONTENT v3.7 and HISTORY v1.10), and the wiring program that installs them.
 //!
 //! Its twins are `../../../typescript/compositions/content-history/host.ts` and
 //! `../../../python/compositions/content-history/host.py`, and the three are worth
@@ -14,39 +13,25 @@
 //! `--debug-open-grants`, one `LISTENING ...` line on stdout — so the same `host-launch`
 //! contract and the same oracle invocation work across all three targets.
 //!
-//! # What this host installs, and the two lines it will not cross
+//! # What this host installs
 //!
-//! **It does not perform CONTENT's or HISTORY's §11.6.1 handler writes.** Measured, both
-//! arms, `gates/host-seam/rust`: `404 handler_not_found` with nothing bound and `501
-//! no_handler_body` with all four bound. `404` is the truth — no handler exists — and
-//! `501` would say one exists and is broken. It would also move a `--profile core` check
-//! for a reason that has nothing to do with either extension.
+//! **Every face of both extensions**, through `install_content` and `install_history` — the other
+//! two ports' calls. Both handlers go in through `Peer::register_handler` (keystone H1).
 //!
-//! **And it does not fabricate a handler grant.** §2.1's autonomous `capability` is "the
-//! handler grant"; there is no mint on this peer and no handler to grant for, so the
-//! recorder identity carries the local identity hash for both `author` and `capability`
-//! and the `COMPOSED` line says `handler_grant=false`. Minting something grant-shaped so
-//! the field looked less degenerate would be making the audit trail claim an authority
-//! that does not exist.
-//!
-//! # What IS installed, and the asymmetry that is this composition's finding
-//!
-//! Types for both extensions, and **HISTORY's emit consumer, which runs**. From the
-//! moment this peer serves, every tree write it accepts is recorded as a §2.1 transition
-//! and the chain is real. Nothing can read it over the wire — §4.3's read paths are
-//! operations on a handler that cannot exist — so `validate-peer -category history` will
-//! score 7 of 34 against a recorder that is working perfectly. The `COMPOSED` line
-//! reports the recorder's own count so a reader has a number that is about the extension
-//! rather than about the oracle's access path.
+//! **This composition was the sharpest case of D13's face amendment**, and the record is kept in
+//! `SYSTEM.toml`: before H1, HISTORY's recorder installed and ran while its read face could not be
+//! installed, so the `history` category scored 7 of 34 against a working recorder, and the host
+//! passed the local identity hash as §2.1's "handler grant" because there was no grant. Now
+//! `register_handler` binds one, `install_history` reads its hash back, and the `COMPOSED` line's
+//! `handler_grant` field reports what was read.
 
 use std::io::Write;
 use std::process::exit;
 use std::sync::Arc;
 
-use entity_content::{install_content_types, ALL_TYPES as CONTENT_TYPES};
+use entity_content::{install_content, ALL_TYPES as CONTENT_TYPES};
 use entity_history::{
-    config_path, history_config, install_history_recorder, install_history_types, RecorderIdentity,
-    ALL_TYPES as HISTORY_TYPES,
+    config_path, history_config, install_history, ALL_TYPES as HISTORY_TYPES,
 };
 
 use entity_core_protocol::peer::transport;
@@ -103,26 +88,11 @@ fn main() {
     // registers no consumer — so for THIS pair the order carries no constraint and is
     // stated anyway.
     //
-    // **The order that DOES matter is inside HISTORY**, and on this target it is the
-    // caller's to get right rather than the extension's. The other two ports register the
-    // consumer inside a single `install_history`, after their own §11.6.1 writes and type
-    // publication. Here the faces install through two calls, so: types first, recorder
-    // LAST. Otherwise the recorder observes its own installation and the audit log opens
-    // with six type writes nobody performed.
-    let content = install_content_types(&peer.store, &local);
-    let history_types = install_history_types(&peer.store, &local);
-
-    // §2.1's autonomous-case identity, captured once. `handler_grant_hash` is the local
-    // identity hash and NOT a grant — see the module doc and
-    // `HistoryRecorderInstallation::handler_grant_available`.
-    let history = install_history_recorder(
-        &peer,
-        RecorderIdentity {
-            local_identity_hash: peer.identity.identity_hash.clone(),
-            handler_grant_hash: peer.identity.identity_hash.clone(),
-            local_peer: local.clone(),
-        },
-    );
+    // **The order that DOES matter is inside HISTORY** — types and handler before the recorder, or
+    // the audit log opens with ten writes nobody performed — and it is inside `install_history`, as
+    // on the other two ports.
+    let content = install_content(&peer, None).unwrap_or_else(|e| die(&format!("install CONTENT: {e}")));
+    let history = install_history(&peer, None).unwrap_or_else(|e| die(&format!("install HISTORY: {e}")));
 
     // ── Composition POLICY: configure history (§6.1, §6.3). ──────────────────
     //
@@ -133,11 +103,11 @@ fn main() {
     // paths". It is also what the oracle requires without saying so: the history category
     // writes to `system/validate/history-ext/*` and never configures history first.
     //
-    // Bound AFTER the consumer is registered, matching the other two ports. The write
-    // fires an event the recorder observes and does not record — there is no config yet
-    // at the moment the config arrives — so the first config write can never be in the
-    // audit trail on any port. A later one can, which is what §3.2 asks for when it says
-    // config paths "SHOULD be recorded as normal transitions for audit purposes".
+    // Bound AFTER the consumer is registered, matching the other two ports. **The write records
+    // itself**: the consumer fires after the bind lands, so the config resolves for its own event,
+    // and §3.2 says config paths "SHOULD be recorded as normal transitions for audit purposes".
+    // This comment said the opposite until 2026-09-12, when `tests/recorder.rs`'s real-seam arm was
+    // first run against `install_history` and measured `recorded == 1` after this one write.
     peer.store.bind(
         &config_path(&local, "everything"),
         &history_config("*", true, None, None, None),
@@ -157,11 +127,12 @@ fn main() {
     // the PEER.
     let stats = history.recorder.stats();
     eprintln!(
-        "COMPOSED extensions=CONTENT,HISTORY types={} of {} handler=NOT-INSTALLABLE \
-         (see gates/host-seam/rust) consumers=1 context_available={} handler_grant={} \
-         recorded={} observed={}",
-        content.type_paths.len() + history_types.type_paths.len(),
+        "COMPOSED extensions=CONTENT,HISTORY types={} of {} handlers={},{} \
+         consumers=1 context_available={} handler_grant={} recorded={} observed={}",
+        content.type_paths.len() + history.type_paths.len(),
         CONTENT_TYPES.len() + HISTORY_TYPES.len(),
+        content.pattern,
+        history.pattern,
         history.context_available(),
         history.handler_grant_available,
         stats.recorded,
@@ -170,7 +141,7 @@ fn main() {
     for path in content
         .type_paths
         .iter()
-        .chain(history_types.type_paths.iter())
+        .chain(history.type_paths.iter())
     {
         eprintln!("COMPOSED   bind {path}");
     }

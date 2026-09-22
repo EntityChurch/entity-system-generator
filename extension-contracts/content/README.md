@@ -47,12 +47,13 @@ The toolchain is **not** in the cell either. It is `languages/<target>/profile.t
 | **Chunking** (§3.2, §3.6) | fixed-size and FastCDC/NC2, gear table per §3.6.1 |
 | **Emit consumer** | **none, and that is correct.** CONTENT registers no emit consumer — "consumer" in this spec means a client of content. That face arrives with HISTORY. |
 
-**Implemented is not the same as installed, and the third port is where they came apart.** On
-`rust` the handler is written and unit-tested and **cannot be installed at any visibility** —
-`501 no_handler_body` with all four §11.6.1 tree writes bound, `404` with none, and the body
-answering `200` when called directly with its invocation counter still at zero. The types face
-installs there and the handler face does not. See `arch/AUTHORING-NOTES.md` §2.0, and D13 in
-`AGENTS.md`, which now requires a capability claim to name **which face** it is about.
+**Implemented is not the same as installed, and the third port is where they came apart.** Until
+keystone landed H1 on the `rust` peer on 2026-09-12, the handler there was written and unit-tested
+and **could not be installed at any visibility** — `501 no_handler_body` with all four §11.6.1 tree
+writes bound, `404` with none. `install_content` now installs it through `Peer::register_handler`,
+and all four faces install on all three targets. The earlier state is recorded in
+`arch/AUTHORING-NOTES.md` §2.0; D13 in `AGENTS.md` still requires a capability claim to name
+**which face** it is about.
 
 Not implemented, declared rather than silent: **namespace-scoped topology (§6.4.2 Hash Tree
 Presence)**. This composition runs single-trust-domain, which §6.4.1 makes opt-in and restricted.
@@ -66,9 +67,8 @@ wrapper."*
 
 So the algorithm is module-private (the `internal/` half of the cell, spelled three ways
 above), absent from the public entry point, and
-the only public route is `reassembleUnderCapability(ctx, blobHash)` — which takes a handler context
-a consumer cannot manufacture, because the dispatcher builds one only after `check_permission`
-returned ALLOW.
+the only public route is `reassembleUnderCapability(ctx, blobHash)` — a wrapper that, on review
+(2026-09-12), checks no capability on any port; see `EXTENSION.toml [substrate.capability_wrapper]`.
 
 **The enforcement point is not that paragraph** — a MUST with no check is a sentence. And **§3.4
 turns out to be TWO clauses that do not move together**, which two substrates could not have shown:
@@ -78,14 +78,15 @@ turns out to be TWO clauses that do not move together**, which two substrates co
 | boundary | the `exports` map in `package.json` | convention: `_internal`, `__all__`, a test | `mod internal;` with no `pub` |
 | enforced by | **node**, at resolve time | **nothing** | **rustc**, at compile time |
 | clause 1 — do not expose it | ENFORCED | CONVENTION ONLY | **strongest**: `error[E0603]`, no dynamic route |
-| clause 2 — capability-checking wrapper | dispatcher-anchored | dispatcher-anchored | **weakest**: crate-anchored only |
+| clause 2 — capability-checking wrapper | caller-constructible context, no capability check | caller-constructible context, no capability check | crate-anchored token (unforgeable), no capability check |
 | the check asserts | the module resolver's refusal | the convention holds **and can be walked around** | a compile that must FAIL, with a control that must compile |
 
 Two cells are not jokes. `test_export_surface.py` deliberately imports
 `entity_content._internal.reassemble` and asserts it works, so that port's §3.4 claim cannot be read
-as equivalent to the others'. And `rust`'s clause-2 cell is the inverse: there is no dispatcher-built
-value to demand — the peer's context type is private and unconstructible — so `DispatchAuthority`
-proves *"you came through this crate's handler"*, **not** *"the dispatcher authorized you"*.
+as equivalent to the others'. And `rust`'s clause-2 cell: `DispatchAuthority` proves *"you came
+through this crate's handler"*, **not** *"the dispatcher authorized you"*. It was written when the
+peer had no dispatcher-built context to demand; since keystone's H1 (2026-09-12) it has one, and
+the wrapper has not been changed to require it.
 
 Recorded as `[substrate.export_boundary]` and `[substrate.capability_wrapper]` — two blocks, because
 reporting one verdict for two requirements that invert between substrates is the D13 error one level
@@ -97,7 +98,7 @@ up.
 |---|---|---|---|---|
 | `typescript` | `ts-content` | 31 | yes | `languages/typescript/compositions/content/status/CONFORMANCE-2026-09-05.md` |
 | `python` | `py-content` | 38 | yes | `languages/python/compositions/content/status/CONFORMANCE-2026-09-06.md` |
-| `rust` | `rs-content` | 40 + a compile that must fail | **no** | `languages/rust/compositions/content/status/CONFORMANCE-2026-09-06.md` |
+| `rust` | `rs-content` | 40 + a compile that must fail | yes, since keystone H1 (2026-09-12) | `languages/rust/compositions/content/status/CONFORMANCE-2026-09-06.md` (pre-H1) |
 
 **No port is a translation of another.** All three are transcriptions of the same pinned snapshot,
 deliberately: a translation of our own first port would agree with it by construction and tell us
@@ -106,7 +107,8 @@ and which are ours — and §2.5 says which of the two-column rows survived the 
 
 ## Conformance
 
-Of the oracle's 13 `content` checks, on `typescript` and `python`: **8 measure this MODULE and 8
+Of the oracle's 13 `content` checks, on `typescript` and `python` (and on `rust` since keystone's
+H1, 2026-09-12; `languages/rust/compositions/content/SYSTEM.toml` baseline): **8 measure this MODULE and 8
 pass**; 4 more pass without contacting the peer at all; 1 skips for want of a `local/files` root.
 Never cite it as `13P·0F` or as a percentage — a skip counts as a failure, and 12 passes is not 12
 measurements of us.

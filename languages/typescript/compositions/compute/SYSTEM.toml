@@ -57,7 +57,7 @@ evaluator     = "installed"
 
 [gate]
 oracle     = "entity-core-go validate-peer"
-categories = ["compute"]
+categories = ["compute", "entity_native"]
 profiles   = ["core"]
 
 # ── [gate.expectation] — PRE-REGISTERED, and this one has a measured basis ──────────
@@ -279,6 +279,27 @@ reaches, and that number is one of the two things this build exists to produce.
 # policy the two readings diverge — see `[substrate.seed_policy_surface]` in the contract,
 # and note the bare arm is keystone's own binary and cannot follow us off the flag.
 
+# ── `entity_native` — ADDED 2026-09-12 (second session), PRE-REGISTERED BEFORE ITS FIRST RUN ─────
+#
+# `validate-peer`'s `entity_native` category (13 checks, `cmd/internal/validate/entity_native.go`
+# @ 78db4a9) measures §3.2 E1 — the H7 evaluator face — and it sits OUTSIDE `--profile core`, so no
+# run in this tree had ever reached it. The contract row that read "§3.2 ... Not measured here" was
+# a statement about the categories WE declare, not about the oracle (D22). Found by the compute-arc
+# review. Five checks have a `compute/literal` body the PEER answers before any evaluator is asked,
+# so they read the same in both arms by construction: `dispatch_basic`, `hot_swap_expression`,
+# `missing_grant_fail_closed`, `empty_handler_grant_dispatches`, `dispatch_with_deliver_to`.
+# `result_unwrapped` is also a literal body and FAILS in both arms on every keystone peer: the
+# peer's literal floor returns a `compute/result` wrapper (§3.2 E1 says unwrap) — keystone's, routed.
+#
+#   PREDICTED improvements (5): scope_params, scope_operation, multiple_operations (E1's scope, bound
+#   2026-09-12), lookup_tree_within_scope, and dual_check_both_pass — THE LAST FOR THE WRONG REASON:
+#   it asserts only `status == 200`, and this port answers handler mode with a `compute/error` VALUE
+#   at 200 (F10). PREDICTED to stay FAIL: lookup_tree_outside_scope (this seam carries no handler
+#   grant to narrow by) and dual_check_handler_grant_blocks (no handler mode). 0 regressions.
+#   MEASURED 2026-09-12 (UTC 09-13), ROUNDS=2: RIGHT, EXACTLY — the 5 named, and the two predicted to stay
+#   FAIL did. Peer-level: this host PASSES `missing_grant_fail_closed` (the other two do not) and fails
+#   `result_unwrapped` / `dispatch_with_deliver_to` in both arms. Routed (keystone, packet d).
+
 # ── [compute] — what the composition configures ─────────────────────────────────────
 [compute]
 # §9.3's recommended limits, taken as-is. §10.4 makes both implementation-defined and
@@ -341,7 +362,7 @@ routed = "docs/status/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-v
 
 # ── languages/typescript/compositions/compute
 [gate.baseline.compute]
-measured = "2026-09-11"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 128
 composed = { PASS = 125, FAIL = 3 }
 bare     = { FAIL = 128 }
@@ -475,7 +496,7 @@ improved = [
 
 # ── languages/typescript/compositions/compute
 [gate.baseline.core]
-measured = "2026-09-11"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 777
 composed = { PASS = 398, WARN = 272, SKIP = 107 }
 bare     = { PASS = 335, WARN = 335, SKIP = 107 }
@@ -543,4 +564,17 @@ improved = [
   "type_system.type_system_compute_store_args_match",
   "type_system.type_system_compute_subgraph_fetch",
   "type_system.type_system_compute_subgraph_match",
+]
+
+[gate.baseline.entity_native]
+measured = "2026-09-13"   # 2 round(s)
+total    = 13
+composed = { PASS = 9, FAIL = 4 }
+bare     = { PASS = 4, FAIL = 9 }
+improved = [
+  "entity_native.dual_check_both_pass",
+  "entity_native.lookup_tree_within_scope",
+  "entity_native.multiple_operations",
+  "entity_native.scope_operation",
+  "entity_native.scope_params",
 ]

@@ -115,7 +115,7 @@ fn normalise(v: &Value, out: &mut String) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
-        eprintln!("usage: probe <content|history>");
+        eprintln!("usage: probe <content|history|compute>");
         std::process::exit(2);
     }
     let ext = args[1].as_str();
@@ -127,8 +127,9 @@ fn main() {
     let entities: Vec<(&'static str, entity_core_protocol::peer::model::Entity)> = match ext {
         "content" => entity_content::types::content_type_entities(),
         "history" => entity_history::types::history_type_entities(),
+        "compute" => entity_compute::types::compute_type_entities(),
         other => {
-            eprintln!("REFUSING: unknown extension {other:?}; expected content|history");
+            eprintln!("REFUSING: unknown extension {other:?}; expected content|history|compute");
             std::process::exit(2);
         }
     };

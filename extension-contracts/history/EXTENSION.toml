@@ -1,7 +1,10 @@
 ## EXTENSION.toml — HISTORY
 ##
-## The machine-readable contract, against `shared/spec-data/history-v1.8/EXTENSION-HISTORY.md`
-## (sha256 0a6346043cab5abff2a254bbd3e27db9f48100af3df3a28f0d083cb6eaabb919).
+## The machine-readable contract, against `shared/spec-data/history-v1.10/EXTENSION-HISTORY.md`
+## (sha256 11de3057555e64ba8e0f9fb2cb285efe81184a800274680bae8abbfc23029c29).
+##
+## The v1.8 notes below are kept as the record of that re-pin. The derivation argument they make
+## closed at v1.10, when the §3.3 header landed: `[contract]` is now transcribed (see its block).
 ##
 ## RE-PINNED v1.7 -> v1.8 on 2026-09-08. See `shared/spec-data/history-v1.8/MANIFEST.md` for the
 ## whole delta. Three of the changes are readings WE routed, landing as spec text; one is a
@@ -209,9 +212,19 @@ note       = "§7.5 is the security clause: rollback may only restore an entity 
 [assumptions]
 event_vocabulary = { value = "modified -> updated", cite = "§2.1 event table vs core §6.10", note = "THE SPEC AND THE PEER DISAGREE ON A STRING. HISTORY §2.1's event table is created/updated/deleted/accessed; the core emit pathway's TreeChangeEvent eventType is created/modified/deleted (all three peers, measured). `updated` and `modified` are the same event under two names. We map at the consumer boundary and record §2.1's spelling in the transition, because §2.1 is what the transition entity's schema says and the oracle's `chain_latest_event_updated` check reads it. Routed to arch as a naming-alignment note, NOT as a blocker." }
 default_events   = { value = ["created", "updated", "deleted"], cite = "§2.2 'Default events' + §5.1", note = "accessed is opt-in; see [substrate.accessed_event]" }
+max_walk         = { value = "query: 1000 transitions per call (DEFAULT_MAX_WALK); is_in_history: uncapped", cite = "§2.3 limit (default 50, unbounded above) + §4.3.1 walk + §4.3.2 is_in_history", note = """
+A LOCAL BOUND THE SPEC DOES NOT HAVE, DECLARED HERE BECAUSE ALL THREE PORTS CITED THIS ENTRY AND IT DID NOT EXIST
+(`git log -S"max_walk ="` on this file: never written; found by the 2026-09-12 cross-port review). `query`'s
+`limit` is caller-supplied and unbounded above, so `limit: 2^53` would walk and materialise the whole chain; the
+ports stop at 1000 transitions and set `has_more`, which is §4.3.1's own continuation signal, so a caller loses no
+reachable state. **`is_in_history` is NOT capped**, and it was until the same review: a cap there turned a real
+rollback target deeper than 1000 transitions into a false `404 not_in_history`, breaking §4.3.2's MUST with no
+continuation available. The chain is content-addressed and cannot cycle. Candidate for arch: §2.3's `limit` has no
+upper bound and §4.3.1 names no server-side one.
+""" }
 
 default_limit    = { value = 50, cite = "§2.3 'Maximum transitions to return. Default: 50'" }
-timestamp_source = { value = "wall-clock ms since epoch, from the host", cite = "§2.1 timestamp + §5.1 system_clock_ms()", note = "§2.1's `clock` field is ABSENT in our transitions: it is `optional: true` and explicitly 'Absent when the clock extension is not installed'. CLOCK is not in this composition. The oracle's `transition_clock_structured` check is therefore expected to SKIP or pass vacuously -- recorded so a pass is not read as evidence we implemented it." }
+timestamp_source = { value = "wall-clock ms since epoch, from the host", cite = "§2.1 timestamp + §5.1 system_clock_ms()", note = "§2.1's `clock` field is ABSENT in our transitions: it is `optional: true` and explicitly 'Absent when the clock extension is not installed'. CLOCK is not in this composition. The oracle's `transition_clock_structured` check WARNs on all three targets (`languages/rust/compositions/content-history/SYSTEM.toml`, MEASURED 2, names it as the WARN in the tally the other two ports share) -- recorded so that result is not read as a statement about our transitions beyond the absent field." }
 specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.8 MUST (HIST-R13/HIST-R14)", note = """NO LONGER AN ASSUMPTION -- v1.8 settled it, and settled it the way our own test docstring had already derived. At v1.7 we implemented the tuple, implemented HIST-CONFIG-SPECIFICITY-1 as a unit test in both insertion orders, and recorded in that test that v1.7's worked pair (`a/b/c/d` vs `a/*/c/*/e`) names no path both patterns match -- because a mid-path `*` is not one of core §5.4's three wildcard forms -- and that consequently "scalar and tuple can never disagree on a pair core §5.4 can express". v1.8 RETRACTS that pair for that reason, proves the same non-constructibility by cases over §5.4's three admissible families, and keeps the MUST as forward-looking: "A specification that claimed otherwise would be asking implementers to defend against a case they cannot write a test for." It replaces the vector with `a/b/*` vs `a/*` at `a/b/c` (key 1 separates) and ADDS HIST-CONFIG-SPECIFICITY-2, `*` vs `/*/a/*` at `a/b`, where key 1 ties at 1 and ONLY KEY 2 SEPARATES -- the case v1.7 had no equivalent of. Both are now unit tests in all three ports, both insertion orders, and all three passed on the first run with no code change. Still measured by nothing upstream: see [conformance] HIST-R13.""" }
 
 # ── [substrate] — MUSTs whose satisfiability differs per peer, measured per peer ─────────
@@ -223,7 +236,14 @@ specificity      = { value = "three-key tuple (literal segments, total depth, le
 # pathway delivers with the event. On all three peers, it does not.
 [substrate.execution_context]
 must = "§2.1 + §9.1 MUST -- record `author` and `capability` (and SHOULD `handler`, `operation`, `chain_id`) from the execution context delivered with the tree-change event (§5.1, SYSTEM-COMPOSITION §1.4)"
-typescript = "FIELD PRESENT, NEVER POPULATED"
+# UPDATED 2026-09-12. Keystone landed H8 on all three peers on 2026-09-07: each tree-change event now
+# has a context slot, filled on the dispatch path and empty for an autonomous write (typescript
+# `HandlerContext.emitContext()`, python `ExecContext`, rust `TreeChangeEvent.context:
+# Option<ExecContext>`). The three row values below are that source read; what a running peer
+# actually delivers is reported by the recorder's `context_observed()`, never declared. The
+# comments under each value describe the pre-H8 state and are kept as the record.
+typescript = "CONTEXT SLOT, FILLED ON DISPATCH (H8)"
+                                     # WAS "FIELD PRESENT, NEVER POPULATED":
                                      # `EmitContext` (src/emit/emit-bus.ts:11) declares chainId,
                                      # parentChainId, author, callerCapability, requestId, bounds,
                                      # cascadeDepth, handlerGrant, handlerPattern, operation --
@@ -248,9 +268,13 @@ typescript = "FIELD PRESENT, NEVER POPULATED"
                                      # -- the comma was inside `abs(ctx, pattern)`. Corrected, and
                                      # the type-level check above is why the conclusion did not
                                      # move.) So every event carries `context: null`.
-python     = "NO CONTEXT FIELD"      # `TreeEvent` is (event_type, path, new_hash, previous_hash).
+python     = "CONTEXT SLOT, FILLED ON DISPATCH (H8)"
+                                     # WAS "NO CONTEXT FIELD":
+                                     # `TreeEvent` is (event_type, path, new_hash, previous_hash).
                                      # The dataclass is frozen+slots; there is no slot to fill.
-rust       = "NO CONTEXT FIELD"      # `TreeChangeEvent` is (event_type, path, new_hash,
+rust       = "CONTEXT SLOT, FILLED ON DISPATCH (H8)"
+                                     # WAS "NO CONTEXT FIELD":
+                                     # `TreeChangeEvent` is (event_type, path, new_hash,
                                      # previous_hash) -- peer/store.rs:34-39, all four fields
                                      # `pub`, and there is no fifth. PORTED 2026-09-07 and the
                                      # row is unchanged by it: the fallback fires on every write,
@@ -284,6 +308,12 @@ installed consumer with a witness carrying both a request field and registration
 an identical peer without the consumer answers the follow-up GET 404.
 """
 consequence = """
+**SUPERSEDED BY H8 (2026-09-07); THE REST OF THIS TEXT IS THE PRE-H8 RECORD.** A write that arrives
+through dispatch now carries its context and is recorded with provenance `"context"`; §2.1's
+autonomous reading is taken only for writes with no context, which are autonomous. The `provenance`
+field and the fallback below still exist for that case. The four `context_*` checks remain presence
+checks (HIST-R3's gap).
+
 THE FOUR ORACLE CHECKS THAT READ THESE FIELDS CANNOT PASS FROM EVENT DATA ON ANY OF THE THREE:
 `context_author_present`, `context_capability_present`, `context_handler_present`,
 `context_operation_present` (entity-core-go cmd/internal/validate/history.go:43-46).
@@ -346,7 +376,8 @@ python     = "THE PEER'S OWN FUNCTION"
                                      # oracle never drives), a planted-defect run in which
                                      # 3 of them go red, and conformance unchanged at
                                      # 0 reg / 32 imp on a REBUILT stage.
-rust       = "REBUILT FROM check_permission"
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record.
+rust       = "THE PEER'S OWN FUNCTION"   # capability::check_path_permission (H9), called with "system/tree"; the carrier and its local-frame limit are gone
                                      # PORTED 2026-09-07. Same answer as `python`, and the
                                      # agreement is the finding: THERE IS NO
                                      # `check_path_permission` ON TWO OF THE THREE PEERS.
@@ -391,9 +422,10 @@ that answers the question; it just did not have the one §4.2 names.
 §6.3's function. One peer exports it and one does not, so an extension author following §4.2
 literally can implement it on one substrate and not the other. Routed to keystone.
 
-**H9 CLOSED ON `python` 2026-09-09; `rust` IS THE OPEN HALF.** Keystone answered the routing
-by making the primitive public on `python` (`d9713a9b`), so two of three ports now call the
-function §4.2 names and this row reads `2 of 3`, not `1 of 3`.
+**H9 CLOSED ON `python` 2026-09-09 AND ON `rust` 2026-09-12.** Keystone answered the routing
+by making the primitive public on `python` (`d9713a9b`), and later on `rust`
+(`capability::check_path_permission`, keystone `dev` 029d1c7), so all three ports now call the
+function §4.2 names. Between those dates this row read `2 of 3`.
 
 **Two corrections came back with it, and both are ours.** Keystone VERIFIED the facade packet
 rather than filing it, and found (a) `typescript`'s `checkPathPermission` IS reachable across
@@ -420,7 +452,8 @@ typescript = "READ BACK FROM THE TREE"
                                      # composition reports rather than passes off as a grant.
 python     = "THE MINTED TOKEN"      # `peer.mint_token(...)` is public; `install_history`
                                      # keeps the token it just minted and uses `token.hash`.
-rust       = "NONE. THERE IS NO GRANT AND NO MINT."
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record.
+rust       = "READ BACK FROM THE TREE"   # register_handler binds a self-issued grant at system/capability/grants/system/history; install_history reads its hash and the recorder stamps it. tests/sdk.rs asserts it is not the identity hash.
                                      # `Peer` exposes exactly two public methods -- `create`
                                      # and `dispatch`. `mint_token`, `grant_val` and
                                      # `owner_grants` are all private. And there is nothing to
@@ -428,7 +461,14 @@ rust       = "NONE. THERE IS NO GRANT AND NO MINT."
                                      # `system/history` grant would be honoured by anything
                                      # even if one could be minted.
 consequence = """
-THE HOST PASSES THE LOCAL IDENTITY HASH FOR BOTH `author` AND `capability`, SO THEY ARE THE SAME
+**ON ALL THREE PORTS THE AUTONOMOUS `capability` IS NOW A REAL GRANT.** Since keystone's H1
+(2026-09-12), `install_history` on `rust` reads back the grant `register_handler` bound and sets
+`HistoryInstallation.handler_grant_available` from whether it found one;
+`languages/rust/extensions/history/tests/sdk.rs` asserts it
+is `true` and that the grant hash differs from the identity hash. The composition's `COMPOSED` line
+prints `handler_grant=`. The rest of this text is the record of the state before H1.
+
+WAS: THE HOST PASSES THE LOCAL IDENTITY HASH FOR BOTH `author` AND `capability`, SO THEY ARE THE SAME
 BYTES ON EVERY TRANSITION THIS PEER RECORDS.
 
 That is one step weaker than the other two ports' fallback, which is already a fabrication: there,
@@ -455,8 +495,15 @@ two ports only ever had to report one.
 must = "nothing. §4.3's read operations are the extension's own, and the oracle's `history` category reaches transitions ONLY through `system/history:query` -- six call sites through one helper (entity-core-go cmd/internal/validate/history.go)."
 typescript = "the handler installs, so the category measures the recorder THROUGH it"
 python     = "same"
-rust       = "THE WRITE FACE INSTALLS AND THE READ FACE CANNOT"
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record.
+rust       = "the handler installs, so the category measures the recorder THROUGH it"
 consequence = """
+**SINCE 2026-09-12 THIS ROW READS THE SAME ON ALL THREE PORTS.** Keystone landed H1 on `rust`, the
+read face installs through `install_history`, and the `history` category measures the recorder
+through `system/history:query` there too: 32 PASS / 1 WARN / 1 FAIL of 34, the other two ports'
+tally (oracle 78db4a9; `languages/rust/compositions/content-history/SYSTEM.toml`, MEASURED 2). The
+text below is the record of the 2026-09-07 port, when the read face could not install.
+
 **THIS IS THE FINDING OF THE THIRD PORT AND IT IS SHARPER THAN CYCLE 1'S.**
 
 `rust x CONTENT` established D13's amendment -- an extension's four faces do not get one answer on
@@ -789,6 +836,12 @@ required = [
   "type:recorder_stats",
   "type:specificity",
   "type:transition_context",
+  # ── PROMOTED BACK TO `required` 2026-09-12 (second session). The install call and its return
+  # were substrate-conditional while `rust` could not host the handler face (`register_handler`
+  # private) — a call that meant "installed" on two peers and "partly installed" on the third.
+  # Keystone landed H1 on `rust` for K-9, all three ports export the name, and the gate reported
+  # the old declaration as a failure on its first run afterwards, which is the refusal working.
+  "fn:install_history", "type:history_installation",
 ]
 
 # Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate forces it.
@@ -798,46 +851,17 @@ required = [
 ports  = ["typescript"]
 reason = "the options-object constructor idiom. `python` takes `max_walk` as a keyword argument and `rust` has a `HistoryHandler::with_max_walk` constructor — the same configuration with no type to name. Not a choice a port can make differently without stopping being idiomatic."
 
-# ── THE THIRD PORT, 2026-09-07. `install_history` did not survive it. ────────────────
+# ── THE THIRD PORT, 2026-09-07 — AND ITS REVERSAL, 2026-09-12 ──────────────────────
 #
-# `fn:install_history` and `type:history_installation` were `required` for two ports and
-# are now substrate-conditional, for the reason CONTENT's `install_content` already is:
-# the function installs the HANDLER face, and on `entity-core-protocol-rust` that face has
-# no install path at any visibility. Measured, both arms, `languages/rust/gates/host-seam`.
-#
-# **The `rust` names are DIFFERENT names, not a narrower version of the same one**, and
-# that is the rule CONTENT set: a caller must not be able to write one call that means
-# "installed" on two peers and "partly installed" on a third. What is new here is that
-# HISTORY installs TWO faces on this peer rather than CONTENT's one, so there are two
-# functions and each is named for the face it installs.
-
-[sdk_surface.substrate."fn:install_history"]
-ports  = ["typescript", "python"]
-reason = "installs the handler face (§11.6.1 writes + the executable body) alongside types and the consumer. `rust` cannot: 501 no_handler_body with all four tree writes bound, 404 with none, and register_handler/Peer::handlers/Outcome are all private (error[E0624]/[E0609]/[E0603]). languages/rust/gates/host-seam."
-
-[sdk_surface.substrate."type:history_installation"]
-ports  = ["typescript", "python"]
-reason = "the return of install_history; same cause."
-
-[sdk_surface.substrate."fn:install_history_types"]
-ports  = ["rust"]
-reason = "one of the TWO install faces that work on that peer. Store::bind is public; the handler container is not."
-
-[sdk_surface.substrate."type:history_type_installation"]
-ports  = ["rust"]
-reason = "the return of install_history_types; same cause."
-
-[sdk_surface.substrate."fn:install_history_recorder"]
-ports  = ["rust"]
-reason = "the OTHER install face that works there — Store::register_tree_consumer is public and live (host-seam arms D-I). On the other two ports the consumer is registered inside install_history, so there is no separate name. It takes `&Arc<Peer>` and holds a Weak: a closure capturing Arc<Peer> would be owned by that peer's own store, which is a reference cycle a process-lifetime host would never notice."
-
-[sdk_surface.substrate."type:history_recorder_installation"]
-ports  = ["rust"]
-reason = "the return of install_history_recorder. Carries `context_available` AND `handler_grant_available`; the other two ports' HistoryInstallation carries only the first, because only on this peer is §2.1's 'handler grant' without a referent."
+# `install_history` was demoted from `required` at the third port, because `rust` had no install
+# path for the handler face and one call must not mean "installed" on two peers and "partly
+# installed" on a third. `rust` shipped `install_history_types` and `install_history_recorder`
+# instead. Keystone landed H1 on `rust` for K-9; the split names are gone and `install_history` is
+# `required` again (see the note in the list above).
 
 [sdk_surface.substrate."type:carried_context"]
 ports  = ["rust"]
-reason = "SYSTEM-COMPOSITION §1.4's inventory as a named shape. `typescript` reads `ev.context`, whose type the PEER declares (EmitContext); `python`'s event has no context field and its build_context takes a dict. Here there is neither a peer type to name nor a structural one to pass, so the shape a peer would have to deliver is declared by us. Nothing on any peer constructs one."
+reason = "SYSTEM-COMPOSITION §1.4's inventory as a named shape: the recorder's projection of the peer's `ExecContext` (H8), built per event by `carried_from_exec`. `typescript` passes the peer-declared `EmitContext` straight to `buildContext`; `python` passes a dict from `exec_context_fields`. Neither needs a name of ours. (Corrected 2026-09-12: this read \"nothing on any peer constructs one\", which stopped being true when H8 landed.)"
 
 [sdk_surface.substrate."type:config_lookup"]
 ports  = ["rust"]
@@ -845,11 +869,11 @@ reason = "the return of resolve_config. `typescript` returns an inline object li
 
 [sdk_surface.substrate."type:handler_request"]
 ports  = ["rust"]
-reason = "there is no dispatch context type to receive. The peer passes (&mut Conn, &Envelope) to private code, so the shape a §11.6.1 body would need is ours to declare. Identical to CONTENT's row of the same name, in a second extension — which is the second incident in the same shape, and makes it a peer fact rather than one extension's workaround."
+reason = "a third party cannot construct the peer's `HandlerContext` (its fields are `pub(crate)`), so the body is written against a request shape of ours and the unit tests reach it through that; the `Handler` impl builds one from the context on the dispatch path. The other two ports' tests construct the peer's own context. Was: \"there is no dispatch context type\" — true until keystone H1 (2026-09-12)."
 
 [sdk_surface.substrate."type:history_outcome"]
 ports  = ["rust"]
-reason = "the peer's own `Outcome` is a bare struct with no `pub` — error[E0603]. The cell cannot name it, construct it, or return it, so it defines its own. D13's Export layer as a compile error rather than a review finding. CONTENT's `type:content_outcome` is the same row; two extensions, one cause."
+reason = "the body's own return shape, mapped one-for-one onto the peer's `HandlerResult` at the dispatch boundary. It existed because `Outcome` was private (E0603); `HandlerResult` is public since keystone H1, so this is now a CANDIDATE FOR REMOVAL rather than a substrate fact — kept only because the unit tests assert on it. Undecided, recorded. CONTENT's `type:content_outcome` is the same row."
 
 # Class 3 — DRIFT. Measured, dated, NOT blessed; `--strict-drift` makes each an error.
 #
@@ -939,8 +963,8 @@ oracle = ["head_pointer_set"]
 gap    = """PARTIAL — the check reads the head pointer out of the QUERY RESULT ("head pointer set \
 in query result"), not out of the tree at `system/history/head/{path}`. The path clause is the \
 half that matters for interop: it is how another extension or another peer finds the head without \
-going through this extension's handler, and on `rust` — where the handler face is not installable \
-— it is the ONLY way. Unmeasured."""
+going through this extension's handler. (Until keystone's H1 on 2026-09-12 it was also the only way on \
+`rust`, where the handler face could not be installed.) Unmeasured."""
 
 [[conformance.requirement]]
 id     = "HIST-R3"

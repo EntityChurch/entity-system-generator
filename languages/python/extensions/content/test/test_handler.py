@@ -319,3 +319,41 @@ def test_closure_distinguishes_complete_missing_chunk_and_blob_not_found():
 
     absent = ensure_closure(peer.store, bytes(33))
     assert not absent.complete and absent.code == "blob_not_found"
+
+
+# ── §6.4 step 2 — in-process, because the wire cannot isolate it ────────────────────
+
+
+def test_a_target_the_capability_does_not_cover_is_403_even_inside_the_namespace():
+    """§6.4 step 2 — the PATH-SCOPE check, ``check_path_permission`` with handler pattern
+    ``system/content``. In-process on purpose: over the wire the dispatcher's step-1 resource
+    check refuses the same request first, so a wire test passes with our clause deleted (D15's
+    sharpened clause — the control must remove the SUBJECT). CONTROL: a covering grant proceeds.
+    """
+    from entity_core.peer.handlers import DispatchCtx
+    from entity_core.peer.wire import make_execute
+
+    peer = Peer(HOST_SEED, open_grants=True)
+    install_content(peer)
+    handler = peer.handlers[CONTENT_PATTERN]
+
+    def grant(resource: str) -> Entity:
+        return Entity.make("system/capability/token", {"grants": [{
+            "handlers": {"include": [CONTENT_PATTERN]},
+            "resources": {"include": [resource]},
+            "operations": {"include": ["get"]},
+        }]})
+
+    exec_e = make_execute("r-64", "/" + peer.local_peer + "/" + CONTENT_PATTERN, "get",
+                          Entity.make(GET_REQUEST, {"hashes": []}),
+                          resource=resource_target(CONTENT_PATTERN + "/private/x"))
+
+    def call(token: Entity):
+        ctx = DispatchCtx(exec=exec_e, conn=None, included={}, caller_cap=token, has_cap=True,
+                          handler_pattern=CONTENT_PATTERN)
+        return handler.handle_op("get", ctx)
+
+    denied = call(grant(CONTENT_PATTERN + "/public/*"))
+    assert denied.status == 403
+    assert denied.result.text("code") == "capability_denied"
+    assert call(grant(CONTENT_PATTERN + "/*")).status == 200, "control: a covering grant proceeds"

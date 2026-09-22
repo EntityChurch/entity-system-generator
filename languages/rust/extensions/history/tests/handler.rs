@@ -1,17 +1,14 @@
 //! §4.3 `query` and `rollback`, driven DIRECTLY.
 //!
-//! **These operations cannot be dispatched on this peer**, so every assertion here is
-//! ours and none of them is a conformance claim. `gates/host-seam/rust` measured why:
-//! `501 no_handler_body` with all four §11.6.1 tree writes bound, `404` with none, and
-//! `register_handler` / `Peer::handlers` / `Outcome` all private. The other two ports
-//! drive these same algorithms over the wire and `validate-peer` scores them; here the
-//! oracle never reaches this code.
+//! These tests call the body through `HandlerRequest`, because a third party cannot construct
+//! the peer's `HandlerContext` (its fields are `pub(crate)`). Over the wire the same body is
+//! installed by `install_history` through `Peer::register_handler` (keystone H1) and the
+//! oracle's `history` category scores it; these assertions are ours and are not a
+//! conformance claim.
 //!
-//! What that buys is still worth having — the algorithms are the same in all three ports
-//! and a divergence here is a divergence there — but the argument that *"the extension
-//! is its own instrument"* holds only where a gated path runs THROUGH the code, and none
-//! does. Stated in `EXTENSION.toml` as `reached_by = []` on this port and stated again
-//! in the composition's conformance report.
+//! Until H1 landed on 2026-09-12 these operations could not be dispatched on this peer at
+//! all (`501 no_handler_body` with all four §11.6.1 writes bound, `404` with none), and this
+//! file was the only thing that ran them.
 
 use entity_core_protocol::peer::model::Entity;
 use entity_core_protocol::peer::store::{Store, TreeChangeEvent};
@@ -34,9 +31,9 @@ fn scope(include: &[&str]) -> Value {
 
 /// A capability token in the shape `capability::grants_of_token` parses.
 ///
-/// Hand-built because the peer's own `grant_val` / `mint_token` are private — the same
-/// Export-layer fact `gates/host-seam` records for `Outcome`. It is never signed and
-/// never dispatched; `check_permission` reads only `grants`.
+/// Hand-built because the peer's own `mint_token` is private. It is never signed and
+/// never dispatched; `capability::check_path_permission`, which the handler's §4.2 check
+/// calls, reads only `grants`.
 fn token(handlers: &[&str], resources: &[&str], operations: &[&str]) -> Entity {
     Entity::make(
         "system/capability/token",
@@ -185,6 +182,7 @@ fn a_resource_less_call_is_400_path_required() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 400);
@@ -205,6 +203,7 @@ fn an_unknown_operation_is_501() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 501);
@@ -237,6 +236,7 @@ fn a_history_only_capability_cannot_read_an_arbitrary_path() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&history_only),
+            context: None,
         },
     );
     assert_eq!(out.status, 403);
@@ -253,6 +253,7 @@ fn a_history_only_capability_cannot_read_an_arbitrary_path() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(allowed.status, 200);
@@ -273,6 +274,7 @@ fn no_caller_capability_is_denied_not_trusted() {
             store: &store,
             local_peer: PEER,
             caller_capability: None,
+            context: None,
         },
     );
     assert_eq!(out.status, 403);
@@ -299,6 +301,7 @@ fn rollback_needs_put_authority_where_query_needs_only_get() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&read_only),
+            context: None,
         },
     );
     assert_eq!(qout.status, 200, "a read-only token may query");
@@ -315,6 +318,7 @@ fn rollback_needs_put_authority_where_query_needs_only_get() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&read_only),
+            context: None,
         },
     );
     assert_eq!(rout.status, 403, "a read-only token may not roll back");
@@ -341,6 +345,7 @@ fn a_path_with_no_history_returns_an_empty_result_not_a_404() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 200);
@@ -370,6 +375,7 @@ fn a_short_form_path_is_canonicalized_before_the_lookup() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 200);
@@ -403,6 +409,7 @@ fn transitions_are_inline_data_maps_not_hashes_or_entity_wrappers() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     let items = transitions_of(&out.result);
@@ -442,6 +449,7 @@ fn limit_truncates_and_sets_has_more() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(transitions_of(&out.result).len(), 1);
@@ -458,6 +466,7 @@ fn limit_truncates_and_sets_has_more() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(transitions_of(&out_all.result).len(), 3);
@@ -492,6 +501,7 @@ fn the_event_filter_skips_and_keeps_walking() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     let items = transitions_of(&out.result);
@@ -525,6 +535,7 @@ fn rollback_restores_the_target_and_rebinds_the_path() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 200);
@@ -535,6 +546,82 @@ fn rollback_restores_the_target_and_rebinds_the_path() {
         Some(v1.hash.clone()),
         "§4.3.2 restores by rebinding the path"
     );
+}
+
+/// §4.3.2 + §2.1 — the rollback write carries THIS dispatch's execution context, so the recorder
+/// attributes it to the caller and records `operation = rollback`. CONTROL: the identical rollback
+/// with no context produces a context-less event — without it, a consumer that always saw SOME
+/// context would pass the first half.
+#[test]
+fn a_rollback_write_carries_the_dispatch_context_to_the_emit_bus() {
+    use entity_core_protocol::peer::store::{ExecContext, TreeChangeEvent};
+    use std::sync::{Arc, Mutex};
+
+    let run = |context: Option<&ExecContext>| -> Option<ExecContext> {
+        let (store, rec) = seeded();
+        let path = format!("/{PEER}/app/doc");
+        let v1 = write(&store, &rec, &path, "v1");
+        write(&store, &rec, &path, "v2");
+        let seen: Arc<Mutex<Option<Option<ExecContext>>>> = Arc::new(Mutex::new(None));
+        let sink = seen.clone();
+        let watched = path.clone();
+        store.register_tree_consumer(move |ev: &TreeChangeEvent| {
+            if ev.path == watched {
+                *sink.lock().unwrap() = Some(ev.context.clone());
+            }
+        });
+        let e = exec("rollback", rollback_params(&path, &v1.hash), &["system/history", &path]);
+        let out = HistoryHandler::new().handle_op(
+            "rollback",
+            &HandlerRequest { exec: &e, store: &store, local_peer: PEER, caller_capability: Some(&full_token()), context },
+        );
+        assert_eq!(out.status, 200);
+        let observed = seen.lock().unwrap().clone();
+        observed.expect("the rollback write fired an event at the path")
+    };
+
+    let dispatch = ExecContext {
+        request_id: "r-1".into(),
+        handler_pattern: "system/history".into(),
+        operation: "rollback".into(),
+        author: Some(vec![0xCA; 33]),
+        caller_capability: Some(vec![0xCC; 33]),
+        handler_grant: None,
+        chain_id: None,
+        parent_chain_id: None,
+        cascade_depth: None,
+    };
+    let carried = run(Some(&dispatch)).expect("the event carries the dispatch context");
+    assert_eq!(carried.operation, "rollback");
+    assert_eq!(carried.author, Some(vec![0xCA; 33]));
+    assert!(run(None).is_none(), "control: a context-less rollback emits a context-less event");
+}
+
+/// `[assumptions].max_walk` — the cap bounds `query` and NOT §4.3.2's `is_in_history`. With a walk
+/// cap of 2 and four writes, `query` stops and says `has_more` (the CONTROL: the cap is really in
+/// force on this handler), while a rollback to the first value — three transitions back — succeeds.
+#[test]
+fn the_walk_cap_bounds_query_and_not_the_rollback_membership_walk() {
+    let (store, rec) = seeded();
+    let path = format!("/{PEER}/app/doc");
+    let v1 = write(&store, &rec, &path, "v1");
+    for v in ["v2", "v3", "v4"] {
+        write(&store, &rec, &path, v);
+    }
+    let h = HistoryHandler::with_max_walk(2);
+    let cap = full_token();
+    let req = |e| HandlerRequest { exec: e, store: &store, local_peer: PEER, caller_capability: Some(&cap), context: None };
+
+    let q = exec("query", query_params(&path, vec![(Key::Text("limit".into()), Value::UInt(50))]), &["system/history", &path]);
+    let out = h.handle_op("query", &req(&q));
+    assert_eq!(out.status, 200);
+    assert_eq!(transitions_of(&out.result).len(), 2, "control: the cap is in force on query");
+    assert_eq!(out.result.field("has_more"), Some(&Value::Bool(true)));
+
+    let r = exec("rollback", rollback_params(&path, &v1.hash), &["system/history", &path]);
+    let out = h.handle_op("rollback", &req(&r));
+    assert_eq!(out.status, 200, "a rollback target deeper than the walk cap is still in history: {}", code_of(&out.result));
+    assert_eq!(store.hash_at(&path), Some(v1.hash.clone()));
 }
 
 /// **§7.5 History Exfiltration Prevention — the security check of this operation.**
@@ -566,6 +653,7 @@ fn rollback_refuses_a_hash_that_was_never_at_this_path() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 404);
@@ -599,6 +687,7 @@ fn is_in_history_matches_previous_hash_not_only_hash() {
         store: &store,
         local_peer: PEER,
         caller_capability: Some(&full_token()),
+        context: None,
     };
     assert!(h.is_in_history(&req, &path, &v1.hash));
 
@@ -663,6 +752,7 @@ fn a_gcd_target_is_500_storage_error_not_a_404() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(out.status, 500);
@@ -682,6 +772,7 @@ fn malformed_params_are_400_unexpected_params() {
                 store: &store,
                 local_peer: PEER,
                 caller_capability: Some(&full_token()),
+                context: None,
             },
         )
     };
@@ -736,6 +827,7 @@ fn the_walk_bound_is_enforced_and_shows_up_as_has_more() {
             store: &store,
             local_peer: PEER,
             caller_capability: Some(&full_token()),
+            context: None,
         },
     );
     assert_eq!(transitions_of(&out.result).len(), 2);

@@ -1,11 +1,9 @@
 //! §6.2 / §6.3 handler behaviour, driven against a real peer `Store`.
 //!
-//! **These tests are ours and they reach code no oracle reaches on this peer.** That is
-//! stated here rather than only in the status doc, because a green suite in this file
-//! is the exact thing that could be mistaken for a conformance result. The handler
-//! cannot be installed (`gates/host-seam/rust`, scenario 1), so no `validate-peer`
-//! check drives any of it. What these prove is that the algorithms are right; what they
-//! do not prove is that anything on a wire ever runs them.
+//! **These tests are ours.** They drive the body directly through [`HandlerRequest`], because a
+//! third party cannot construct the peer's `HandlerContext`. The oracle's `content` category
+//! reaches the same body over the wire now that `install_content` puts it behind
+//! `Peer::register_handler`; what these add is the branches no vector reaches.
 
 use entity_content::{
     create_blob_fixed, store_blob, ContentHandler, FrameBudget, HandlerRequest, CONTENT_PATTERN,
@@ -49,7 +47,9 @@ fn req<'a>(e: &'a Entity, store: &'a Store) -> HandlerRequest<'a> {
     HandlerRequest {
         exec: e,
         store,
-        frame_budget: FrameBudget::from_peer(),
+        frame_budget: FrameBudget::Enforced(entity_core_protocol::peer::wire::MAX_FRAME),
+        caller_capability: None,
+        local_peer: "PEER",
     }
 }
 
@@ -75,10 +75,9 @@ fn a_request_with_no_resource_is_400_path_required() {
 #[test]
 fn an_empty_targets_list_is_treated_as_absent() {
     // Core §3.2 makes `targets` MUST-contain-at-least-one, so `{targets: []}` is
-    // malformed. See the note on `resource_targets`: over the wire on a peer that can
-    // dispatch, `check_permission` refuses this first with 403. On THIS peer every call
-    // is in-process, so 400 is the only reachable answer -- which is the same branch
-    // `python` keeps for its own in-process case.
+    // malformed. See the note on `resource_targets`: over the wire, `check_permission`
+    // refuses this first with 403 (measured on `python`). This test is an in-process call, where 400 is the
+    // answer -- the same branch `python` keeps for its own in-process case.
     let store = Store::new();
     let h = ContentHandler::new();
     let e = exec("get", get_params(&[]), Some(targets(&[])));
@@ -98,6 +97,66 @@ fn a_target_outside_the_namespace_is_403() {
     // status alone, because the status was already right under v3.6 and the code was not —
     // a test that checked only `403` would have survived the re-pin without noticing.
     assert_eq!(code_of(&out.result), "capability_denied");
+}
+
+/// §6.4 step 2 — the PATH-SCOPE check against the caller's capability, through the peer's H9
+/// `check_path_permission` with handler pattern `system/content`. A target INSIDE the namespace (so
+/// the prefix check above passes) that the grant does not cover is `403 capability_denied`. CONTROL:
+/// the same request under a grant that does cover it proceeds — without it, a handler denying every
+/// capability-bearing request would pass the first assertion.
+#[test]
+fn a_target_the_capability_does_not_cover_is_403_even_inside_the_namespace() {
+    let store = Store::new();
+    let h = ContentHandler::new();
+    let grant = |resources: &str| {
+        let scope = |s: &str| Value::Map(vec![(Key::Text("include".into()), Value::Array(vec![Value::Text(s.into())]))]);
+        Entity::make(
+            "system/capability/token",
+            Value::Map(vec![(
+                Key::Text("grants".into()),
+                Value::Array(vec![Value::Map(vec![
+                    (Key::Text("handlers".into()), scope("system/content")),
+                    (Key::Text("resources".into()), scope(resources)),
+                    (Key::Text("operations".into()), scope("get")),
+                ])]),
+            )]),
+        )
+    };
+    let e = exec("get", get_params(&[]), Some(targets(&["system/content/private/x"])));
+    let narrow = grant("system/content/public/*");
+    let mut r = req(&e, &store);
+    r.caller_capability = Some(&narrow);
+    let out = h.handle_op("get", &r);
+    assert_eq!((out.status, code_of(&out.result).as_str()), (403, "capability_denied"));
+
+    let wide = grant("system/content/*");
+    r.caller_capability = Some(&wide);
+    assert_eq!(h.handle_op("get", &r).status, 200, "control: a covering grant proceeds");
+}
+
+/// §6.2 — the budget pays for the `found`/`missing` entries too, one per requested hash. A budget
+/// that EXACTLY fits one entity plus one entry packs it (the CONTROL: the arithmetic is right, not
+/// merely stingy); the same budget with one extra, absent hash in the request does not, because that
+/// hash's `missing` entry is part of the response. The pre-2026-09-12 accounting packed it anyway.
+#[test]
+fn the_budget_is_charged_for_every_hash_list_entry_not_only_packed_entities() {
+    let store = Store::new();
+    let h = ContentHandler::new();
+    let e = Entity::make("test/blob", Value::Map(vec![(Key::Text("p".into()), Value::Bytes(vec![7; 200]))]));
+    store.put_entity(&e);
+    let wire = entity_core_protocol::cbor::encode(&e.to_cbor()).len();
+    let budget = entity_content::FRAME_RESERVE_BYTES + 35 + wire + e.hash.len();
+    let run = |hashes: &[Vec<u8>]| {
+        let x = exec("get", get_params(hashes), Some(targets(&[CONTENT_PATTERN])));
+        let mut r = req(&x, &store);
+        r.frame_budget = FrameBudget::Enforced(budget);
+        let out = h.handle_op("get", &r);
+        assert_eq!(out.status, 200);
+        out.included.len()
+    };
+    assert_eq!(run(&[e.hash.clone()]), 1, "control: a budget that exactly fits packs the entity");
+    let absent = vec![0u8; 33];
+    assert_eq!(run(&[e.hash.clone(), absent]), 0, "the absent hash's `missing` entry is part of the response");
 }
 
 #[test]
@@ -189,6 +248,8 @@ fn the_frame_budget_bounds_the_batch_and_the_rest_go_to_missing_in_order() {
         exec: &e,
         store: &store,
         frame_budget: FrameBudget::Enforced(entity_content::FRAME_RESERVE_BYTES + 64),
+        caller_capability: None,
+        local_peer: "PEER",
     };
     let out = h.handle_op("get", &tight);
     assert_eq!(out.status, 200);
@@ -207,15 +268,19 @@ fn the_frame_budget_bounds_the_batch_and_the_rest_go_to_missing_in_order() {
     assert!(out.included.is_empty());
 }
 
+/// Amendment 1 BY VALUE, which this peer could not support before keystone's H6: configure a
+/// non-default budget and require the body's read to return it. The NEGATIVE arm is a peer left at
+/// the default, whose read must be the 16 MiB literal — so a `from_peer` that returned the constant
+/// would pass the second assertion and fail the first.
 #[test]
-fn from_peer_reads_the_bound_the_transport_enforces() {
-    // Amendment 1's actual requirement, on the one axis this peer can satisfy: the
-    // number a body reads is the number the transport enforces. It is a constant here
-    // ONLY because the peer offers no configuration -- see FrameBudget's doc and the
-    // routed finding. Asserting the equality is what keeps that claim honest if the
-    // peer ever gains a configurable bound and this stops being true.
+fn from_peer_reads_the_configured_budget_by_value() {
+    use entity_core_protocol::peer::{CreateOptions, Peer, PeerConfig};
+    let opts = || CreateOptions { seed: [0x11; 32], open_grants: true, conformance: false };
+    let configured = Peer::create_with(opts(), PeerConfig::default().max_frame_bytes(3_145_749));
+    assert_eq!(FrameBudget::from_peer(&configured), FrameBudget::Enforced(3_145_749));
+    let default = Peer::create(opts());
     assert_eq!(
-        FrameBudget::from_peer(),
+        FrameBudget::from_peer(&default),
         FrameBudget::Enforced(entity_core_protocol::peer::wire::MAX_FRAME)
     );
 }

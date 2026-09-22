@@ -19,7 +19,7 @@
 //! `languages/rust/compositions/content` exists to run it.
 
 use entity_content::{
-    content_type_defs, content_type_entities, install_content_types, ALL_TYPES, BLOB, CHUNK,
+    content_type_defs, content_type_entities, publish_content_types, ALL_TYPES, BLOB, CHUNK,
     DESCRIPTOR,
 };
 use entity_core_protocol::peer::model::Entity;
@@ -181,12 +181,12 @@ fn install_writes_all_seven_at_the_core_type_index() {
     // (GUIDE-EXTENSION-DEVELOPMENT §4.3 -- a type name inside our owned prefix is ours;
     // the index it is filed under is shared).
     let store = Store::new();
-    let installation = install_content_types(&store, "PEERID");
-    assert_eq!(installation.type_paths.len(), 7);
+    let type_paths = publish_content_types(&store, "PEERID");
+    assert_eq!(type_paths.len(), 7);
     for name in ALL_TYPES {
         let path = format!("/PEERID/system/type/{name}");
         assert!(
-            installation.type_paths.contains(&path),
+            type_paths.contains(&path),
             "{path} was not written"
         );
         let bound = store.get_at(&path).expect("bound in the tree");

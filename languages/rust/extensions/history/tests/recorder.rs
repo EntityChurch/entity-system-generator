@@ -5,7 +5,7 @@
 //! - most tests drive [`HistoryRecorder::on_tree_change`] against a bare `Store` with a
 //!   hand-built event, because that isolates §5.1's algorithm from the seam;
 //! - [`the_real_seam_records_a_transition`] drives a REAL `Peer` through
-//!   `install_history_recorder` and a real `store.bind`, because `gates/host-seam` arm G
+//!   `install_history` and a real `store.bind`, because `gates/host-seam` arm G
 //!   measured that a consumer may write from inside the callback **with a toy consumer**,
 //!   and the extension's own recorder is a different program. An arm that measures a
 //!   stand-in has measured the stand-in.
@@ -18,7 +18,7 @@ use entity_core_protocol::peer::{CreateOptions, Peer};
 use entity_core_protocol::value::{Key, Value};
 
 use entity_history::{
-    build_context, config_path, history_config, install_history_recorder, install_history_types,
+    build_context, config_path, history_config, install_history,
     resolve_config, CarriedContext, HistoryRecorder, RecorderIdentity, HEAD_PREFIX,
 };
 
@@ -28,8 +28,8 @@ const OTHER: &str = "z6MkfZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
 fn identity() -> RecorderIdentity {
     RecorderIdentity {
         local_identity_hash: vec![0xAA; 33],
-        // On this peer there is no handler grant to read. The host passes the identity
-        // hash and declares it; see `HistoryRecorderInstallation::handler_grant_available`.
+        // A rig identity, not a peer's: `install_history` reads the real grant back off the
+        // tree. Equal to the identity hash here on purpose — the rig tests do not read it.
         handler_grant_hash: vec![0xAA; 33],
         local_peer: PEER.to_string(),
     }
@@ -427,7 +427,7 @@ fn a_malformed_config_is_skipped_and_counted() {
 // ── the real seam ────────────────────────────────────────────────────────────
 
 /// **The integration arm: a real `Peer`, a real `store.bind`, the extension's own
-/// recorder registered through `install_history_recorder`.**
+/// recorder registered through `install_history`.**
 ///
 /// `gates/host-seam` arm G measured that the peer's consumer seam is re-entrant using a
 /// TOY consumer. This runs the real one, which does considerably more from inside the
@@ -443,30 +443,23 @@ fn the_real_seam_records_a_transition() {
     }));
     let local = peer.local_peer.clone();
 
-    // Types FIRST, recorder LAST — otherwise the recorder observes its own installation
-    // and the audit log opens with six writes nobody performed.
-    let types = install_history_types(&peer.store, &local);
-    assert_eq!(types.type_paths.len(), 6);
+    // `install_history` registers the recorder LAST, after the handler's four entities and the
+    // six types, so its stats start at zero.
+    let install = install_history(&peer, None).expect("install");
+    assert_eq!(install.type_paths.len(), 6);
+    assert_eq!(install.context_available(), "unknown");
+    assert!(install.handler_grant_available);
 
+    // Composition policy, bound after the recorder as the hosts bind it. The consumer fires AFTER the
+    // bind lands, so the config is already resolvable when its own event arrives and a `pattern: "*"`
+    // config records its own write — §3.2 keeps config paths out of the self-guard on purpose, and
+    // `python`/`typescript` measure the same. So the counts below are DELTAS from this point.
     peer.store.bind(
         &config_path(&local, "everything"),
         &history_config("*", true, None, None, None),
     );
-
-    let install = install_history_recorder(
-        &peer,
-        RecorderIdentity {
-            local_identity_hash: peer.identity.identity_hash.clone(),
-            handler_grant_hash: peer.identity.identity_hash.clone(),
-            local_peer: local.clone(),
-        },
-    );
-    // "unknown" at install time, before any event: the recorder has observed nothing, so
-    // it claims nothing. This was `assert!(!install.context_available)` against a hardcoded
-    // `false` -- an assertion about ANOTHER TEAM'S PEER that our own source supplied, which
-    // is why it survived H8 landing without anything failing.
-    assert_eq!(install.context_available(), "unknown");
-    assert!(!install.handler_grant_available);
+    let base = install.recorder.stats();
+    assert_eq!(base.recorded, 1, "the config write records itself (§3.2)");
 
     let app = format!("/{local}/app/doc");
     let ent = payload("v1");
@@ -482,12 +475,12 @@ fn the_real_seam_records_a_transition() {
     assert_eq!(t.bytes_field("hash"), Some(ent.hash.as_slice()));
 
     let stats = install.recorder.stats();
-    assert_eq!(stats.recorded, 1);
+    assert_eq!(stats.recorded - base.recorded, 1);
     assert_eq!(
-        stats.skipped_self_guard, 1,
+        stats.skipped_self_guard - base.skipped_self_guard, 1,
         "the head write's own event must come back to the guard exactly once"
     );
-    assert_eq!(stats.observed, 2, "1 app write + 1 re-entrant head write");
+    assert_eq!(stats.observed - base.observed, 2, "1 app write + 1 re-entrant head write");
 
     // The negative that separates "the counter tracks events" from "the counter tracks
     // calls": an identical re-bind produces no event at all (§6.10 Store step). Without
@@ -495,7 +488,7 @@ fn the_real_seam_records_a_transition() {
     // never moved would pass it too.
     peer.store.bind(&app, &ent);
     assert_eq!(
-        install.recorder.stats().observed,
+        install.recorder.stats().observed - base.observed,
         2,
         "a no-op re-bind must be silent"
     );

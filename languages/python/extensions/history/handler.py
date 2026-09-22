@@ -21,9 +21,9 @@ a way the next one was not.**
    mirrors ``typescript``'s ``Permissions.checkPathPermission`` so a spec-literal
    implementation ports between the two unchanged.
 
-**``rust`` is still at (2) and that is not drift** — no ``check_path_permission`` exists
-on that peer, which is recorded in ``EXTENSION.toml [substrate.path_permission]`` and is
-the open half of H9.
+**``rust`` calls ``check_path_permission`` too, since 2026-09-12**, when keystone made it
+public on that peer (H9's second half). Until then it stayed at (2); see
+``EXTENSION.toml [substrate.path_permission]``.
 """
 
 from __future__ import annotations
@@ -182,7 +182,11 @@ class HistoryHandler:
         if denied is not None:
             return denied
 
-        limit = params_e.uint("limit") or DEFAULT_QUERY_LIMIT
+        # `is None`, not `or`: `limit: 0` is a value the caller sent, and `or` turned it into 50
+        # (the other two ports honor 0). Found by the 2026-09-12 cross-port review.
+        limit = params_e.uint("limit")
+        if limit is None:
+            limit = DEFAULT_QUERY_LIMIT
         before = params_e.uint("before")
         since = params_e.bytes_("since")
         raw_events = params_e.field("events")
@@ -277,7 +281,13 @@ class HistoryHandler:
         # §4.3.2: "This goes through normal put, which will itself be recorded in
         # history." So this write fires the emit pathway and our own recorder observes
         # it — the rollback appears in the chain as an ordinary `updated`.
-        self.peer.store.bind(path, ent)
+        #
+        # §4.3.2: "the transition's `operation` field will reflect the rollback operation", and §2.1
+        # records the remote caller as `author`. So the write carries THIS dispatch's execution context.
+        # It did not in any of our three ports until 2026-09-12 (cross-port review): every rollback was
+        # recorded as the peer's own `system/tree:put`, and the oracle's `rollback_new_transition`
+        # checks only `event` and `hash`, so nothing could see it.
+        self.peer.store.bind(path, ent, ctx.exec_context())
 
         return Outcome(200, Entity.make(ROLLBACK_RESULT, {"path": path, "restored": target_hash}))
 
@@ -288,15 +298,19 @@ class HistoryHandler:
         test that rolls back to a value the path once held; it fails only for the FIRST
         entity ever at the path, which is the oldest reachable state and the one an undo
         most wants.
+
+        **UNCAPPED, deliberately** — unlike ``query``. ``max_walk`` bounds a READ whose caller has
+        ``has_more`` to continue with; applied here it turned a real rollback target deeper than
+        ``max_walk`` transitions into a false ``404 not_in_history``, which breaks §4.3.2's MUST.
+        The chain is content-addressed, so it cannot cycle; the walk ends at the first transition.
+        (``[assumptions].max_walk``; found by the 2026-09-12 cross-port review.)
         """
         head_hex = self.peer.store.hash_at(self._head_path(path))
         current: bytes | None = bytes.fromhex(head_hex) if head_hex else None
-        walked = 0
-        while current is not None and walked < self.max_walk:
+        while current is not None:
             t = self.peer.store.get_by_hash(current)
             if t is None:
                 return False
-            walked += 1
             if t.bytes_("hash") == target_hash or t.bytes_("previous_hash") == target_hash:
                 return True
             current = t.bytes_("previous")

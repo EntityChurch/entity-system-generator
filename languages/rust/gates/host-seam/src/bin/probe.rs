@@ -1,33 +1,26 @@
 //! `probe-seam-rust` — the executed half of the `rust` host-seam probe.
 //!
-//! `probe-seam.mjs` and `probe-seam.py` measure one peer each and answer one
-//! question: *can a language-native handler body be installed after construction and
-//! reached by a real EXECUTE?* On both of those peers the answer was yes, so both
-//! probes are shaped as "install, then dispatch, then check the witness".
+//! `probe-seam.mjs` and `probe-seam.py` measure one peer each and answer one question: *can a
+//! language-native handler body be installed after construction and reached by a real EXECUTE?*
+//! Until keystone landed H1 on this peer (for our K-9, 2026-09-12) the answer here was NO, and this
+//! probe was shaped around that: bind the four §11.6.1 entities, observe `501 no_handler_body`, and
+//! call the body directly to prove it was never asked. **It is now shaped like its two siblings —
+//! install, dispatch, witness — because the peer changed**, and the old arms are recorded in
+//! `../README.md` rather than kept running against a surface that no longer exists.
 //!
-//! **That shape does not fit here, and finding out why is the result.** On this peer
-//! there is nothing to install. So this probe measures the three layers that CAN be
-//! measured by running a program — Reach, the emit face, and the frame budget — and
-//! defers Access / Read / Export to `access_absent` + `access_control`, which put the
-//! question to rustc. Both halves are driven by `probe-seam-rust.sh`; neither is a
-//! verdict on its own.
+//! Every scenario carries controls:
 //!
-//! Every scenario below carries a control, and the controls are not decoration:
-//!
-//! - **A** nothing bound → `404`. Without it, the `501` in B is just "an error".
-//! - **B** all four §11.6.1 writes bound → the status the peer actually answers.
-//! - **C** the same body live and **directly** reachable, with its invocation counter
-//!   snapshotted before the direct call. This is D13's required distinguisher between
-//!   *"not installed"* and *"installed and never asked"*, and on this peer it settles
-//!   the sharper third case: **there is nowhere to install, so it was never asked.**
-//! - **D/E/F** the emit face, with two different negatives — no consumer registered,
-//!   and a re-bind that changes nothing. The second is the one that would catch a
-//!   counter incrementing on the CALL rather than on the EVENT.
-//! - **G** added when the second extension needed the face for real. D/E/F measure
-//!   that a consumer is *invoked*; HISTORY §5.1 needs one that **writes** from inside
-//!   the callback, which is a question about `Store`'s consumer lock and not about the
-//!   hook. It runs behind a timeout, because the failure it is looking for is a
-//!   deadlock and a probe that hangs reports nothing at all.
+//! - **1 · H1** — A nothing installed → `404`; B installed through `Peer::register_handler` → `200`
+//!   with a witness folding a request field into the registration nonce, invocation counter `0 → 1`;
+//!   C `unregister_handler` → `404` again and the counter does NOT move. C is D13's distinguisher
+//!   between "not installed" and "installed and never asked", run in the direction that matters now.
+//! - **2 · emit face** — D/E/F: consumer invoked, no consumer, identical re-bind. G: a consumer that
+//!   WRITES, behind a timeout. H/I: the same, driven over the wire.
+//! - **3 · H6** — the frame budget BY VALUE: a peer configured to 3,145,749 must hand a body
+//!   3,145,749, and an unconfigured peer 16,777,216. A body reading a constant passes one arm only.
+//! - **5 · H7** — an entity-native body the peer cannot evaluate: `501` with no evaluator, `200` with
+//!   one installed (the value folds a request field in), `501` again for a body the evaluator
+//!   declines, and the literal floor answered without the evaluator being asked.
 
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -39,7 +32,10 @@ use entity_core_protocol::peer::model::{self, Entity};
 use entity_core_protocol::peer::store::TreeChangeEvent;
 use entity_core_protocol::peer::transport::{self, Io};
 use entity_core_protocol::peer::wire;
-use entity_core_protocol::peer::{CreateOptions, Peer};
+use entity_core_protocol::peer::handler::{
+    ExpressionEvaluator, ExpressionRequest, FnHandler, HandlerContext, HandlerResult, OperationSpec,
+};
+use entity_core_protocol::peer::{CreateOptions, Peer, PeerConfig};
 use entity_core_protocol::value::{Key, Value};
 
 /// Captured at registration time and folded into the witness. A body that returns a
@@ -50,88 +46,62 @@ const REG_NONCE: &str = "rs-seam-9c41";
 
 const PATTERN: &str = "system/content";
 
-// ── the body we would install, if there were anywhere to install it ──────────
+// ── the bodies this probe installs ───────────────────────────────────────────
 
-struct WouldBeHandler {
-    invocations: AtomicUsize,
-}
-
-impl WouldBeHandler {
-    fn new() -> WouldBeHandler {
-        WouldBeHandler {
-            invocations: AtomicUsize::new(0),
-        }
-    }
-
-    /// The shape a §11.6.1 step-4 body takes: request in, (status, entity) out. It
-    /// cannot be spelled as the peer's own `Outcome` — that type is private — which
-    /// is itself one of the four things `access_absent` measures.
-    fn handle(&self, echo: &str) -> (u64, Entity) {
-        self.invocations.fetch_add(1, Ordering::SeqCst);
-        (
-            200,
-            Entity::make(
+/// Scenario 1's body. The witness depends on BOTH a registration-time nonce and a request field,
+/// so no constant, literal or built-in can produce it.
+fn witness_handler(invocations: Arc<AtomicUsize>) -> Arc<FnHandler> {
+    Arc::new(FnHandler::new(
+        PATTERN,
+        "probe-witness",
+        vec![OperationSpec::named("get")],
+        move |ctx: &HandlerContext<'_>| {
+            invocations.fetch_add(1, Ordering::SeqCst);
+            let echo = ctx
+                .params()
+                .and_then(|p| p.text_field("echo").map(str::to_string))
+                .unwrap_or_default();
+            HandlerResult::ok(Entity::make(
                 "system/content/content-response",
                 model::map(vec![("witness", model::text(&format!("{REG_NONCE}:{echo}")))]),
-            ),
-        )
-    }
+            ))
+        },
+    ))
 }
 
-// ── the four §11.6.1 writes, exactly as the `python` port performs them ──────
+/// Scenario 3's body: it answers with the budget the context hands it.
+fn budget_handler() -> Arc<FnHandler> {
+    Arc::new(FnHandler::new(
+        PATTERN,
+        "probe-budget",
+        vec![OperationSpec::named("get")],
+        |ctx: &HandlerContext<'_>| {
+            HandlerResult::ok(Entity::make(
+                "primitive/any",
+                model::map(vec![("budget", Value::UInt(ctx.frame_budget() as u64))]),
+            ))
+        },
+    ))
+}
 
-/// Bind the manifest, the interface entity and a self-signed grant + signature.
-///
-/// These four ARE reachable — they are ordinary `store.bind` calls through public
-/// names, and `python`'s `install_content` performs the same four. What is missing is
-/// the fifth thing that port does last: put the callable in the container dispatch
-/// consults. So this function performs an install that is complete except for the one
-/// step that makes it mean anything, which is precisely the state scenario B measures.
-fn bind_handler_entities(peer: &Peer) {
-    let local = &peer.local_peer;
-    let interface_rel = format!("system/handler/{PATTERN}");
+/// Scenario 5's evaluator: claims `probe/double` only, and folds a request field into the value.
+struct Doubler {
+    calls: Arc<AtomicUsize>,
+}
 
-    let handler_e = Entity::make(
-        "system/handler",
-        model::map(vec![("interface", model::text(&interface_rel))]),
-    );
-    peer.store.bind(&format!("/{local}/{PATTERN}"), &handler_e);
-
-    let iface_e = Entity::make(
-        "system/handler/interface",
-        model::map(vec![
-            ("pattern", model::text(PATTERN)),
-            ("name", model::text("content")),
-            (
-                "operations",
-                Value::Map(vec![
-                    (Key::Text("get".into()), Value::Map(vec![])),
-                    (Key::Text("ingest".into()), Value::Map(vec![])),
-                ]),
-            ),
-        ]),
-    );
-    peer.store
-        .bind(&format!("/{local}/{interface_rel}"), &iface_e);
-
-    // (3)+(4) A self-issued grant at the §3.5 pointer plus its signature. `mint_token`
-    // is private here, so the token is hand-built and signed through the ONE public
-    // signing route, `identity.sign_entity`. That it can be done at all is worth
-    // recording: three of the five install writes are reachable and the fourth is not.
-    let token = Entity::make(
-        "system/capability/token",
-        model::map(vec![
-            ("grantee", model::bytes(&peer.identity.identity_hash)),
-            ("grants", Value::Array(vec![])),
-        ]),
-    );
-    let signature = peer.identity.sign_entity(&token);
-    peer.store
-        .bind(&format!("/{local}/system/capability/grants/{PATTERN}"), &token);
-    peer.store.bind(
-        &format!("/{local}/system/signature/{}", model::hex(&token.hash)),
-        &signature,
-    );
+impl ExpressionEvaluator for Doubler {
+    fn evaluate(&self, req: &ExpressionRequest<'_>, ctx: &HandlerContext<'_>) -> Option<HandlerResult> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if req.expression.typ != "probe/double" {
+            return None;
+        }
+        let n = req.expression.uint_field("n")?;
+        let bump = ctx.params().and_then(|p| p.uint_field("bump")).unwrap_or(0);
+        Some(HandlerResult::ok(Entity::make(
+            "primitive/any",
+            model::map(vec![("value", Value::UInt(n * 2 + bump))]),
+        )))
+    }
 }
 
 // ── scaffolding: two peers over real loopback TCP ────────────────────────────
@@ -182,33 +152,34 @@ impl Loopback {
         }
     }
 
-    /// One EXECUTE at `system/content`, returning `(status, code)`.
-    fn execute_content(&mut self) -> (u64, String) {
+    /// One EXECUTE at the probe pattern carrying `echo`, returning `(status, code, witness)`.
+    fn execute_content(&mut self, echo: &str) -> (u64, String, String) {
         let uri = format!("/{}/{PATTERN}", self.remote);
         let resource = Value::Map(vec![(
             Key::Text("targets".into()),
             Value::Array(vec![Value::Text(format!("{PATTERN}/probe"))]),
         )]);
-        let params = Entity::make(
-            "system/content/get-request",
-            model::map(vec![("hashes", Value::Array(vec![]))]),
-        );
+        let params = Entity::make("primitive/any", model::map(vec![("echo", model::text(echo))]));
         let resp = self
             .session
             .execute(&uri, "get", params, Some(resource))
             .expect("a response envelope");
         let status = resp.root.uint_field("status").unwrap_or(0);
-        let code = resp
-            .root
-            .entity_field("result")
+        let result = resp.root.entity_field("result");
+        let code = result
+            .as_ref()
             .and_then(|r| r.text_field("code").map(str::to_string))
             .unwrap_or_default();
-        (status, code)
+        let witness = result
+            .as_ref()
+            .and_then(|r| r.text_field("witness").map(str::to_string))
+            .unwrap_or_default();
+        (status, code, witness)
     }
 
     /// One EXECUTE at an arbitrary handler, returning `(status, result entity)`.
     ///
-    /// `execute_content` above is the fixed-shape version scenario 1 needs; this is the
+    /// `execute_content` above is the fixed-shape version scenarios 1 and 3 need; this is the
     /// general one scenario 4 needs, and the two are kept separate rather than merged so
     /// that scenario 1's request — the one whose 404/501 answer is the measurement —
     /// cannot change shape when a later scenario wants a different call.
@@ -256,65 +227,58 @@ fn peer(seed: u8) -> Arc<Peer> {
     }))
 }
 
+fn peer_with(seed: u8, config: PeerConfig) -> Arc<Peer> {
+    Arc::new(Peer::create_with(
+        CreateOptions {
+            seed: [seed; 32],
+            open_grants: true,
+            conformance: false,
+        },
+        config,
+    ))
+}
+
 // ── the run ──────────────────────────────────────────────────────────────────
 
 fn main() {
     let mut vacuous: Vec<&str> = Vec::new();
     println!("probe-seam-rust — peer: entity-core-protocol-rust (keystone, read-only)\n");
 
-    // ── Scenario 1: the Reach layer ──────────────────────────────────────────
-    println!("Scenario 1 — the Reach layer (handler face, §11.6.1 model 2)");
+    // ── Scenario 1: H1 — install, dispatch, witness, uninstall ──────────────
+    println!("Scenario 1 — H1: a language-native body installed after construction (§11.6.1)");
 
-    let body = WouldBeHandler::new();
+    let invocations = Arc::new(AtomicUsize::new(0));
+    let responder = peer(0x21);
+    let mut lb = Loopback::connect(responder.clone(), peer(0x22));
 
-    // A. NEGATIVE CONTROL. Nothing bound at the pattern.
-    let responder_a = peer(0x21);
-    let mut lb = Loopback::connect(responder_a.clone(), peer(0x22));
-    let (status_a, code_a) = lb.execute_content();
-    lb.shutdown();
-    println!("  A. nothing bound                          {status_a}  {code_a}");
+    // A. NEGATIVE CONTROL — nothing installed at the pattern.
+    let (status_a, code_a, _) = lb.execute_content("hello");
+    println!("  A. nothing installed                      {status_a}  {code_a}");
     if status_a != 404 {
         vacuous.push("control A did not answer 404 — the negative arm does not discriminate");
     }
 
-    // B. All four §11.6.1 tree writes bound. The fifth step has no destination.
-    let responder_b = peer(0x23);
-    bind_handler_entities(&responder_b);
-    let bound = responder_b
-        .store
-        .get_at(&format!("/{}/{PATTERN}", responder_b.local_peer))
-        .is_some();
-    let mut lb = Loopback::connect(responder_b.clone(), peer(0x24));
-    let before = body.invocations.load(Ordering::SeqCst);
-    let (status_b, code_b) = lb.execute_content();
-    let after_dispatch = body.invocations.load(Ordering::SeqCst);
+    // B. Installed through the public registration call.
+    let registered = responder.register_handler(witness_handler(invocations.clone()));
+    let before = invocations.load(Ordering::SeqCst);
+    let (status_b, code_b, witness_b) = lb.execute_content("hello");
+    let after_dispatch = invocations.load(Ordering::SeqCst);
+    println!("  B. register_handler -> {:<17} {status_b}  {code_b}witness={witness_b}", if registered.is_ok() { "Ok" } else { "Err" });
+    println!("     invocations: before={before} after dispatch={after_dispatch}");
+    let reached = status_b == 200 && witness_b == format!("{REG_NONCE}:hello") && after_dispatch == before + 1;
+
+    // C. Uninstalled — the counter must not move, and the pattern must stop resolving.
+    let removed = responder.unregister_handler(PATTERN);
+    let (status_c, code_c, _) = lb.execute_content("again");
+    let after_uninstall = invocations.load(Ordering::SeqCst);
     lb.shutdown();
-    println!("  B. all four tree writes bound             {status_b}  {code_b}");
-    println!("     manifest resolvable in the tree:       {bound}");
-    if !bound {
-        vacuous.push("scenario B never bound the manifest — the probe measured nothing");
-    }
-    if status_b == 404 {
-        vacuous.push("B answered 404 like the control — the tree writes had no effect at all");
+    println!("  C. unregister_handler -> {removed:<15} {status_c}  {code_c}");
+    println!("     invocations after the uninstalled dispatch: {after_uninstall}");
+    if !removed || status_c != 404 || after_uninstall != after_dispatch {
+        vacuous.push("control C did not return the peer to 404 with the counter unmoved — B's witness is not attributable to the install");
     }
 
-    // C. THE DISTINGUISHER. The same body, live, called directly.
-    let (status_c, result_c) = body.handle("hello");
-    let after_direct = body.invocations.load(Ordering::SeqCst);
-    let witness = result_c.text_field("witness").unwrap_or("").to_string();
-    println!("  C. that body called DIRECTLY              {status_c}  witness={witness}");
-    println!(
-        "     invocations: before={before} after dispatch={after_dispatch} after direct={after_direct}"
-    );
-    if after_direct != after_dispatch + 1 || witness != format!("{REG_NONCE}:hello") {
-        vacuous.push("control C did not run the body — the counter proves nothing");
-    }
-
-    let reach = if after_dispatch == before {
-        "NO — dispatch never reached an installed body, and there is nowhere to install one"
-    } else {
-        "YES"
-    };
+    let reach = if reached { "YES" } else { "NO" };
     println!("  => Reach (handler face): {reach}\n");
 
     // ── Scenario 2: the emit face ────────────────────────────────────────────
@@ -682,41 +646,97 @@ fn main() {
         }
     );
 
-    // ── Scenario 3: the frame budget (CONTENT §6.2 / §4.2 Amendment 1) ───────
-    println!("Scenario 3 — the connection frame budget (CONTENT Am. 1 §6.2 MUST)");
-    println!("  wire::MAX_FRAME                           {}", wire::MAX_FRAME);
-    println!("  CreateOptions fields                      seed · open_grants · conformance");
-    println!("  Conn fields                               established · issued_nonce · hello_peer_id · outbound · out_counter");
-    // MEASURED BY VALUE, per the D15 upgrade K-1 forced on the `python` probe: the
-    // question is never "is there a field whose NAME matches frame|max|budget", it is
-    // "does a body read back a number the transport was configured to enforce". Here
-    // there is no configuration to vary, so the two arms of that comparison cannot be
-    // constructed — which is the finding, and it is stated as one rather than scored.
-    let configurable = false;
-    println!(
-        "  => budget readable by a body: NO. And NOT configurable ({configurable}), so the\n     \
-         by-value check that K-1 forced has no second arm to run here. Reported as\n     \
-         UNSATISFIABLE-AND-VACUOUS, not as a failed check."
-    );
+    // ── Scenario 3: H6 — the frame budget BY VALUE (CONTENT Am. 1 §6.2) ───────
+    println!("Scenario 3 — H6: the connection frame budget a body reads (CONTENT Am. 1 §6.2)");
+    const CONFIGURED: u64 = 3_145_749;
+    let read_budget = |responder: Arc<Peer>, seed: u8| -> Option<u64> {
+        responder.register_handler(budget_handler()).ok()?;
+        let mut lb = Loopback::connect(responder, peer(seed));
+        let (status, result) = lb.execute(PATTERN, "get", Entity::make("primitive/any", model::map(vec![])), &[PATTERN]);
+        lb.shutdown();
+        (status == 200).then(|| result.uint_field("budget")).flatten()
+    };
+    let configured = read_budget(peer_with(0x41, PeerConfig::default().max_frame_bytes(CONFIGURED as usize)), 0x42);
+    let defaulted = read_budget(peer(0x43), 0x44);
+    println!("  configured {CONFIGURED:>10} -> body reads   {configured:?}");
+    println!("  default    {:>10} -> body reads   {defaulted:?}", wire::MAX_FRAME);
+    let budget_by_value = configured == Some(CONFIGURED) && defaulted == Some(wire::MAX_FRAME as u64);
+    if configured.is_none() || defaulted.is_none() {
+        vacuous.push("scenario 3 could not install or reach the budget body — no arm measured");
+    }
+    println!("  => budget read BY VALUE: {}\n", if budget_by_value { "YES (both arms)" } else { "NO" });
+
+    // ── Scenario 5: H7 — the evaluator for entity-native bodies ─────────────────
+    println!("Scenario 5 — H7: an installed evaluator for entity-native handler bodies (§6.13(a))");
+    let responder = peer(0x51);
+    let mut lb = Loopback::connect(responder.clone(), peer(0x52));
+    let register = |lb: &mut Loopback, pattern: &str, body_path: &str, body: &Entity| -> u64 {
+        let put = Entity::make("system/tree/put-request", model::map(vec![("entity", body.to_cbor())]));
+        let (put_status, _) = lb.execute("system/tree", "put", put, &[body_path]);
+        let req = Entity::make(
+            "system/handler/register-request",
+            model::map(vec![(
+                "manifest",
+                model::map(vec![("name", model::text(pattern)), ("expression_path", model::text(body_path))]),
+            )]),
+        );
+        let (reg_status, _) = lb.execute("system/handler", "register", req, &[&format!("system/handler/{pattern}")]);
+        put_status.max(reg_status)
+    };
+    let setup = [
+        register(&mut lb, "probe/lit", "probe/bodies/lit", &Entity::make("compute/literal", model::map(vec![("value", Value::UInt(50))]))),
+        register(&mut lb, "probe/dbl", "probe/bodies/dbl", &Entity::make("probe/double", model::map(vec![("n", Value::UInt(21))]))),
+        register(&mut lb, "probe/oth", "probe/bodies/oth", &Entity::make("probe/other", model::map(vec![]))),
+    ];
+    let run = |lb: &mut Loopback, pattern: &str, bump: u64| {
+        lb.execute(pattern, "run", Entity::make("primitive/any", model::map(vec![("bump", Value::UInt(bump))])), &[pattern])
+    };
+    let (s_none, _) = run(&mut lb, "probe/dbl", 1);
+    let calls = Arc::new(AtomicUsize::new(0));
+    responder.set_expression_evaluator(Some(Arc::new(Doubler { calls: calls.clone() })));
+    let (s_lit, lit) = run(&mut lb, "probe/lit", 1);
+    let calls_after_literal = calls.load(Ordering::SeqCst);
+    let (s_dbl, dbl) = run(&mut lb, "probe/dbl", 1);
+    let (s_oth, _) = run(&mut lb, "probe/oth", 1);
+    lb.shutdown();
+    println!("  setup (put + register, x3)                {setup:?}");
+    println!("  K. no evaluator, probe/double             {s_none}");
+    println!("  L. evaluator set, compute/literal         {s_lit}  value={:?}  evaluator asked {calls_after_literal}x", lit.field("value"));
+    println!("  M. evaluator set, probe/double bump=1     {s_dbl}  value={:?}", dbl.field("value"));
+    println!("  N. evaluator set, probe/other (declined)  {s_oth}");
+    if setup.iter().any(|s| *s != 200) {
+        vacuous.push("scenario 5 could not register its entity-native handlers — no arm measured");
+    }
+    let evaluator_reached = s_none == 501
+        && s_lit == 200
+        && calls_after_literal == 0
+        && s_dbl == 200
+        && dbl.field("value") == Some(&Value::UInt(43))
+        && s_oth == 501;
+    println!("  => Reach (evaluator face): {}\n", if evaluator_reached { "YES" } else { "NO" });
 
     // ── verdict ──────────────────────────────────────────────────────────────
     println!("\n--- summary ---");
-    println!("handler face:  Reach NO (executed, both controls)");
-    println!("emit face:     Reach YES (executed, two negatives)");
+    println!("handler face:   Reach {reach} (executed: nothing-installed and uninstalled controls)");
+    println!("emit face:      Reach YES (executed, two negatives)");
     println!(
         "emit face, RE-ENTRANT (a consumer that writes): {}",
         if reentrant_ok { "YES (arm G)" } else { "NO (arm G)" }
     );
     println!(
         "emit face, FROM THE WIRE (put -> consumer -> get): {}",
-        if wire_emit_ok {
-            "YES (arms H/I)"
-        } else {
-            "NO (arms H/I)"
-        }
+        if wire_emit_ok { "YES (arms H/I)" } else { "NO (arms H/I)" }
     );
-    println!("frame budget:  MAX_FRAME is a module constant == the literal Am. 1 forbids");
+    println!("frame budget:   by value {}", if budget_by_value { "YES" } else { "NO" });
+    println!("evaluator face: Reach {}", if evaluator_reached { "YES" } else { "NO" });
     println!("Access / Read / Export: see access_absent + access_control (rustc decides, not this binary)");
+
+    // The contracts claim `handler`, `evaluator` and the H6 budget on this peer on the strength of
+    // this binary. A NO here is not a vacuous run — it is the claim being false, and it fails.
+    if !(reached && budget_by_value && evaluator_reached) {
+        eprintln!("\nprobe verdict: a face the contracts claim INSTALLED on this peer measured NO");
+        std::process::exit(1);
+    }
 
     if vacuous.is_empty() {
         println!("\nprobe integrity: OK — every arm discriminated");

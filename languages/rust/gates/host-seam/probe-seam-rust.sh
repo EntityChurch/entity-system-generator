@@ -5,8 +5,9 @@
 # questions:
 #
 #   1. `access_control`  MUST COMPILE   — the positive control for (2).
-#   2. `access_absent`   MUST NOT COMPILE — Access, Read and Export, decided by rustc.
-#   3. `probe`           runs           — Reach, the emit face, the frame budget.
+#   2. `access_absent`   MUST NOT COMPILE — H3: the container behind the public registration call,
+#                                         decided by rustc, one required error code per claim.
+#   3. `probe`           runs           — H1 Reach, the emit face, H6 by value, H7 Reach.
 #
 # (1) exists because a compile-fail check with no positive control reports its
 # strongest result when the toolchain is broken (D15, false green). If the control
@@ -59,25 +60,31 @@ fi
 "$CARGO_TARGET_DIR/debug/access_control"
 echo
 
-echo "== 2. access_absent — MUST FAIL TO COMPILE (Access · Read · Export) =="
+echo "== 2. access_absent — MUST FAIL TO COMPILE, with EACH claimed code (keystone H3) =="
 if $CARGO build --bin access_absent --features compile-fail-fixture \
      2>"$CARGO_TARGET_DIR/absent.err"; then
   echo "   IT COMPILED. That is a real change in the peer, not a probe failure:" >&2
-  echo "   a public install surface has appeared. Re-measure and update D13's rows." >&2
+  echo "   the container behind register_handler has become reachable. Re-measure H3." >&2
   exit 1
 fi
 echo "   did not compile, as required. The errors, which ARE the measurement:"
 grep -E "^error\[E[0-9]+\]:" "$CARGO_TARGET_DIR/absent.err" | sed 's/^/     /'
-# D14: cite the command that PRINTS the count, and count the right thing. Matching
-# `^error:` too would sweep in rustc's own "could not compile ... due to N previous
-# errors" summary line and report 5 where the fixture makes 4 claims -- an off-by-one
-# in the direction that overstates, which is AP-1's exact shape.
-echo "   distinct type errors: $(grep -cE "^error\[E[0-9]+\]:" "$CARGO_TARGET_DIR/absent.err") \
-of 4 claimed  (command: grep -cE '^error\[E[0-9]+\]:' absent.err)"
-[ "$(grep -cE "^error\[E[0-9]+\]:" "$CARGO_TARGET_DIR/absent.err")" -eq 4 ] || {
-  echo "   REFUSING: the fixture makes four independent claims and rustc did not" >&2
-  echo "   report four. A single early error can mask the other three, and then" >&2
-  echo "   'it did not compile' is one measurement being read as four." >&2; exit 1; }
+# EACH CODE, NOT A COUNT. Until 2026-09-12 this arm required four distinct diagnostics, and keystone
+# measured it passing four-of-four against a peer where one of the four claims had become FALSE —
+# `register_handler` went public and the fixture's call turned into E0061 (wrong argument count). A
+# count survives a change of cause; a code does not. Each claim names its code and each is required.
+MISSING=""
+for code in E0616 E0609 E0603 E0624; do
+  grep -qE "^error\[$code\]:" "$CARGO_TARGET_DIR/absent.err" || MISSING="$MISSING $code"
+done
+OTHER="$(grep -E "^error\[E[0-9]+\]:" "$CARGO_TARGET_DIR/absent.err" | grep -vE "^error\[(E0616|E0609|E0603|E0624)\]:" || true)"
+echo "   claimed codes present: $(( 4 - $(echo $MISSING | wc -w) )) of 4  (command: grep -E '^error\[<code>\]:' absent.err per code)"
+[ -z "$MISSING" ] && [ -z "$OTHER" ] || {
+  echo "   REFUSING: missing [$MISSING ] / unclaimed errors:" >&2
+  [ -n "$OTHER" ] && echo "$OTHER" | sed 's/^/     /' >&2
+  echo "   A missing code is a claim that stopped being true; an unclaimed one means the fixture" >&2
+  echo "   failed for a reason it does not name, and then it measured the build, not the peer." >&2
+  exit 1; }
 echo
 
 echo "== 3. probe — Reach · emit face · frame budget (executed) =="

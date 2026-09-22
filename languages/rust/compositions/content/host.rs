@@ -11,31 +11,19 @@
 //! indistinguishable from a bare one to everything except the failing checks, which
 //! would then read as defects in the PEER.
 //!
-//! # What this host installs, and the line it will not cross
+//! # What this host installs
 //!
-//! `install_content_types` and nothing else. The handler face has no install path on
-//! this peer — measured by `gates/host-seam/rust/`, both arms:
-//!
-//! ```text
-//! A. nothing bound at system/content          404  handler_not_found
-//! B. all four §11.6.1 tree writes bound       501  no_handler_body
-//! ```
-//!
-//! **Binding those four writes here would make the peer worse and make the report
-//! lie.** `404` is the truth — no content handler exists — and `501` would say one
-//! exists and is broken. It would also move a `--profile core` check for a reason that
-//! has nothing to do with CONTENT. So the wiring program does not perform them, and
-//! that refusal is the composition's most important line.
-//!
-//! What IS installed is real and is measured by an oracle that is not ours:
-//! `validate-peer -category type_system` renders the same three §11.1 types from
-//! `entity-core-go`'s independent transcription and compares content hashes.
+//! `install_content` — the handler through `Peer::register_handler` (keystone H1) and the seven
+//! type entities. Until H1 landed on this peer the host installed the types and nothing else, and
+//! deliberately bound no manifest: with no body behind it the peer answered `501 no_handler_body`,
+//! a broken handler where the truth was an absent one. `register_handler` binds the entities and
+//! the body together, so that line has nothing left to refuse.
 
 use std::io::Write;
 use std::process::exit;
 use std::sync::Arc;
 
-use entity_content::{install_content_types, ALL_TYPES};
+use entity_content::{install_content, ALL_TYPES};
 use entity_core_protocol::peer::transport;
 use entity_core_protocol::peer::{CreateOptions, Peer};
 
@@ -86,7 +74,7 @@ fn main() {
     // One extension, so the order is trivially satisfied and is stated anyway: the
     // first two-extension composition is where an unstated ordering rule becomes an
     // ordering bug (SYSTEM-COMPOSITION §2.2).
-    let installed = install_content_types(&peer.store, &peer.local_peer);
+    let installed = install_content(&peer, None).unwrap_or_else(|e| die(&format!("install CONTENT: {e}")));
 
     let listener = transport::listen(port).unwrap_or_else(|e| die(&format!("listen failed: {e}")));
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
@@ -96,10 +84,11 @@ fn main() {
     );
     let _ = std::io::stdout().flush();
 
-    // The proof-of-install line. It reports what was written AND what was refused,
-    // because a report naming only what happened lets the absence read as an oversight.
+    // The proof-of-install line, naming every face, so a peer that installed nothing is
+    // distinguishable from a bare one by something other than failing checks.
     eprintln!(
-        "COMPOSED CONTENT v3.7 types={} of {} handler=NOT-INSTALLABLE (see gates/host-seam/rust)",
+        "COMPOSED CONTENT pattern={} types={} of {} handler=installed",
+        installed.pattern,
         installed.type_paths.len(),
         ALL_TYPES.len()
     );

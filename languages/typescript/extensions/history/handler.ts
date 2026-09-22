@@ -333,7 +333,13 @@ export class HistoryHandler implements Handler {
     // goes through normal put, which will itself be recorded in history." So this write
     // fires the emit pathway and our own recorder observes it — the rollback appears in
     // the chain as an ordinary `updated`, which is what §4.3.2's closing paragraph says.
-    tree.put(path, entity);
+    //
+    // §4.3.2: "the transition's `operation` field will reflect the rollback operation", and §2.1
+    // records the remote caller as `author`. So the write carries THIS dispatch's execution context.
+    // It did not in any of our three ports until 2026-09-12 (cross-port review): every rollback was
+    // recorded as the peer's own `system/tree:put`, and the oracle's `rollback_new_transition`
+    // checks only `event` and `hash`, so nothing could see it.
+    tree.put(path, entity, ctx.emitContext());
 
     return HandlerResult.ok(
       Entity.create(
@@ -351,6 +357,11 @@ export class HistoryHandler implements Handler {
    * some transition's `hash`. It fails only for the FIRST entity ever at the path when
    * you roll back past the write that replaced it — the oldest reachable state, which is
    * the one an undo most wants.
+   *
+   * **UNCAPPED, deliberately** — unlike `query`. `maxWalk` bounds a READ whose caller has
+   * `has_more` to continue with; applied here it turned a real rollback target deeper than
+   * `maxWalk` transitions into a false `404 not_in_history`, which breaks §4.3.2's MUST. The chain
+   * is content-addressed and cannot cycle. (`[assumptions].max_walk`; 2026-09-12 cross-port review.)
    */
   #isInHistory(
     tree: EntityTree,
@@ -360,13 +371,11 @@ export class HistoryHandler implements Handler {
     targetHash: Uint8Array,
   ): boolean {
     let current: Uint8Array | null = tree.getHash(this.#headPath(ctx, path)) ?? null;
-    let walked = 0;
-    while (current !== null && walked < this.#maxWalk) {
+    while (current !== null) {
       const transition: Entity | undefined = store.get(current);
       if (transition === undefined) {
         return false;
       }
-      walked += 1;
       const h = Ecf.optBytes(transition.data, "hash");
       const ph = Ecf.optBytes(transition.data, "previous_hash");
       if ((h !== null && bytesEqual(h, targetHash)) || (ph !== null && bytesEqual(ph, targetHash))) {

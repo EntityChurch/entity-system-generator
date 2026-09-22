@@ -1,8 +1,8 @@
 //! §5.1 `emit_entity` — the transition recorder. **MODULE-PRIVATE** (see `mod.rs`).
 //!
-//! This is the emit-consumer body, and on this peer it is the half of the extension
-//! that actually runs in production. The handler face cannot be installed; this one
-//! can, and `languages/rust/gates/host-seam` arm G measured the property it needs:
+//! This is the emit-consumer body. Until keystone landed H1 on this peer (2026-09-12) it
+//! was the only half of the extension that ran, because the handler face could not be
+//! installed; the consumer always could, and `languages/rust/gates/host-seam` arm G measured the property it needs:
 //! **the peer's consumer seam is re-entrant.** `Store::fire` holds `consumers.read()`
 //! across the callback, a `bind` from inside takes `inner.write()` and then re-enters
 //! `fire`, and the arm ran that shape behind a 5-second timeout because the failure it
@@ -67,13 +67,11 @@ pub struct RecorderIdentity {
     pub local_identity_hash: Vec<u8>,
     /// §2.1: "For autonomous operations, the handler grant."
     ///
-    /// **On this peer there is no handler grant, because there is no handler.** The
-    /// other two ports read back the token their own `install_history` minted at
-    /// `system/capability/grants/system/history`; here `Peer` exposes `create` and
-    /// `dispatch` and nothing else, so there is no mint and nothing to read. The host
-    /// supplies the local identity hash and the composition declares that it did — see
-    /// `EXTENSION.toml [substrate.handler_grant]`. It is a weaker fabrication than the
-    /// other two ports', not the same one.
+    /// `install_history` reads this back from `system/capability/grants/system/history`,
+    /// where `Peer::register_handler` bound it, and falls back to the local identity hash
+    /// only if nothing is there (reported as `handler_grant_available = false`). Until
+    /// keystone's H1 (2026-09-12) this peer had no handler and no mint, so the fallback was
+    /// the only value — see `EXTENSION.toml [substrate.handler_grant]`.
     pub handler_grant_hash: Vec<u8>,
     pub local_peer: String,
 }
@@ -358,22 +356,16 @@ pub fn record_transition(
     })
 }
 
-/// §3.3 `prune_history`. **This severs nothing, and the comment is the deliverable.**
+/// §3.3 `prune_history`. **Walks and reports; mutates nothing.**
 ///
-/// §3.3's algorithm walks to the `max_depth`-th transition and then says: "sever the
-/// chain — the old transition keeps its previous field (immutable in content store),
-/// but it's no longer reachable from the head."
+/// Through v1.7, §3.3 said to "sever the chain" at the `max_depth`-th transition. A
+/// content-addressed entity cannot be edited, so severing means rewriting every transition
+/// up to the head, which defeats an audit chain. We routed that (A-4), and v1.8 rewrote
+/// §3.3: `max_depth` is a retention floor, "the chain is never rewritten and the head is
+/// never re-pointed", and the pseudocode "MUTATES NOTHING" — which is what this already did.
 ///
-/// A content-addressed entity cannot be edited, so "severing" means writing a NEW
-/// transition identical to the last-kept one except with `previous` absent — which
-/// changes its content hash, which changes the hash the transition before it points at,
-/// which cascades all the way to the head. Rewriting the chain is the only way to
-/// truncate it, and rewriting an audit chain is the opposite of what an audit chain is
-/// for.
-///
-/// So this walks and reports. Pruning is a SHOULD (§9.1), the transitions beyond the
-/// depth remain reachable, and the honest statement is that we do not implement it
-/// rather than that we do. Routed to arch.
+/// Collection is a SHOULD (§9.1) and this port collects nothing, which v1.8's §3.3 states
+/// is conformant.
 pub fn prune_history(store: &Store, head_path: &str, max_depth: u64) -> (u64, Option<Vec<u8>>) {
     let Some(head) = store.hash_at(head_path) else {
         return (0, None);

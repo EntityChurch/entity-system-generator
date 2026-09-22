@@ -112,8 +112,8 @@ inattributable     = 4
 history_checks     = 34
 declared_skips     = ["frame-limit-respected"]
 skip_cause         = "needs a local/files root to seed >16 MiB of content; not installed in this composition"
-context_provenance = "fallback"
-context_note       = "Every transition this composition records carries provenance=autonomous-fallback. The peer's tree-change event carries no execution context on any of the three targets. Reported here so a green history category is not read as a satisfied §9.1 MUST."
+context_provenance = "dispatch context (H8), autonomous fallback otherwise"
+context_note       = "CORRECTED 2026-09-12: this read `fallback` and said no target's tree-change event carries an execution context, which stopped being true when keystone's H8 landed (2026-09-07) and the recorder began consuming it. A write made through dispatch now carries its context; `w6_caller_cap_absent` still FAILS because every wire put arrives with the peer's bootstrap `system/tree` handler grant set and the recorder prefers `handler_grant` over `caller_capability` — the missing capability slot is K-1, routed. Reported here so a green history category is not read as a satisfied §9.1 MUST."
 
 # ── [history] — what the composition configures, because the oracle assumes it ──────
 [history]

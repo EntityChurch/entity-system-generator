@@ -102,6 +102,12 @@ well as the code. *(That pin was this repo's own routed finding —
 
 ## 2. The substrate model — three peers, measured, not extrapolated
 
+> **Dated note, 2026-09-12.** The `rust` handler-face rows below were measured before keystone
+> landed H1/H6 on that peer. Since then `Peer::register_handler` is public, `install_content`
+> installs the handler, the body reads the connection's frame budget (`HandlerContext::frame_budget`),
+> and the `content` category scores 12 PASS / 1 SKIP of 13 on `rust` (oracle 78db4a9). The tables
+> are kept as the record of the port; the current per-row values are in `../EXTENSION.toml`.
+
 Every row was **measured**, by `languages/typescript/gates/host-seam/probe-seam.mjs` / `probe-seam.py` /
 `rust/probe-seam-rust.sh` or by the build itself. None is a source read.
 

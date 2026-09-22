@@ -222,31 +222,39 @@ function installEvaluator(
       // installed evaluators compose.
       if (!isComputeExpression(request.expression.type)) return null;
 
+      // §3.2 E1 — the dispatch layer pre-populates `{operation, params, resource,
+      // caller_capability}`. The first three come off the EXECUTE this peer hands us.
+      // `caller_capability` binds null: `ExpressionRequest` carries no verified token on
+      // this peer (`[substrate.evaluator_seam]`), and the EXECUTE's `capability` is a hash,
+      // not the capability entity E1 names.
+      const exec = request.execute;
+      const bindings = new Map<string, codec.EcfValue | Entity>([
+        ["operation", Ecf.text(exec.operation)],
+        ["params", Ecf.field(exec.entity.data, "params") === null ? Ecf.nullValue : exec.params],
+        ["resource", Ecf.field(exec.entity.data, "resource") ?? Ecf.nullValue],
+        ["caller_capability", Ecf.nullValue],
+      ]);
+
       // A fresh evaluator per dispatch: §4.2 scopes the encountered set to one
       // evaluation, so a shared instance would widen `resolve()`'s reach across
       // unrelated requests.
       const outcome = new ComputeEvaluator(peer, limits).evaluateAt(
         request.expression,
         request.expressionPath,
+        { bindings },
       );
 
-      // F10 — an evaluated `compute/error` is a VALUE at 200, not a transport
-      // failure, and the dispatch boundary unwraps it as the result entity (§3.2).
-      // Declining here instead would answer 501 for a program that RAN and produced
-      // an error, which is a different and wrong statement.
+      // §3.2 E1 — "the result is unwrapped at the dispatch boundary": `compute/result` →
+      // its value; `compute/error` → the result entity at 200 (F10, a program that RAN and
+      // produced an error is not a transport failure); a bare primitive →
+      // `{type: "primitive/any", data}`; an entity → as-is. This used to return a
+      // `compute/result` wrapper, which is what the peer's own literal floor still does
+      // (keystone's, routed).
       if (outcome.error !== null) return HandlerResult.ok(outcome.error.toEntity());
-
       const value = outcome.value;
-      if (value instanceof Entity) return HandlerResult.ok(value);
-      return HandlerResult.ok(
-        Entity.create(
-          RESULT,
-          Ecf.map(
-            ["value", value as codec.EcfValue],
-            ["expression", Ecf.bytes(request.expression.contentHash)],
-          ),
-        ),
-      );
+      if (value instanceof Entity && value.type !== RESULT) return HandlerResult.ok(value);
+      const bare = value instanceof Entity ? (Ecf.field(value.data, "value") ?? Ecf.nullValue) : value;
+      return HandlerResult.ok(Entity.create("primitive/any", bare ?? Ecf.nullValue));
     },
   };
 

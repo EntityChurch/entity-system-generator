@@ -102,6 +102,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity-compute"
+version = "3.29.0"
+dependencies = [
+ "entity-core-protocol-rust",
+ "sha2",
+]
+
+[[package]]
 name = "entity-content"
 version = "3.6.0"
 dependencies = [
@@ -224,6 +232,7 @@ dependencies = [
 name = "type-parity-rust"
 version = "0.0.0"
 dependencies = [
+ "entity-compute",
  "entity-content",
  "entity-core-protocol-rust",
  "entity-history",

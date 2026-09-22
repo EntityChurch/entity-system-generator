@@ -1,12 +1,13 @@
 //! HISTORY — the SDK face, and the **emit-consumer face**.
 //!
-//! The emit consumer is why this extension was built second, and on this peer it is the
-//! only face that both installs *and* does work. `DESIGN-THE-SDK-LAYER` §1 named four
-//! faces; CONTENT exercised three and none of them ran here. This one runs.
+//! The emit consumer is why this extension was built second: it is the face CONTENT does
+//! not have. Until keystone landed H1 on this peer (2026-09-12) it was also the only face
+//! here that both installed and did work; all four install now, through
+//! [`crate::install_history`].
 //!
-//! Everything interesting about it is about the two things the peer does not give us:
-//! the execution context (see [`build_context`]) and read events (see `EXTENSION.toml
-//! [substrate.accessed_event]`).
+//! Most of what is interesting about it is the execution context (see [`build_context`]),
+//! which the peer delivered only from H8, and read events, which it never delivers (see
+//! `EXTENSION.toml [substrate.accessed_event]`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -25,14 +26,14 @@ use crate::types::{CONFIG, CONFIG_PREFIX};
 
 /// Build the §2.1 context from whatever the tree-change event carried.
 ///
-/// # On this peer it carried nothing, and it cannot
+/// # What the event carries
 ///
-/// `TreeChangeEvent` is `{event_type, path, new_hash, previous_hash}` — four fields,
-/// `store.rs:34-39`, no context field to be absent. `python`'s event is the same four.
-/// `typescript` declares an `EmitContext` with almost exactly SYSTEM-COMPOSITION §1.4's
-/// inventory and **constructs it at zero sites**. So across three peers the fallback is
-/// not a fallback: it is the only path, and the constant is named
-/// `PROVENANCE_AUTONOMOUS_FALLBACK` rather than something reassuring for that reason.
+/// Since keystone's H8 (2026-09-07) `TreeChangeEvent.context` is `Some(ExecContext)` for a
+/// write made through dispatch and `None` for an autonomous one; [`carried_from_exec`]
+/// converts it. Before H8 the event had four fields and no context slot on this peer or
+/// `python`, and `typescript` never constructed its `EmitContext`, so the fallback was the
+/// only path on all three. The constant is still named `PROVENANCE_AUTONOMOUS_FALLBACK`
+/// rather than something reassuring.
 ///
 /// §2.1 defines the autonomous-case values exactly:
 ///
@@ -47,18 +48,14 @@ use crate::types::{CONFIG, CONFIG_PREFIX};
 /// will say it was. §7.2 calls `capability` the answer to "under what authority?" — and
 /// on these peers the answer is always "its own".
 ///
-/// **And on THIS peer it is one step weaker still.** The second bullet has no referent:
-/// there is no handler grant, because `Peer` exposes no mint and there is no handler to
-/// grant for. The host passes the local identity hash for both, so `author` and
-/// `capability` are the same bytes on every transition. The oracle's
-/// `context_capability_present` only checks non-zero and passes on that — which is the
-/// D13 distinction one level up, and is why the composition report says so out loud.
+/// **The second bullet's referent is the grant `register_handler` binds**, which
+/// [`crate::install_history`] reads back into `RecorderIdentity::handler_grant_hash`. Until
+/// keystone's H1 (2026-09-12) this peer had no handler and no mint, the host passed the local
+/// identity hash for both values, and `author == capability` on every autonomous transition.
 ///
-/// The signature takes the already-extracted pieces rather than the event, because the
-/// per-target difference is *which of them can ever be non-`None`*, and that belongs at
-/// the boundary rather than threaded through the recorder. On this port `carried` is
-/// always `None` and the parameter exists so the day it is not, this function is where
-/// the change lands.
+/// The signature takes the already-extracted pieces rather than the event, so the
+/// per-target conversion stays at the boundary ([`carried_from_exec`]) rather than
+/// threaded through the recorder.
 pub fn build_context(
     identity: &RecorderIdentity,
     operation: &str,
@@ -125,10 +122,10 @@ pub fn carried_from_exec(ctx: &ExecContext) -> Option<CarriedContext> {
 
 /// SYSTEM-COMPOSITION §1.4's inventory, as the recorder would consume it.
 ///
-/// **Nothing on this peer produces one.** It is declared so that [`build_context`] has a
-/// non-degenerate branch to test — `tests/recorder.rs` constructs one by hand and
-/// asserts the `context` provenance path — and so that the shape a peer would have to
-/// deliver is written down in the routing packet's own vocabulary rather than in prose.
+/// [`carried_from_exec`] builds one from the peer's `ExecContext` on every event that
+/// carries a context with an `author` (keystone H8). Until H8 nothing on this peer produced
+/// one, and the type was declared so [`build_context`] had a non-degenerate branch to test;
+/// `tests/recorder.rs` still constructs one by hand for that.
 #[derive(Clone, Debug, Default)]
 pub struct CarriedContext {
     pub author: Vec<u8>,
@@ -353,9 +350,8 @@ pub fn config_path(local_peer: &str, name: &str) -> String {
 /// lookup.
 ///
 /// Exposed because it is the only way an operator can answer "is this path audited, and
-/// by which rule" without writing to it and looking. On this peer it is also the only
-/// route to that answer at all: the other two ports can ask over the wire through
-/// `system/history:query`, and here there is no handler to ask.
+/// by which rule" without writing to it and looking. (Until keystone's H1 on 2026-09-12
+/// it was also the only route on this peer, which then had no `system/history` handler.)
 pub fn resolve_config(store: &Store, path: &str, local_peer: &str) -> ConfigLookup {
     find_history_config(store, path, local_peer)
 }

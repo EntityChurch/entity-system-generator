@@ -1,0 +1,454 @@
+## SYSTEM.toml — languages/rust/compositions/compute
+##
+## A composition NAMES things and DECLARES NOTHING NEW. Every fact about COMPUTE lives in
+## `extension-contracts/compute/EXTENSION.toml`; every fact about the toolchain lives in
+## `languages/rust/profile.toml`.
+##
+## THE THIRD PORT OF COMPUTE. First measured with two of five faces installed (7 of 128, predicted
+## exactly), then — the same day, after keystone landed H1/H7/K-5 on this peer — with all five
+## (125, predicted exactly), then with `compute/apply` handler mode, which only this peer can host.
+## Each run was pre-registered below before it happened, and every block is kept.
+
+[system]
+name       = "compute"
+extensions = ["COMPUTE"]
+
+[system.peer]
+generator = "entity-core-keystone"
+# Read-only, another team's tree. Consumed as a CRATE by path dependency, which is this language's
+# packaging boundary.
+path      = "../entity-core-keystone/protocol-generator/rust"
+
+# ── [system.consumers] — SYSTEM-COMPOSITION §2.2 ────────────────────────────────────────
+[system.consumers]
+order = ["COMPUTE"]
+positions = { COMPUTE = 5 }
+enforced_by = "the wiring program's call order — NOT by the peer"
+note = """
+`Store::register_tree_consumer` PUSHES onto a `Vec` with no position argument, as on the other two
+peers. With one consumer, position 5 is satisfied by having nowhere else to be.
+
+**The consumer is registered and IDLE on the wire.** Nothing can install a subgraph over the wire
+(the install operation is a handler operation), so the dependency index stays empty and every tree
+write the oracle makes costs one `HashMap` lookup that finds nothing. It is registered anyway, for
+the reason `rust × content-history` registered HISTORY's recorder: the face IS live on this peer,
+§7.1's rebuild runs against whatever `system/compute/processes/*` the tree holds, and an
+in-process embedder that drives `ComputeHandler` directly gets a working reactive engine.
+`tests/reactive.rs` measures that engine over this peer's real bus, including a sixteen-deep
+re-entrant cascade behind a timeout.
+"""
+
+# ── [system.faces] — per (extension x face), because a peer answers per face (D13) ──────────
+#
+# ** RE-DECLARED 2026-09-12 (second session), when keystone landed H1/H6/H7/H9 on this peer. **
+# The first declaration read `handler = "not-installable"` and `evaluator = "not-installable"`, both
+# from keystone's own `[extension_host]` row and our compile-fail arm (`E0624 register_handler is
+# private`). Their answer to K-9 —
+# `ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe`
+# — made `Peer::register_handler` public and `system/*` installable, and added
+# `Peer::set_expression_evaluator`. The evidence for each value below:
+#
+# `handler`   the composed run: every one of the category's evaluation checks dispatches through
+#             `system/compute:*`. And `languages/rust/gates/host-seam` scenario 1, install -> dispatch
+#             -> witness with the nothing-installed and uninstalled controls.
+# `evaluator` READ BACK off the peer by `install_compute` and printed on the COMPOSED line; dispatched
+#             through by host-seam scenario 5 (an entity-native body the peer alone answers 501).
+# `sdk`       `installed` now, not `library-only`: the handler runs THROUGH `ComputeEvaluator`.
+[system.faces.COMPUTE]
+types         = "installed"
+handler       = "installed"
+emit_consumer = "installed"
+sdk           = "installed"
+evaluator     = "installed"
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+categories = ["compute", "entity_native"]
+profiles   = ["core"]
+
+# ── [gate.expectation] — PRE-REGISTERED, written BEFORE the first composed run ─────────────
+#
+# **A different kind of prediction from the other two ports'.** Those priced how much of §4.1 a
+# second derivation reaches. This one prices the REGISTRATION SURFACE, and the interpreter's
+# correctness is not in it at all: 78 unit tests, six planted defects each caught by its named
+# test, and `make type-parity` / `make sdk-parity` across three ports are where that lives.
+[gate.expectation]
+compute_checks = 128
+
+# The BARE arm is keystone's own `entity-peer-host`, which publishes no compute types. Measured at 0
+# of 128 on `typescript` (2026-09-09) and on `python` (2026-09-11); the argument carries to any peer
+# with no compute types bound.
+bare_pass = 0
+bare_fail = 128
+bare_skip = 0
+
+predicted_composed_pass_low  = 7
+predicted_composed_pass_high = 7
+predicted_regressions        = 0
+prediction_basis = """
+EXACTLY SEVEN, and they are named: `types_expression`, `types_inline`, `types_value`,
+`types_result_error`, `types_subgraph`, `v37_lookup_hash_type_registered` and
+`v314_args_types_registered`. Every one is `client.TreeGet` on `system/type/<name>` and nothing
+else (`entity-core-go` `cmd/internal/validate/compute.go`, read 2026-09-12) — G-3's shape: they
+assert the paths RESOLVE. `Store::bind` is public, so they resolve.
+
+EVERYTHING ELSE FAILS, and the mechanism is one check:
+
+  `handler_present` is `client.TreeGet("system/handler/system/compute")`. This composition binds no
+  manifest (the handler face is not-installable), so it FAILS, and 97 checks `Require` it directly
+  and the rest transitively through `handler_op_install`, `handler_manifest_decode` and the
+  reactive chain. A parse of the file for `r.Run` blocks with no `Require(` finds exactly the eight
+  above; the parse sees 121 `r.Run` blocks against 128 `Declare`s, so the seven the parse does not
+  see are asserted to be among the handler-dependent ones rather than measured to be.
+
+THE CORE ARM: 63 improvements, and the NAME SET is predicted, not only the count — it is exactly
+`python × compute`'s `[gate.baseline.core].improved`, the 63 `type_system.type_compute_*_{fetch,
+match}` and `type_system.type_system_compute_*_{fetch,match}` checks. The `_match` half compares this
+port's type entity bytes against `entity-core-go`'s own transcription, so a field-map slip in
+`src/types.rs` lands HERE, as a named core check, rather than in the category.
+
+0 REGRESSIONS, with one named risk. The emit consumer is registered and fires on every one of the
+core profile's tree writes. It does one index lookup and returns. The risk is not the lookup; it is
+that the consumer list's `RwLock` is now read on every write by a consumer that exists, where the
+bare arm has none — measured by `make regression`, not reasoned.
+
+A miss in either direction is kept and written up. If a type check FAILS, the defect is in
+`src/types.rs` or in `install_compute_types` and the core arm will say which type.
+"""
+
+# ── PRE-REGISTRATION 2 — written 2026-09-12 BEFORE the first composed run with H1 ─────────────
+#
+# The first pre-registration above priced a peer with no handler, matched exactly, and is kept. This
+# one prices the same interpreter on the same peer with every face installed. Not a new
+# `[gate.expectation]` table: nothing reads these numbers mechanically, and the first block is the
+# artifact of that run.
+#
+#   compute  PREDICTED 125 PASS / 3 FAIL of 128 — the same number as `typescript` and `python`, and the
+#            same THREE failing: `v38_apply_handler_mode`, `v310_apply_resource_field_accepted`,
+#            `v314_compute_apply_to_entity_native`. All three are `compute/apply` HANDLER mode, which
+#            this port does not implement yet (`internal/evaluator.rs` returns a named error). The
+#            improved NAME SET is predicted to equal `typescript × compute`'s 125, name for name.
+#   core     PREDICTED 63 improvements, the same name set as the first run, 0 regressions.
+#
+# NAMED RISKS, each a place this port's substrate differs and the oracle can see it for the first time:
+#   - the ~120 evaluation checks have never run through this port's interpreter over the wire; 50 unit
+#     tests and six planted defects are the only prior evidence. A miss here is a port defect.
+#   - `range`'s bound is the third value in the cohort (A-26); `canonicalize` accepts `./x` like
+#     `typescript` and unlike `python`. Neither is known to be vectored.
+#   - the evaluation thread per request (256 MiB reserved stack) under the oracle's concurrency.
+#   - H9 replaced a `check_permission` carrier that also matched `peers`; under the degenerate seed
+#     policy the difference is unobservable, so `cp1_*` should not move.
+#
+# A miss in either direction is kept and written up below it, not folded into the numbers.
+
+# ── MEASURED 2 — the H1 run, 2026-09-12, ROUNDS=2, oracle 78db4a9 ──────────────────────────────
+#
+#   compute  125 PASS / 3 FAIL, both rounds. RIGHT, EXACTLY: the 125 are `typescript × compute`'s 125
+#            name for name, and the 3 are the three named, each failing with our own
+#            `invalid_expression` for handler mode. None of the four named risks materialised.
+#   core     63 improvements (the same name set), 0 regressions, 0 flaky.
+#
+# ── PRE-REGISTRATION 3 — written BEFORE the handler-mode run ────────────────────────────────────
+#
+# `compute/apply` HANDLER mode, over keystone's `HandlerContext::dispatch_execute` (K-5, landed on
+# `rust` only). No other port implements it, so there is no sibling number to copy; derived from
+# §4.1, with `entity-core-go`'s `evalApplyHandler` read for the places §4.1 is silent (declared in
+# `[assumptions].apply_handler_mode`).
+#
+#   compute  PREDICTED 128 PASS of 128. The three that move: `v38_apply_handler_mode` (apply ->
+#            system/compute:eval -> 50), `v310_apply_resource_field_accepted` (the same with a
+#            resource -> 7), `v314_compute_apply_to_entity_native` (apply -> a wire-registered
+#            entity-native body evaluated by OUR H7 evaluator with `params` bound -> 42).
+#   core     PREDICTED unchanged: 63 improvements, 0 regressions. Nothing in `--profile core` builds
+#            a `compute/apply`.
+#
+# NAMED RISKS: `v314` crosses three seams at once — dispatch_execute, the peer's entity-native route,
+# and §3.2 E1's scope binding in our evaluator — and is the one most likely to miss. SA-4: our H7
+# evaluator returns a `compute/result` entity (as the peer's own literal floor does) rather than the
+# `primitive/any` wrapper the reference's comment describes; the apply passes it through, so the
+# oracle's `extractResultValue` must read `value` off it. A miss is kept, not folded in.
+
+# ── MEASURED 3 — handler mode, 2026-09-12 (UTC 09-13), ROUNDS=2 ────────────────────────────────
+#
+#   compute  128 PASS of 128, both rounds. RIGHT, EXACTLY: the three handler-mode vectors moved, nothing
+#            else did. The first port in this repo to pass the whole category, and the only peer that
+#            can host it today (K-5 is open on the other two).
+#   core     63 improvements, 0 regressions, 0 flaky — unchanged.
+#   Between pre-registration 3 and this run the compute-arc review changed the H7 evaluator's authority
+#   (handler grant, not caller capability), its result unwrapping (§3.2 E1) and handler resolution
+#   order; the prediction stood unedited through that and matched.
+
+# ── `entity_native` — ADDED 2026-09-12 (second session), PRE-REGISTERED BEFORE ITS FIRST RUN ─────
+#
+# `validate-peer`'s `entity_native` category (13 checks, `cmd/internal/validate/entity_native.go`
+# @ 78db4a9) measures §3.2 E1 — the H7 evaluator face — and it sits OUTSIDE `--profile core`, so no
+# run in this tree had ever reached it. The contract row that read "§3.2 ... Not measured here" was
+# a statement about the categories WE declare, not about the oracle (D22). Found by the compute-arc
+# review. Five checks have a `compute/literal` body the PEER answers before any evaluator is asked,
+# so they read the same in both arms by construction: `dispatch_basic`, `hot_swap_expression`,
+# `missing_grant_fail_closed`, `empty_handler_grant_dispatches`, `dispatch_with_deliver_to`.
+# `result_unwrapped` is also a literal body and FAILS in both arms on every keystone peer: the
+# peer's literal floor returns a `compute/result` wrapper (§3.2 E1 says unwrap) — keystone's, routed.
+#
+#   PREDICTED improvements (7): scope_params, scope_operation, multiple_operations,
+#   lookup_tree_within_scope, lookup_tree_outside_scope (narrowed by the HANDLER GRANT),
+#   dual_check_handler_grant_blocks (F2 ceiling = the handler grant), dual_check_both_pass (handler
+#   mode dispatching `system/tree:get` under the provided capability). 0 regressions.
+#   MEASURED 2026-09-12 (UTC 09-13), ROUNDS=2: RIGHT, EXACTLY — the 7 named, 0 regressions. The 3 that
+#   fail in BOTH arms are the peer's: `result_unwrapped` (literal floor wraps), `missing_grant_fail_closed`
+#   (this host dispatches a grantless handler, 200 not 403), `dispatch_with_deliver_to` (200 not 202).
+#   Routed: `ROUTING-2026-09-12-d-keystone-rust-hosts-every-face-and-three-entity-native-rows-on-your-hosts`.
+
+# ── [compute] — what the composition configures ──────────────────────────────────────────
+[compute]
+# §9.3's recommended limits, identical to the other two ports'. The two ports MUST carry the same
+# numbers: §4.2 makes the `budget_exhausted` step count a cross-impl determinism surface.
+max_operations = 100000
+max_depth      = 1024
+note = """
+Not tuned. The three ports MUST carry the same numbers (§4.2's `budget_exhausted` step count is a
+cross-impl determinism surface), and they are here so the three ports' compositions can be diffed
+line for line.
+"""
+
+# ── MEASURED 2026-09-12, ROUNDS=2, oracle 78db4a9 (check_set_digest 866ef058…) ─────────────
+[gate.expectation.measured]
+compute  = "bare FAIL 128 · composed PASS 7 / FAIL 121, both rounds. Exactly the seven named in `prediction_basis`, and nothing else moved in either direction."
+core     = "bare PASS 334 / WARN 337 / SKIP 107 · composed PASS 397 / WARN 274 / SKIP 107, of 778. 63 improvements, 0 regressions attributable, 0 flaky."
+name_set = "The 63 core improvements are IDENTICAL, name for name, to `python × compute`'s `[gate.baseline.core].improved` — compared as sets before this block was written. So all three ports' 33 type entities match `entity-core-go`'s own transcription, and `make type-parity` separately reports the three ports agree by hash and field map."
+verdict  = """
+RIGHT, EXACTLY, on all four numbers and both name sets. The second pre-registration in this repo
+to match exactly, after `rust × content-history`, and for the same reason: the prediction was about
+a REGISTRATION SURFACE, which is structural, not about how much of an interpreter a port reaches.
+
+**And 7 of 128 is not a statement about this port's interpreter.** 78 unit tests, six planted
+defects each caught by its named test, and three-port type- and SDK-parity are. The oracle cannot
+see any of it on this peer because every evaluation check reaches COMPUTE through
+`system/compute:*`, and `rust` cannot host a handler (keystone K-9, in flight in their worktree).
+
+The named core risk did not materialise: the emit consumer is registered on this peer's bus for
+all 778 checks' worth of tree writes, finds nothing in its index, and moved no core check.
+"""
+
+# ══ [gate.baseline.*] — D21's REFERENCE IN TIME, first bless 2026-09-12 at ROUNDS=2 ══
+[gate.baseline.compute]
+measured = "2026-09-13"   # 2 round(s)
+total    = 128
+composed = { PASS = 128 }
+bare     = { FAIL = 128 }
+improved = [
+  "compute.algo_fibonacci_10",
+  "compute.algo_fibonacci_5",
+  "compute.cp1_install_dynamic_capability_deferred",
+  "compute.cp1_install_static_literal_adversary_rejected",
+  "compute.cp1_install_static_literal_self_issued_accepted",
+  "compute.d8_reeval_dep_in_apply_arg",
+  "compute.d8_reeval_dep_in_let_binding",
+  "compute.eval_arithmetic_add",
+  "compute.eval_arithmetic_div_exact",
+  "compute.eval_arithmetic_div_float",
+  "compute.eval_arithmetic_mod",
+  "compute.eval_arithmetic_mul",
+  "compute.eval_arithmetic_sub",
+  "compute.eval_closure_captures_scope",
+  "compute.eval_compare_eq_false",
+  "compute.eval_compare_eq_true",
+  "compute.eval_compare_lt",
+  "compute.eval_compare_neq",
+  "compute.eval_construct_deterministic",
+  "compute.eval_construct_field_extract",
+  "compute.eval_depth_limit",
+  "compute.eval_division_by_zero",
+  "compute.eval_error_non_expression",
+  "compute.eval_error_not_found",
+  "compute.eval_error_propagation",
+  "compute.eval_if_false_branch",
+  "compute.eval_if_short_circuit",
+  "compute.eval_if_true_branch",
+  "compute.eval_lambda_apply",
+  "compute.eval_let_sequential",
+  "compute.eval_literal_bool",
+  "compute.eval_literal_int",
+  "compute.eval_literal_string",
+  "compute.eval_logic_and",
+  "compute.eval_logic_not",
+  "compute.eval_logic_or",
+  "compute.eval_lookup_scope",
+  "compute.eval_lookup_tree_evaluates_expr",
+  "compute.eval_lookup_tree_non_expr",
+  "compute.handler_manifest_decode",
+  "compute.handler_op_eval",
+  "compute.handler_op_install",
+  "compute.handler_op_uninstall",
+  "compute.handler_present",
+  "compute.q23_install_builtin_apply_capability_resource",
+  "compute.q23_install_builtin_apply_resource_only",
+  "compute.reactive_converged_result",
+  "compute.reactive_final_result",
+  "compute.reactive_initial_result",
+  "compute.reactive_install",
+  "compute.reactive_second_update",
+  "compute.reactive_update_dependency",
+  "compute.types_expression",
+  "compute.types_inline",
+  "compute.types_result_error",
+  "compute.types_subgraph",
+  "compute.types_value",
+  "compute.v310_apply_resource_field_accepted",
+  "compute.v310_f5_eval_capability_without_resource",
+  "compute.v310_f5_install_capability_without_resource",
+  "compute.v314_args_types_registered",
+  "compute.v314_builtin_arithmetic_alias",
+  "compute.v314_builtin_filter",
+  "compute.v314_builtin_fold",
+  "compute.v314_builtin_fold_empty",
+  "compute.v314_builtin_map",
+  "compute.v314_builtin_store_roundtrip",
+  "compute.v314_cast_float_truncate",
+  "compute.v314_cast_inf_to_int",
+  "compute.v314_cast_int_to_uint_negative",
+  "compute.v314_cast_nan_to_int",
+  "compute.v314_cast_neg_float_to_uint",
+  "compute.v314_cast_to_invalid_type",
+  "compute.v314_compute_apply_to_entity_native",
+  "compute.v314_index_basic",
+  "compute.v314_index_negative",
+  "compute.v314_index_past_end",
+  "compute.v314_index_type_mismatch",
+  "compute.v314_length_empty",
+  "compute.v314_length_nonempty",
+  "compute.v314_length_type_mismatch",
+  "compute.v316_eager_cast_not_through_let",
+  "compute.v316_eager_cast_unsigned_div",
+  "compute.v316_int_wraparound_add",
+  "compute.v316_sign_agnostic_add",
+  "compute.v316_signed_canonical_encoding",
+  "compute.v316_uint_round_trip",
+  "compute.v316_uint_wraparound_add",
+  "compute.v317_cast_through_closure_arg",
+  "compute.v317_cast_through_if_branch",
+  "compute.v317_cast_through_lookup_scope",
+  "compute.v319_f10_error_at_200",
+  "compute.v319_f11_filter_fn_arg",
+  "compute.v319_n5_closure_field",
+  "compute.v319_n5_compute_compose",
+  "compute.v319_n5_disambiguation",
+  "compute.v319_n5_nested_field",
+  "compute.v319b_scope_entity_round_trip",
+  "compute.v319b_scope_hash_agreement",
+  "compute.v319b_scope_unreachable",
+  "compute.v319c_construct_entity_valued_field",
+  "compute.v319c_construct_navigation_chain",
+  "compute.v319c_inline_vs_builtin_construct_hash_agreement",
+  "compute.v319c_readback_navigation_returns_hash",
+  "compute.v36_add_mixed_float",
+  "compute.v36_div_negative",
+  "compute.v36_div_repeating",
+  "compute.v36_eq_cross_type",
+  "compute.v36_eq_incompatible",
+  "compute.v36_lt_string",
+  "compute.v36_lt_type_mismatch",
+  "compute.v36_mod_both_neg",
+  "compute.v36_mod_neg_dividend",
+  "compute.v36_mod_neg_divisor",
+  "compute.v36_resolve_rejects_non_compute",
+  "compute.v37_lookup_hash_eval",
+  "compute.v37_lookup_hash_field_extract",
+  "compute.v37_lookup_hash_type_registered",
+  "compute.v38_apply_handler_mode",
+  "compute.v38_cascade_chain",
+  "compute.v38_depth_non_tail",
+  "compute.v38_dynamic_handler",
+  "compute.v38_dynamic_handler_swap",
+  "compute.v38_newton_sqrt",
+  "compute.v38_relative_lookup_tree",
+  "compute.v38_tco_if_chain",
+  "compute.v38_tco_let_chain",
+  "compute.v38_tco_sum_2000",
+]
+
+[gate.baseline.core]
+measured = "2026-09-13"   # 2 round(s)
+total    = 778
+composed = { PASS = 397, WARN = 274, SKIP = 107 }
+bare     = { PASS = 334, WARN = 337, SKIP = 107 }
+improved = [
+  "type_system.type_compute_apply_fetch",
+  "type_system.type_compute_apply_match",
+  "type_system.type_compute_arithmetic_fetch",
+  "type_system.type_compute_arithmetic_match",
+  "type_system.type_compute_closure_fetch",
+  "type_system.type_compute_closure_match",
+  "type_system.type_compute_compare_fetch",
+  "type_system.type_compute_compare_match",
+  "type_system.type_compute_construct_fetch",
+  "type_system.type_compute_construct_match",
+  "type_system.type_compute_error_fetch",
+  "type_system.type_compute_field_fetch",
+  "type_system.type_compute_field_match",
+  "type_system.type_compute_if_fetch",
+  "type_system.type_compute_if_match",
+  "type_system.type_compute_index_fetch",
+  "type_system.type_compute_index_match",
+  "type_system.type_compute_lambda_fetch",
+  "type_system.type_compute_lambda_match",
+  "type_system.type_compute_length_fetch",
+  "type_system.type_compute_length_match",
+  "type_system.type_compute_let_fetch",
+  "type_system.type_compute_let_match",
+  "type_system.type_compute_literal_fetch",
+  "type_system.type_compute_literal_match",
+  "type_system.type_compute_logic_fetch",
+  "type_system.type_compute_logic_match",
+  "type_system.type_compute_lookup_hash_fetch",
+  "type_system.type_compute_lookup_hash_match",
+  "type_system.type_compute_lookup_scope_fetch",
+  "type_system.type_compute_lookup_scope_match",
+  "type_system.type_compute_lookup_tree_fetch",
+  "type_system.type_compute_lookup_tree_match",
+  "type_system.type_compute_numeric_cast_fetch",
+  "type_system.type_compute_numeric_cast_match",
+  "type_system.type_compute_result_fetch",
+  "type_system.type_compute_result_match",
+  "type_system.type_compute_scope_fetch",
+  "type_system.type_compute_scope_match",
+  "type_system.type_system_compute_assoc_args_fetch",
+  "type_system.type_system_compute_assoc_args_match",
+  "type_system.type_system_compute_concat_args_fetch",
+  "type_system.type_system_compute_concat_args_match",
+  "type_system.type_system_compute_filter_args_fetch",
+  "type_system.type_system_compute_filter_args_match",
+  "type_system.type_system_compute_fold_args_fetch",
+  "type_system.type_system_compute_fold_args_match",
+  "type_system.type_system_compute_group_by_args_fetch",
+  "type_system.type_system_compute_group_by_args_match",
+  "type_system.type_system_compute_install_request_fetch",
+  "type_system.type_system_compute_install_request_match",
+  "type_system.type_system_compute_install_result_fetch",
+  "type_system.type_system_compute_install_result_match",
+  "type_system.type_system_compute_map_args_fetch",
+  "type_system.type_system_compute_map_args_match",
+  "type_system.type_system_compute_range_args_fetch",
+  "type_system.type_system_compute_range_args_match",
+  "type_system.type_system_compute_scope_binding_fetch",
+  "type_system.type_system_compute_scope_binding_match",
+  "type_system.type_system_compute_store_args_fetch",
+  "type_system.type_system_compute_store_args_match",
+  "type_system.type_system_compute_subgraph_fetch",
+  "type_system.type_system_compute_subgraph_match",
+]
+
+[gate.baseline.entity_native]
+measured = "2026-09-13"   # 2 round(s)
+total    = 13
+composed = { PASS = 10, FAIL = 3 }
+bare     = { PASS = 3, FAIL = 10 }
+improved = [
+  "entity_native.dual_check_both_pass",
+  "entity_native.dual_check_handler_grant_blocks",
+  "entity_native.lookup_tree_outside_scope",
+  "entity_native.lookup_tree_within_scope",
+  "entity_native.multiple_operations",
+  "entity_native.scope_operation",
+  "entity_native.scope_params",
+]

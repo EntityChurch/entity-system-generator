@@ -8,37 +8,24 @@
 //! failure — with a positive control, because a compile-fail check without one reports
 //! its strongest result when the toolchain is broken.
 //!
-//! # What this port installs, and what it cannot
+//! # What this port installs
 //!
-//! An extension has four faces (`docs/DESIGN-THE-SDK-LAYER.md`). **On this peer they
-//! do not get the same answer, and that is the result of the third port.**
+//! An extension has four faces (`docs/DESIGN-THE-SDK-LAYER.md`). **On this peer they now all get the
+//! same answer**, which they did not for the first four compositions on `rust`:
 //!
 //! | face | on this peer | how we know |
 //! |---|---|---|
-//! | types (§11.1) | **installable** — [`install_content_types`] | `Store::bind` is `pub`; oracle-checked |
+//! | types (§11.1) | **installed** | `Store::bind` is `pub`; oracle-checked by content hash |
 //! | emit consumer (§6.13(c)) | **installable** — unused by CONTENT | probe scenario 2, two negatives |
-//! | SDK (§3.3/§5.3/§3.4) | **usable** — it is a library, it needs no peer hook | [`sdk`] |
-//! | handler body (§11.6.1 step 4) | **NOT installable** | probe scenario 1: `501` with all four tree writes bound |
+//! | SDK (§3.3/§5.3/§3.4) | **installed** — the handler runs through it | [`sdk`] |
+//! | handler body (§11.6.1 step 4) | **installed** — `Peer::register_handler` (keystone H1) | the `content` category; probe scenario 1 |
 //!
-//! So there is **no `install_content`** in this module, and its absence is deliberate.
-//! The four §11.6.1 tree writes *are* individually performable — they are ordinary
-//! `store.bind` calls — and performing them without a body is worse than doing
-//! nothing: it moves the peer from `404 handler_not_found` to `501 no_handler_body`,
-//! which reads as *installed and broken* rather than *absent*. Measured, not reasoned:
-//! `gates/host-seam/rust`, scenario 1 arms A and B.
-//!
-//! Shipping a function that does that would be shipping a trap, so this crate does not
-//! have one. [`ContentHandler`] is written, tested and correct; it has nowhere to go.
-//!
-//! # What that costs, stated plainly
-//!
-//! No wire-driven conformance check reaches [`handler`] or [`sdk`] on this peer.
-//! `EXTENSION.toml` records `reached_by = []` for every SDK entry on this port. The
-//! argument that "the extension is its own instrument" holds only where a gated path
-//! runs THROUGH the SDK face, and here none does. The one third-party measurement this
-//! substrate supports is `validate-peer`'s `type_system.type_system_content_*_match`,
-//! which reads the entities [`install_content_types`] binds and compares content hashes
-//! against `entity-core-go`'s independent transcription.
+//! Until keystone landed H1 for K-9 the handler row read **NOT installable** (`501 no_handler_body`
+//! with all four tree writes bound, `register_handler` private), and this crate deliberately had no
+//! `install_content`: performing the four writes without a body moves a peer from
+//! `404 handler_not_found`, which was true, to `501 no_handler_body`, which says a handler exists
+//! and is broken. `register_handler` binds the entities and the body together, so the trap is gone
+//! and the name is the other two ports' name.
 
 pub mod chunking;
 pub mod handler;
@@ -56,6 +43,11 @@ pub use chunking::{
 pub use handler::{
     ContentHandler, ContentOutcome, FrameBudget, HandlerRequest, FRAME_RESERVE_BYTES, OPERATIONS,
 };
+
+use std::sync::Arc;
+
+use entity_core_protocol::peer::handler::RegisterError;
+use entity_core_protocol::peer::Peer;
 pub use sdk::{
     at_peer, bind_at_peer, create_descriptor, descriptor_matches_anchor, descriptor_path,
     ensure_closure, hash_hex_with_format, reassemble_under_capability, ClosureVerdict,
@@ -68,26 +60,30 @@ pub use types::{
     MIN_CHUNK_SIZE,
 };
 
-use entity_core_protocol::peer::store::Store;
-
-/// What [`install_content_types`] actually wrote, so a caller can assert on it.
+/// What [`install_content`] installed, so a caller can assert on it.
 #[derive(Clone, Debug)]
-pub struct ContentTypeInstallation {
+pub struct ContentInstallation {
+    pub pattern: String,
+    pub interface_path: String,
     pub type_paths: Vec<String>,
 }
 
-/// Publish CONTENT's seven `system/type/*` entities into a peer's tree.
+/// Install CONTENT onto a live peer: the §6.1 handler through `Peer::register_handler`, then the
+/// seven `system/type/*` entities.
 ///
-/// **This is the whole install surface on this substrate**, and it is a real one: the
-/// oracle's `type_system` category reads exactly these paths, and the three §11.1 types
-/// among them are compared by content hash against `entity-core-go`'s own transcription.
-/// A hand-built field map that is subtly wrong fails there and nowhere else.
-///
-/// Neither `typescript`'s nor `python`'s registration path writes type entities either
-/// (measured, `gates/host-seam/probe-seam.mjs`: `type_blob/chunk/descriptor = NO`), so
-/// this is the one §11.6.1-adjacent write that is the module's job in all three ports.
-pub fn install_content_types(store: &Store, local_peer: &str) -> ContentTypeInstallation {
-    ContentTypeInstallation {
-        type_paths: publish_content_types(store, local_peer),
-    }
+/// `namespace` is §6.4's served prefix and defaults to [`CONTENT_PATTERN`]; the handler is always
+/// installed AT [`CONTENT_PATTERN`], as on the other two ports. Refused (keystone H3) when a handler
+/// is already bound there, before anything is written.
+pub fn install_content(peer: &Peer, namespace: Option<&str>) -> Result<ContentInstallation, RegisterError> {
+    let handler = match namespace {
+        Some(ns) => ContentHandler::with_namespace(ns),
+        None => ContentHandler::new(),
+    };
+    peer.register_handler(Arc::new(handler))?;
+    let local = &peer.local_peer;
+    Ok(ContentInstallation {
+        pattern: CONTENT_PATTERN.to_string(),
+        interface_path: format!("/{local}/system/handler/{CONTENT_PATTERN}"),
+        type_paths: publish_content_types(&peer.store, local),
+    })
 }

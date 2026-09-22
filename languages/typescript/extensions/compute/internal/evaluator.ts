@@ -598,6 +598,13 @@ function evalApply(entity: Entity, scope: Scope, budget: Budget, ctx: EvalContex
   const path = Ecf.optText(entity.data, "path");
   const fnRef = Ecf.optBytes(entity.data, "fn");
 
+  // §2.1 [MUST] — "either `path` or `fn`, not both and not neither". §4.1's listing tests `path`
+  // first and would silently take handler mode; the prose MUST is the rule (routed: the listing
+  // omits it). Keyed on PRESENCE, before either mode is entered.
+  if (Ecf.field(entity.data, "path") !== null && Ecf.field(entity.data, "fn") !== null) {
+    return err(CODE_INVALID_EXPRESSION, "compute/apply MUST have either path or fn, not both");
+  }
+
   if (path !== null) {
     // §2.1 Q23 / §3.3 — a builtin path dispatches no EXECUTE, so `capability` and
     // `resource` have no referent. SHAPE CHECK, BEFORE ANY RESOLUTION (normative).

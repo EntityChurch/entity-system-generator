@@ -4,8 +4,9 @@
 ##
 ## The python composition was the retarget test and it passed: `tools/compose.py` needed no
 ## change for it. **This one needed a new concept**, because on this peer an extension's
-## four faces do not all install. `[system.faces]` below is that concept, and it exists
-## because the alternative was a composition that promises a handler and delivers `501`.
+## four faces did not all install. `[system.faces]` below is that concept; it exists because
+## the alternative was a composition that promises a handler and delivers `501`. Since
+## keystone landed H1 on this peer (2026-09-12) all four faces install.
 ##
 ## The resolved plan is DERIVED by `tools/compose.py` into
 ## `languages/rust/output/content/PLAN.json`.
@@ -44,21 +45,27 @@ path      = "../entity-core-keystone/protocol-generator/rust"
 # Making a peer worse to make a report look more installed is the failure mode this
 # repo's second gate (`make regression`) exists to catch, and doing it on purpose would
 # be worse than tripping it by accident.
+# ** RE-DECLARED 2026-09-12 (second session). ** The block above explains a refusal that was
+# right while `register_handler` was private. Keystone made it public for K-9 —
+# `ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe`
+# — and it binds the four entities AND the body in one call, so there is no longer a way to
+# produce the 404 -> 501 state. The handler is installed through `install_content`.
 [system.faces]
 types          = "installed"        # Store::bind is public. Oracle-checked; see [gate].
-handler        = "not-installable"  # see above. NOT "not installed".
+handler        = "installed"        # Peer::register_handler (keystone H1). The `content` category.
 emit_consumer  = "available-unused" # Store::register_tree_consumer is live (probe
                                     # scenario 2, two negatives). CONTENT registers none
                                     # -- `EXTENSION.toml [surfaces] emit_consumers = []`
                                     # -- so this row records a capability we measured and
                                     # did not use, which is different from one we lack.
-sdk            = "library-only"     # usable in-process; no gated path reaches it here
+sdk            = "installed"        # the handler runs through it
 
 [gate]
 oracle     = "entity-core-go validate-peer"
-# TWO categories, and the second one is not decoration. `type_system` is what measures
-# us. `content` is what measures the ABSENCE, and running it is the difference between
-# "we did not install a handler" and "we did not check".
+# TWO categories. `type_system` measures CONTENT's types; `content` measures the handler,
+# installed since keystone's H1 (2026-09-12). Before H1 `content` measured the handler's
+# ABSENCE, which is the difference between "we did not install a handler" and "we did not
+# check".
 categories = ["type_system", "content"]
 profiles   = ["core"]
 
@@ -138,8 +145,33 @@ verdict     = "RIGHT."
 # connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
+# ── PRE-REGISTRATION 2 — written 2026-09-12 BEFORE the first composed run with H1 ─────────────
+#
+#   content      PREDICTED 12 PASS / 1 SKIP of 13 — the `typescript` and `python` number, and the
+#                improved NAME SET equal to theirs (8 names). Was 7 / 2 FAIL / 4 SKIP without a handler.
+#   type_system  PREDICTED unchanged from the baseline below: `register_handler` binds a handler
+#                interface and no type entity, and this category reads `system/type/*`.
+#   core         PREDICTED the same 6 improvements by name and 0 regressions. The bare arm is keystone's
+#                host rebuilt at their `dev` 029d1c7, so its absolute counts may move by their change;
+#                the diff is the claim, not the absolute.
+#
+# NAMED RISKS: this port's CONTENT and HISTORY bodies have never been reached over the wire.
+# `ContentHandler` reads the H6 frame budget off the connection (16 MiB under the oracle, same
+# as the other two ports). `HistoryHandler::check_target_access` moved from a `check_permission`
+# carrier to keystone's H9 predicate in the same change, and under the degenerate seed policy the
+# difference is unobservable. A miss is kept and written up below the numbers, never folded in.
+#
+# ── MEASURED 2 — 2026-09-12 (UTC 09-13), ROUNDS=2, oracle 78db4a9, keystone `dev` 029d1c7 ──────
+#
+# RIGHT, EXACTLY, on every category and every name set. 0 regressions, 0 flaky, in every arm.
+#   content      12 PASS / 1 SKIP — the 8 improved names equal `python`'s and `typescript`'s.
+#   type_system  unchanged (118 / 11 WARN / 317 FAIL; the same 6 improvements).
+#   core         the same 6 improvements by name; bare arm unchanged at 334 / 337 / 107.
+# Baselines below re-blessed from this run; `make expectation` failed on the undeclared gains first,
+# which is D21's gate doing its job.
+
 [gate.baseline.type_system]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 446
 composed = { PASS = 118, WARN = 11, FAIL = 317 }
 bare     = { PASS = 112, WARN = 11, FAIL = 323 }
@@ -159,11 +191,16 @@ improved = [
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.content]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 13
-composed = { PASS = 7, FAIL = 2, SKIP = 4 }
+composed = { PASS = 12, SKIP = 1 }
 bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
 improved = [
+  "content.get_path_required",
+  "content.handler_manifest",
+  "content.handler_op_get",
+  "content.handler_op_ingest",
+  "content.ingest_path_required",
   "content.type_blob",
   "content.type_chunk",
   "content.type_descriptor",
@@ -185,7 +222,7 @@ improved = [
 # composition and this re-bless adds no capability claim. We had never passed the flag;
 # keystone had, which is how 776 vs 778 at one oracle commit got noticed (AP-29).
 [gate.baseline.core]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 778
 composed = { PASS = 340, WARN = 331, SKIP = 107 }
 bare     = { PASS = 334, WARN = 337, SKIP = 107 }

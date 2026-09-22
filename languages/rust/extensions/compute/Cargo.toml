@@ -1,0 +1,40 @@
+# languages/rust/extensions/compute — COMPUTE v3.29 for the `rust` keystone peer.
+#
+# THE THIRD PORT OF THE LARGEST EXTENSION IN THE CORPUS. All five faces install since keystone
+# landed H1/H7/K-5 on this peer (2026-09-12), and it is the one port with `compute/apply` handler
+# mode, because it is the one peer with a local dispatch seam. See `src/lib.rs`.
+#
+# `sha2` IS NOT AN ADDITION, for the same reason it is not one in `../content`: §3.3's
+# `deterministic_id` is SHA-256 over the root path, the peer already pins `sha2 = "=0.10.9"`,
+# and this cell pins the SAME version so cargo unifies them into one build of one crate.
+# `languages/rust/build` asserts the equality against the peer's own manifest at stage time.
+#
+# Staged out of the tree and compiled with no workspace above it, so nothing here is
+# `.workspace = true`.
+
+[package]
+name    = "entity-compute"
+version = "3.29.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "entity_compute"
+path = "src/lib.rs"
+
+[dependencies]
+# The peer, consumed ACROSS THE CRATE BOUNDARY (D13 Access). Rewritten to an absolute path at
+# stage time by `languages/rust/build`, which REFUSES if it does not match exactly once.
+entity-core-protocol-rust = { path = "../../../../../entity-core-keystone/protocol-generator/rust" }
+sha2 = { version = "=0.10.9", default-features = false }
+
+[features]
+# Never enabled by a normal build. `languages/rust/test` enables it for exactly one
+# invocation, to require that the invocation FAILS. See src/bin/deep_import.rs.
+compile-fail-fixture = []
+
+[[bin]]
+name = "deep_import"
+path = "src/bin/deep_import.rs"
+required-features = ["compile-fail-fixture"]

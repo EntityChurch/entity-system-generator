@@ -169,11 +169,12 @@ def reassemble_under_capability(ctx, blob_hash: bytes, store=None) -> Reassemble
     capability-checking wrapper" §3.4 requires before reassembly may be reachable from
     outside the handler body at all.
 
-    A ``DispatchCtx`` cannot be manufactured by a consumer in the sense that matters: the
-    dispatcher builds one, and only after ``check_permission`` (core §5.2) returned ALLOW
-    for this caller, this operation and this resource. Requiring one as the first argument
-    means the capability discipline has already run by the time this function has
-    anything to do.
+    **Weaker than this docstring used to claim.** It said a ``DispatchCtx`` cannot be
+    manufactured by a consumer. It is a plain dataclass: any object with ``caller_cap`` and
+    ``has_cap`` passes, ``store`` is a free argument, and the handler pattern is never
+    checked. Recorded in ``EXTENSION.toml [substrate.capability_wrapper]`` (corrected
+    2026-09-12 by the cross-port review); not fixed here, because the fix is one design
+    question across all three ports.
 
     **`store` is a parameter here and is not in the `typescript` port, and that is the
     substrate difference, not a design choice.** There, ``ctx.peer.contentStore`` is

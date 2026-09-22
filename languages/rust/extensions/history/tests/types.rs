@@ -19,7 +19,7 @@
 //! are structural and are not a substitute for it.
 
 use entity_history::{
-    history_type_defs, history_type_entities, install_history_types, ALL_TYPES, CONFIG,
+    history_type_defs, history_type_entities, publish_history_types, ALL_TYPES, CONFIG,
     QUERY_PARAMS, QUERY_RESULT, ROLLBACK_PARAMS, ROLLBACK_RESULT, TRANSITION,
 };
 
@@ -202,24 +202,24 @@ fn type_entities_are_system_type_and_self_naming() {
     }
 }
 
-/// The one install face that works on this substrate, exercised against a real `Store`.
+/// Type publication, exercised against a bare `Store`.
 #[test]
 fn publishing_binds_exactly_the_six_oracle_paths() {
     let store = Store::new();
-    let installed = install_history_types(&store, "PEER");
-    assert_eq!(installed.type_paths.len(), 6);
+    let type_paths = publish_history_types(&store, "PEER");
+    assert_eq!(type_paths.len(), 6);
     for name in ALL_TYPES {
         // The exact paths `validate-peer -category history` fetches.
         let path = format!("/PEER/system/type/{name}");
         assert!(
-            installed.type_paths.contains(&path),
+            type_paths.contains(&path),
             "missing published path {path}"
         );
         let bound = store.get_at(&path).expect("bound");
         assert_eq!(bound.text_field("name"), Some(name));
     }
     // I1: nothing outside `system/type/` was written.
-    for p in &installed.type_paths {
+    for p in &type_paths {
         assert!(p.starts_with("/PEER/system/type/"), "{p} escapes the namespace");
     }
 }
@@ -227,22 +227,20 @@ fn publishing_binds_exactly_the_six_oracle_paths() {
 /// Re-publishing is idempotent: same bytes, same hash, and the second bind fires no
 /// tree-change event.
 ///
-/// This matters for the recorder rather than for the types: `install_history_recorder`
-/// is called AFTER `install_history_types` precisely so the six type writes are not
+/// This matters for the recorder rather than for the types: `install_history` registers the
+/// recorder AFTER publishing the types precisely so the six type writes are not
 /// recorded as application transitions, and a type publication that changed hash on
 /// every call would defeat that on any restart.
 #[test]
 fn publishing_twice_is_byte_identical() {
     let store = Store::new();
-    let first = install_history_types(&store, "PEER");
+    let first = publish_history_types(&store, "PEER");
     let hashes_a: Vec<Vec<u8>> = first
-        .type_paths
         .iter()
         .map(|p| store.hash_at(p).unwrap())
         .collect();
-    let second = install_history_types(&store, "PEER");
+    let second = publish_history_types(&store, "PEER");
     let hashes_b: Vec<Vec<u8>> = second
-        .type_paths
         .iter()
         .map(|p| store.hash_at(p).unwrap())
         .collect();

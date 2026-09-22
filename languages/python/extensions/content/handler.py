@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from entity_core.peer.capability import check_path_permission
 from entity_core.peer.handlers import DispatchCtx, Outcome
 from entity_core.peer.model import Entity, entity_of_cbor
 from entity_core.peer.wire import error_result
@@ -101,6 +102,20 @@ class ContentHandler:
                     "capability_denied",
                     f"resource target '{target}' is outside namespace '{self.namespace}' (§6.4)",
                 )
+            # §6.4 step 2 — the PATH-SCOPE check, "using `check_path_permission`" against the caller's
+            # capability with handler pattern `system/content`. The prefix compare above is the namespace
+            # this instance serves; it never read the capability, and until 2026-09-12 (cross-port review)
+            # it was the whole of step 2 in all three ports. The peer's own predicate now runs as well.
+            # With no caller capability — an in-process call no wire request can make — there is no grant
+            # to check, as for COMPUTE's eval.
+            if ctx.caller_cap is not None and not check_path_permission(
+                op, target, ctx.caller_cap, CONTENT_PATTERN, self.peer.local_peer
+            ):
+                return _err(
+                    403,
+                    "capability_denied",
+                    f"capability does not cover {op} on '{target}' (§6.4 path scope)",
+                )
 
         if op == "get":
             return self._get(ctx)
@@ -124,7 +139,13 @@ class ContentHandler:
         # response-construction time, not a hardcoded 16 MiB literal. `frame_budget()`
         # prefers the connection's value and falls back to the peer's configured default
         # only for an in-process dispatch, which has no frame at all.
-        remaining = _frame_budget(ctx) - FRAME_RESERVE_BYTES
+        #
+        # EVERY requested hash lands in exactly one of `found` / `missing`, so the two lists together cost
+        # one hash-list entry per request hash — charged here, up front. Until 2026-09-12 (cross-port review)
+        # only a packed entity was charged (its bytes plus its `included` key); the `found` entry beside it and
+        # every `missing` entry rode on the fixed reserve, which a request of ~120 hashes outgrows, so a
+        # response packed close to the budget could exceed the frame §6.2 MUSTs it fit.
+        remaining = _frame_budget(ctx) - FRAME_RESERVE_BYTES - len(hashes) * _HASH_ENTRY_BYTES
 
         found: list[bytes] = []
         missing: list[bytes] = []
@@ -288,6 +309,10 @@ def _frame_budget(ctx: DispatchCtx) -> int:
     if isinstance(conn_budget, int):
         return conn_budget
     return getattr(ctx, "peer_max_frame", 16 * 1024 * 1024)
+
+
+#: One ``system/hash`` in a ``found`` or ``missing`` array: 33 bytes plus a 2-byte CBOR header.
+_HASH_ENTRY_BYTES = 35
 
 
 def _wire_size(entity: Entity) -> int:

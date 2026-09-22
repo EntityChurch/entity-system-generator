@@ -3,48 +3,33 @@
 //! Two operations, `get` (§6.2) and `ingest` (§6.3), both hash-addressed at the params
 //! level and path-addressed at the cap-scope level (§6.4).
 //!
-//! # This handler is written and tested. It cannot be installed. Both facts are real.
+//! # Installed through `Peer::register_handler` (keystone H1)
 //!
-//! `gates/host-seam/rust/` measures the seam by execution and by rustc:
-//!
-//! ```text
-//! A. nothing bound                    404  handler_not_found
-//! B. all four §11.6.1 tree writes     501  no_handler_body
-//! C. the same body called DIRECTLY    200  witness=...   invocations 0 -> 1
-//! error[E0624]: method `register_handler` is private
-//! error[E0609]: no field `handlers` on type `Peer`
-//! error[E0603]: struct `Outcome` is private
-//! ```
-//!
-//! So the module cannot spell its result as the peer's `Outcome`, cannot receive the
-//! peer's dispatch context, and has nowhere to be bound. **What it can still be is
-//! correct**, and correct is testable: every branch below is exercised by
-//! `tests/handler.rs` against a real peer `Store`, driving the same §6.2/§6.3
-//! algorithms the other two ports drive over the wire.
-//!
-//! What that does NOT buy is a conformance claim. `tests/handler.rs` is ours; the
-//! oracle never reaches this code on this peer; and **the extension being its own
-//! instrument is an argument that only works when a wire check runs THROUGH it.**
-//! Here none does. Stated in `EXTENSION.toml` as `reached_by = []` for every entry on
-//! this port, and stated again in the composition's conformance report.
+//! Until keystone landed H1/H6 on this peer this body had nowhere to go: `register_handler` was
+//! private (`E0624`), `Peer` had no handler container (`E0609`) and `Outcome` did not export
+//! (`E0603`), so a bound manifest answered `501 no_handler_body`. [`crate::install_content`] installs
+//! it now, and the [`Handler`] impl at the bottom of this file is the whole of the change.
 //!
 //! # Three context facts this handler is built around
 //!
-//! 1. **There is no dispatch context type.** `typescript` has `ctx`, `python` has
-//!    `DispatchCtx`; here the dispatcher passes `(&mut Conn, &Envelope)` to private
-//!    code. So [`HandlerRequest`] is OURS, and its shape is a claim about what a body
-//!    would need rather than a mirror of what a body is given.
-//! 2. **The store arrives by registration-time capture**, exactly as on `python`, and
-//!    for the same reason: nothing in a request carries a route back to the peer.
-//! 3. **The frame budget is the peer's transport constant.** See [`FrameBudget`].
+//! 1. **[`HandlerRequest`] is still ours.** A third party cannot construct the peer's
+//!    `HandlerContext` (its fields are `pub(crate)`), so the unit tests reach the body through
+//!    this type and the dispatch path builds one from the context.
+//! 2. **The store is read off the context's peer**, not captured at registration.
+//! 3. **The frame budget is the connection's configured one** (H6,
+//!    `HandlerContext::frame_budget`). See [`FrameBudget`].
 
+use entity_core_protocol::peer::capability;
+use entity_core_protocol::peer::handler::{Handler, HandlerContext, HandlerResult, OperationSpec};
 use entity_core_protocol::peer::model::{self, entity_of_cbor, Entity};
 use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::peer::wire;
 use entity_core_protocol::value::{Key, Value};
 
 use crate::sdk::DispatchAuthority;
-use crate::types::{CONTENT_PATTERN, CONTENT_RESPONSE, INGEST_RESULT};
+use entity_core_protocol::peer::Peer;
+
+use crate::types::{CONTENT_PATTERN, CONTENT_RESPONSE, GET_REQUEST, INGEST_REQUEST, INGEST_RESULT};
 
 /// Envelope + response overhead reserved out of the frame budget before entities are
 /// packed. The response entity carries two hash arrays (33 B each plus CBOR framing)
@@ -52,38 +37,37 @@ use crate::types::{CONTENT_PATTERN, CONTENT_RESPONSE, INGEST_RESULT};
 /// batch a caller can request within one frame.
 pub const FRAME_RESERVE_BYTES: usize = 4096;
 
+/// One `system/hash` in a `found` or `missing` array: 33 bytes plus a 2-byte CBOR byte-string
+/// header. Private: it is this port's accounting, not a cross-port constant.
+const HASH_ENTRY_BYTES: usize = 35;
+
 /// The bound in force on the connection this request arrived over.
 ///
-/// **CONTENT Amendment 1 §6.2 forbids a hardcoded 16 MiB literal and requires
-/// consulting the connection's configured budget at response-construction time. On
-/// this peer those two are the same number, and that is a finding rather than a
-/// loophole.**
+/// **CONTENT Amendment 1 §6.2 forbids a hardcoded 16 MiB literal and requires consulting the
+/// connection's configured budget at response-construction time.** Before keystone's H6 this peer
+/// had no configuration and no accessor, so the only honest read was `wire::MAX_FRAME` — the exact
+/// literal the amendment names, satisfied degenerately because it was also the only bound enforced.
+/// H6 added `PeerConfig::max_frame_bytes`, `Peer::max_frame_bytes` and
+/// `HandlerContext::frame_budget`, and the transport enforces the same number, so the MUST is now
+/// satisfied in the form it states: the dispatch path reads [`HandlerContext::frame_budget`].
 ///
-/// `wire::MAX_FRAME` is `16 * 1024 * 1024` — the exact literal the amendment names as
-/// the wrong answer — and it is what `read_frame` enforces. But it is not *hardcoded
-/// by us*: it is the peer's own transport constant, read from the peer, and it is the
-/// only bound the peer ever enforces because `CreateOptions` has no frame field and
-/// `Conn` carries none (measured: `gates/host-seam/rust`, scenario 3).
-///
-/// So the MUST is satisfied **degenerately**: the value read is the value enforced.
-/// The routed finding is *"make it configurable"*, not *"this is unimplementable"* —
-/// which is a materially different packet from the one that became K-1 on `python`,
-/// where nothing on the connection carried a budget at all AND the constant was
-/// consulted by a body that could not see it.
-///
-/// This is an enum with one variant on purpose. A bare `usize` would let a caller pass
-/// a number with no statement about where it came from, and that is precisely the
-/// provenance Amendment 1 is about.
+/// An enum with one variant on purpose. A bare `usize` would let a caller pass a number with no
+/// statement about where it came from, and that provenance is what Amendment 1 is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrameBudget {
-    /// The bound the transport is enforcing, read from the peer that enforces it.
+    /// The bound the transport is enforcing, read from the peer or connection that enforces it.
     Enforced(usize),
 }
 
 impl FrameBudget {
-    /// Read the bound from the peer's own transport module.
-    pub fn from_peer() -> FrameBudget {
-        FrameBudget::Enforced(wire::MAX_FRAME)
+    /// The peer's configured budget — what a connection on it enforces unless configured otherwise.
+    pub fn from_peer(peer: &Peer) -> FrameBudget {
+        FrameBudget::Enforced(peer.max_frame_bytes())
+    }
+
+    /// The budget for this request's connection. What the dispatch path uses.
+    pub fn from_context(ctx: &HandlerContext<'_>) -> FrameBudget {
+        FrameBudget::Enforced(ctx.frame_budget())
     }
 
     fn bytes(self) -> usize {
@@ -93,21 +77,21 @@ impl FrameBudget {
     }
 }
 
-/// What a §11.6.1 body would receive, if there were a way to be one.
+/// What the body reads from a request. Built from the peer's [`HandlerContext`] on the dispatch
+/// path, and by hand in `tests/`.
 pub struct HandlerRequest<'a> {
     /// The `system/protocol/execute` entity (§3.2).
     pub exec: &'a Entity,
-    /// Registration-time capture. Nothing in `exec` routes back to the peer.
     pub store: &'a Store,
     pub frame_budget: FrameBudget,
+    /// The caller's verified capability, for §6.4 step 2's path-scope check. `None` models an
+    /// in-process call with no token, which no wire request can make.
+    pub caller_capability: Option<&'a Entity>,
+    pub local_peer: &'a str,
 }
 
-/// A handler outcome: status, the result entity, and protocol entities to bundle.
-///
-/// **This type exists because the peer's does not export.** `peer::core::Outcome` is a
-/// bare `struct` with no `pub` (`error[E0603]`, measured), so a third party cannot name
-/// it, construct it, or return it. That is D13's Export layer, and on this substrate it
-/// is not a review finding — it is a compile error.
+/// A handler outcome: status, the result entity, and protocol entities to bundle. Mapped onto the
+/// peer's [`HandlerResult`] one-for-one at the dispatch boundary; kept because the tests assert on it.
 #[derive(Clone, Debug)]
 pub struct ContentOutcome {
     pub status: u64,
@@ -191,6 +175,21 @@ impl ContentHandler {
         // *fallback* for the 403 status, not a code — and §3.3's 403 row names
         // `capability_denied` as the default.
         for target in &targets {
+            // §6.4 step 2 — the PATH-SCOPE check, "using `check_path_permission`" against the caller's
+            // capability with handler pattern `system/content`. The prefix compare above is the namespace
+            // this instance serves; it never read the capability, and until 2026-09-12 (cross-port review)
+            // it was the whole of step 2 in all three ports. The peer's own predicate now runs as well.
+            // With no caller capability — an in-process call no wire request can make — there is no grant
+            // to check, as for COMPUTE's eval.
+            if let Some(cap) = req.caller_capability {
+                if !capability::check_path_permission(op, target, cap, CONTENT_PATTERN, req.local_peer) {
+                    return ContentOutcome::err(
+                        403,
+                        "capability_denied",
+                        &format!("capability does not cover {op} on '{target}' (§6.4 path scope)"),
+                    );
+                }
+            }
             if !within_namespace(target, &self.namespace) {
                 return ContentOutcome::err(
                     403,
@@ -235,7 +234,16 @@ impl ContentHandler {
             }
         };
 
-        let mut remaining = req.frame_budget.bytes().saturating_sub(FRAME_RESERVE_BYTES);
+        // EVERY requested hash lands in exactly one of `found` / `missing`, so the two lists together cost
+        // one hash-list entry per request hash — charged here, up front. Until 2026-09-12 (cross-port review)
+        // only a packed entity was charged (its bytes plus its `included` key); the `found` entry beside it and
+        // every `missing` entry rode on the fixed reserve, which a request of ~120 hashes outgrows, so a
+        // response packed close to the budget could exceed the frame §6.2 MUSTs it fit.
+        let mut remaining = req
+            .frame_budget
+            .bytes()
+            .saturating_sub(FRAME_RESERVE_BYTES)
+            .saturating_sub(hashes.len() * HASH_ENTRY_BYTES);
         let mut found: Vec<Value> = Vec::new();
         let mut missing: Vec<Value> = Vec::new();
         let mut included: Vec<Entity> = Vec::new();
@@ -443,8 +451,8 @@ impl Default for ContentHandler {
 /// runs before dispatch and refuses the malformed resource with `403
 /// capability_denied` first. That was measured on `python` (AP-4.5) and the branch is
 /// kept for the same reason it is kept there: it is still right for an in-process call,
-/// which has no cap check in front of it. On THIS peer every call is in-process, so
-/// here it is the only reachable answer rather than the unreachable one.
+/// which has no cap check in front of it. (Until keystone's H1 on 2026-09-12 every call on
+/// this peer was in-process, so here it was the only reachable answer.)
 fn resource_targets(exec: &Entity) -> Option<Vec<String>> {
     let resource = exec.field("resource")?;
     let targets = model::map_get(resource, "targets")?;
@@ -478,4 +486,39 @@ fn within_namespace(target: &str, namespace: &str) -> bool {
 /// looking like a `python` quirk once a third substrate agreed with it.
 fn wire_size(entity: &Entity) -> usize {
     entity_core_protocol::cbor::encode(&entity.to_cbor()).len()
+}
+
+/// H1 — the dispatch path. `route` calls this after §6.6 resolution and the dispatch-time
+/// `check_permission` have allowed the request (§6.4 step 1).
+impl Handler for ContentHandler {
+    fn pattern(&self) -> &str {
+        CONTENT_PATTERN
+    }
+
+    fn name(&self) -> &str {
+        "content"
+    }
+
+    fn operations(&self) -> Vec<OperationSpec> {
+        vec![
+            OperationSpec::typed("get", GET_REQUEST, CONTENT_RESPONSE),
+            OperationSpec::typed("ingest", INGEST_REQUEST, INGEST_RESULT),
+        ]
+    }
+
+    fn handle(&self, ctx: &HandlerContext<'_>) -> HandlerResult {
+        let req = HandlerRequest {
+            exec: ctx.execute(),
+            store: &ctx.peer().store,
+            frame_budget: FrameBudget::from_context(ctx),
+            caller_capability: ctx.caller_capability(),
+            local_peer: ctx.local_peer(),
+        };
+        let outcome = self.handle_op(ctx.operation(), &req);
+        HandlerResult {
+            status: outcome.status,
+            result: outcome.result,
+            included: outcome.included,
+        }
+    }
 }

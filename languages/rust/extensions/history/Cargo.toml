@@ -1,9 +1,9 @@
-# languages/rust/extensions/history — HISTORY v1.7 for the `rust` keystone peer.
+# languages/rust/extensions/history — HISTORY v1.10 for the `rust` keystone peer.
 #
-# THE THIRD PORT OF THE SECOND EXTENSION, and the first cell in this repo where the
-# faces genuinely disagree about whether they installed. CONTENT on this peer installs
-# one face of four; HISTORY installs TWO — types and the emit consumer — and the emit
-# consumer is the face this extension exists to exercise.
+# THE THIRD PORT OF THE SECOND EXTENSION. At the port (2026-09-07) it was the first cell in
+# this repo where the faces disagreed about whether they installed: types and the emit
+# consumer did, the handler could not. Since keystone landed H1 on this peer (2026-09-12)
+# all four faces install, through `install_history`.
 #
 # NO DEPENDENCIES BEYOND THE PEER, and here that is not a stance, it is the whole
 # dependency list: HISTORY has no chunking, so unlike `../content` there is no `sha2`

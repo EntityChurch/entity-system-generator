@@ -1,21 +1,16 @@
 ## SYSTEM.toml — languages/rust/compositions/content-history
 ##
-## THE FIFTH COMPOSITION, and the first one where an extension's WRITE face installs and
-## its READ face cannot.
+## THE FIFTH COMPOSITION, and the first one where an extension's WRITE face installed and
+## its READ face could not.
 ##
-## `rust × content` established that the four faces get different answers on one peer.
-## That composition's un-installable handler meant CONTENT did nothing at runtime here —
-## it published types and stopped. **HISTORY is not like that.** Its emit consumer
-## installs, and the peer accumulates a real, correct, content-addressed audit chain at
-## `system/history/head/*` from the moment it starts serving. Nothing can read that chain
-## over the wire, because every §4.3 read path is an operation on the handler that cannot
-## exist.
+## At the port (2026-09-07) the emit consumer installed and recorded a real audit chain at
+## `system/history/head/*`, but the handler could not be installed, so nothing could read
+## that chain over the wire and the `history` category scored 7 of 34 against a working
+## recorder. The first [gate.expectation] below is that pre-registration and its result.
 ##
-## So the `history` category will score 7 of 34 on a peer whose recorder is working
-## perfectly, and **the number is about the oracle's access path, not about the
-## extension**. Writing that down BEFORE the run is the whole reason this block exists:
-## "23 checks did not move" and "23 checks failed" are the same bytes in a report and are
-## not the same fact.
+## Since keystone landed H1 on this peer (2026-09-12) both extensions install every face
+## through `install_content` and `install_history`. PRE-REGISTRATION 2 and MEASURED 2, above
+## the baselines, record the first run with the handler installed.
 ##
 ## The resolved plan is DERIVED by `tools/compose.py` into
 ## `languages/rust/output/content-history/PLAN.json`.
@@ -64,27 +59,29 @@ to put one. Routed to keystone.
 # timeout — because the failure it was looking for is a hang, and a probe that hangs
 # reports nothing — and the seam held. Reading `store.rs` would have suggested the same
 # answer and would not have been evidence for it.
+# ** RE-DECLARED 2026-09-12 (second session). ** `handler` read `not-installable` for both
+# extensions until keystone made `Peer::register_handler` public for K-9
+# (`ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe`).
+# Both now go in through `install_content` / `install_history`.
 [system.faces.CONTENT]
 types         = "installed"
-handler       = "not-installable"
+handler       = "installed"
 emit_consumer = "not-installed"     # CONTENT registers none; [surfaces].emit_consumers = []
-sdk           = "library-only"
+sdk           = "installed"
 
 [system.faces.HISTORY]
 types         = "installed"
-handler       = "not-installable"
-emit_consumer = "installed"         # FIRST TIME ON THIS PEER. See the block above.
-sdk           = "library-only"
+handler       = "installed"         # the read face, which was the one that could not install
+emit_consumer = "installed"
+sdk           = "installed"
 
 [gate]
 oracle     = "entity-core-go validate-peer"
 # THREE categories, and the third is not decoration.
 #   type_system  where CONTENT's six type checks move
-#   content      where CONTENT's three tree-read checks move, and where the five handler
-#                checks stay put — running it is the difference between "we did not
-#                install a handler" and "we did not check"
-#   history      where HISTORY's six type checks move, and where the 23 that need the
-#                query op cannot
+#   content      CONTENT's type and handler checks
+#   history      HISTORY's type checks and, through the query op, the recorder's transitions
+#                (until H1 on 2026-09-12 the handler checks in both could not move here)
 categories = ["type_system", "content", "history"]
 profiles   = ["core"]
 
@@ -260,12 +257,22 @@ same argument we routed, and annotates the pseudocode "It MUTATES NOTHING" — w
 omitting `max_depth` is not a shortfall against the SHOULD. No code changes.
 """
 
-# ── the two things this peer cannot supply, declared where a reader will look ───────
+# ── provenance, declared where a reader will look ───────────────────────────────────
+# THE TWO VALUES BELOW ARE THE 2026-09-07 DECLARATION AND NO LONGER DESCRIBE THE PEER; see the
+# note. The live values are what the host prints on its `COMPOSED` line.
 [history.provenance]
-context_available       = false
-handler_grant_available = false
+context_available       = "observed at runtime"   # HistoryInstallation::context_available(); was `false` (pre-H8)
+handler_grant_available = true                    # read back by install_history; was `false` (pre-H1)
 note = """
-`context_available = false` is the same on all three targets: the peer's tree-change event
+**BOTH FACTS BELOW CHANGED.** Keystone's H8 (2026-09-07) put an execution context on the
+tree-change event for writes made through dispatch; `HistoryInstallation::context_available()` now
+reports what the recorder has observed. Keystone's H1 (2026-09-12) gave this peer a handler, and
+`install_history` reads back the grant `register_handler` bound, so `handler_grant_available` is
+reported `true` by the installation and asserted by
+`languages/rust/extensions/history/tests/sdk.rs`. The rest of this note is the
+record of the port.
+
+WAS: `context_available = false` is the same on all three targets: the peer's tree-change event
 carries no execution context, so every transition records §2.1's autonomous-case values —
 including for writes that arrived over the wire from a remote caller, which are not
 autonomous. Four oracle checks read those fields and they are presence checks over values
@@ -306,8 +313,38 @@ green row is never read as a satisfied §9.1 MUST.
 # connectivity_conn_errors.go, plus one a BARE-NAME diff cannot identify because its name
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
+# ── PRE-REGISTRATION 2 — written 2026-09-12 BEFORE the first composed run with H1 ─────────────
+#
+#   history      PREDICTED 32 PASS / 1 WARN / 1 FAIL of 34 — the `typescript` and `python` number, and
+#                the same non-PASS pair by name. Was 7 / 23 FAIL / 4 SKIP with the read face absent.
+#   content      PREDICTED 12 PASS / 1 SKIP of 13, the other two ports' number and name set.
+#   type_system  PREDICTED unchanged from the baseline below.
+#   core         PREDICTED the same 6 improvements by name and 0 regressions; the bare arm's absolute
+#                counts may move by keystone's own change (their `dev` 029d1c7).
+#
+# One HISTORY-specific risk: the autonomous `capability` is now the real handler grant's hash
+# instead of the local identity hash. `context_capability_present` checks non-zero and passed on
+# both, so it should not move; a check that compared `capability` against `author` would.
+#
+# NAMED RISKS: this port's CONTENT and HISTORY bodies have never been reached over the wire.
+# `ContentHandler` reads the H6 frame budget off the connection (16 MiB under the oracle, same
+# as the other two ports). `HistoryHandler::check_target_access` moved from a `check_permission`
+# carrier to keystone's H9 predicate in the same change, and under the degenerate seed policy the
+# difference is unobservable. A miss is kept and written up below the numbers, never folded in.
+#
+# ── MEASURED 2 — 2026-09-12 (UTC 09-13), ROUNDS=2, oracle 78db4a9, keystone `dev` 029d1c7 ──────
+#
+# RIGHT, EXACTLY, on every category and every name set. 0 regressions, 0 flaky, in every arm.
+#   content      12 PASS / 1 SKIP — the 8 improved names equal `python`'s and `typescript`'s.
+#   history      32 PASS / 1 WARN / 1 FAIL — the other two ports' tally, non-PASS pair
+#                (`transition_clock_structured` WARN, `w6_caller_cap_absent` FAIL) identical by name.
+#   type_system  unchanged (118 / 11 WARN / 317 FAIL; the same 6 improvements).
+#   core         the same 6 improvements by name; bare arm unchanged at 334 / 337 / 107.
+# Baselines below re-blessed from this run; `make expectation` failed on the undeclared gains first,
+# which is D21's gate doing its job.
+
 [gate.baseline.type_system]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 446
 composed = { PASS = 118, WARN = 11, FAIL = 317 }
 bare     = { PASS = 112, WARN = 11, FAIL = 323 }
@@ -327,11 +364,16 @@ improved = [
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.content]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 13
-composed = { PASS = 7, FAIL = 2, SKIP = 4 }
+composed = { PASS = 12, SKIP = 1 }
 bare     = { PASS = 4, FAIL = 5, SKIP = 4 }
 improved = [
+  "content.get_path_required",
+  "content.handler_manifest",
+  "content.handler_op_get",
+  "content.handler_op_ingest",
+  "content.ingest_path_required",
   "content.type_blob",
   "content.type_chunk",
   "content.type_descriptor",
@@ -344,11 +386,37 @@ improved = [
 # already exists in another category. All pass in BOTH arms, so none of it is a statement
 # about this composition. Verified before blessing: every improvement NAME set is unchanged.
 [gate.baseline.history]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 34
-composed = { PASS = 7, FAIL = 23, SKIP = 4 }
+composed = { PASS = 32, WARN = 1, FAIL = 1 }
 bare     = { PASS = 1, FAIL = 29, SKIP = 4 }
 improved = [
+  "history.chain_latest_event_updated",
+  "history.chain_latest_hash",
+  "history.chain_linked",
+  "history.chain_previous_hash",
+  "history.chain_two_transitions",
+  "history.context_author_present",
+  "history.context_capability_present",
+  "history.context_handler_present",
+  "history.context_operation_present",
+  "history.event_filter_only_created",
+  "history.first_transition_no_previous",
+  "history.handler_manifest_decode",
+  "history.handler_manifest_present",
+  "history.handler_op_query",
+  "history.handler_op_rollback",
+  "history.head_pointer_set",
+  "history.limit_has_more",
+  "history.limit_returns_1",
+  "history.rollback_new_transition",
+  "history.rollback_restored_hash",
+  "history.rollback_verify_binding",
+  "history.transition_clock_structured",
+  "history.transition_event_created",
+  "history.transition_has_timestamp",
+  "history.transition_hash_matches",
+  "history.transition_recorded",
   "history.type_config",
   "history.type_query_params",
   "history.type_query_result",
@@ -373,7 +441,7 @@ improved = [
 # composition and this re-bless adds no capability claim. We had never passed the flag;
 # keystone had, which is how 776 vs 778 at one oracle commit got noticed (AP-29).
 [gate.baseline.core]
-measured = "2026-09-09"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 778
 composed = { PASS = 340, WARN = 331, SKIP = 107 }
 bare     = { PASS = 334, WARN = 337, SKIP = 107 }

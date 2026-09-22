@@ -1,17 +1,14 @@
 //! CONTENT — the SDK face.
 //!
 //! **There is no conformance gate on this face, anywhere, and per the operator that is
-//! correct rather than a defect: the SDK is a convention.** So the extension is its own
-//! instrument — the handler's conformance path runs THROUGH these functions rather than
-//! beside them, and `EXTENSION.toml [sdk].*.reached_by` records, per operation, which
-//! check reaches it.
+//! correct rather than a defect: the SDK is a convention.** `EXTENSION.toml
+//! [sdk].*.reached_by` records, per operation, which conformance check reaches it.
 //!
-//! **On this substrate that argument is weaker than on the other two, and the honest
-//! thing is to say so here rather than in a status document.** The handler face cannot
-//! be installed at all (`gates/host-seam/rust`, scenario 1: `501 no_handler_body` with
-//! all four §11.6.1 tree writes bound), so no wire-driven check reaches any of this.
-//! `reached_by` is empty for every entry on this port, and it is empty for a structural
-//! reason rather than an oracle gap.
+//! **Today no check reaches any of these functions, on any port.** The handler is installed
+//! on this peer (keystone H1, 2026-09-12) and the oracle drives it, but no port's handler calls
+//! `ensure_closure`, `at_peer` or `reassemble_under_capability`; this handler only mints a
+//! [`DispatchAuthority`]. Until H1 the handler could not be installed here at all
+//! (`501 no_handler_body` with all four §11.6.1 tree writes bound).
 
 use entity_core_protocol::peer::model::{self, Entity};
 use entity_core_protocol::peer::store::Store;
@@ -192,24 +189,25 @@ pub fn descriptor_matches_anchor(descriptor: &Entity, blob_hash: &[u8]) -> bool 
 
 /// A token that only this crate can mint.
 ///
-/// **This is §3.4's "explicit capability-checking wrapper", and this port satisfies it
-/// differently — and, on one axis, less well — than the other two.**
+/// **This is §3.4's "explicit capability-checking wrapper", and no port satisfies it
+/// fully** (`EXTENSION.toml [substrate.capability_wrapper]`, corrected 2026-09-12).
 ///
-/// On `typescript` and `python` the wrapper demands the peer's own dispatch context, a
-/// value the dispatcher constructs *after* `check_permission` returned ALLOW. Holding
-/// one is therefore evidence about the caller's capability.
+/// On `typescript` and `python` the wrapper demands the peer's dispatch context, but that
+/// context is constructible by any caller, and no port checks the capability against the
+/// blob or namespace.
 ///
-/// **Here there is no such value to demand.** The peer's dispatch context is
-/// `(&mut Conn, &Envelope)` and `Conn` is freely constructible; `Outcome` and
-/// `dispatch_outcome` are private; and no handler body is reachable from dispatch at
-/// all (`gates/host-seam/rust`, scenario 1). So what this type proves is narrower and
-/// is stated narrowly: **you got here through this crate's handler**, not **the
-/// dispatcher authorized you**.
+/// **This wrapper does not demand one.** Until keystone's H1 (2026-09-12) there was no such
+/// value on this peer: the dispatch context was `(&mut Conn, &Envelope)` with `Conn` freely
+/// constructible, and no handler body was reachable from dispatch. The peer's
+/// `HandlerContext` now has `pub(crate)` fields and is built by the dispatcher, but this
+/// type was not changed to require it. So what it proves is stated narrowly: **you got
+/// here through this crate's handler** — whose `handle_op` is also callable in-process —
+/// not **the dispatcher authorized you**.
 ///
 /// It is unforgeable — a tuple struct with a private field cannot be constructed
-/// outside the crate, and the constructor is `pub(crate)` — which makes the *first*
-/// clause of §3.4 stronger than either sibling port. The second clause is weaker. The
-/// two clauses are recorded separately in `EXTENSION.toml` for exactly that reason.
+/// outside the crate, and the constructor is `pub(crate)` — which makes it the only one
+/// of the three ports' wrappers a third party cannot forge. It still checks no capability.
+/// The two §3.4 clauses are recorded separately in `EXTENSION.toml` for that reason.
 pub struct DispatchAuthority(());
 
 impl DispatchAuthority {

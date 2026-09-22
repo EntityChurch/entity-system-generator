@@ -7,81 +7,63 @@ host contract H1/H2/H6/H7. **Peer under test:** `entity-core-protocol-rust` (key
 sh languages/rust/gates/host-seam/probe-seam-rust.sh        # or: make probe
 ```
 
-## Why this one is shaped differently from `probe-seam.mjs` / `probe-seam.py`
+## The shape, and why it changed on 2026-09-12
 
-Both sibling probes are shaped as *install, then dispatch, then check the witness*, because on
-both of those peers a handler body can be installed after construction. **That shape does not
-fit here and finding out why is the result.**
+Until keystone landed H1/H3/H6/H7/H9 on this peer (for our K-9), this probe could not be shaped
+like its siblings — *install, then dispatch, then check the witness* — because there was nowhere to
+install. It measured the absence instead: four §11.6.1 tree writes bound → `501 no_handler_body`,
+and the same body called directly to prove dispatch never asked it. **That record is kept below;
+the probe is now shaped like the other two, because the peer changed.**
 
-And a deeper difference: on `typescript` and `python`, *"is the symbol there"* is a question you
-ask an object at runtime. On an AOT substrate it is a question you ask the **compiler**. A probe
-that answered it with a grep would be reading source to decide what is true, which is exactly
-what D13 exists to forbid. So this probe is three invocations, not one:
+On an AOT substrate some D13 questions are for the **compiler**, so this is still three invocations:
 
 | | must | what it establishes |
 |---|---|---|
-| `access_control` | **compile** | the positive control — the peer IS reachable as a library |
-| `access_absent` | **fail to compile** | Access · Read · Export, decided by rustc |
-| `probe` | run | Reach · the emit face · the frame budget, by execution |
+| `access_control` | **compile** | the positive control — the peer is reachable as a library, and a body installs through `register_handler` |
+| `access_absent` | **fail to compile, with EACH of `E0616` `E0609` `E0603` `E0624`** | keystone H3: the container behind the public registration call is not reachable |
+| `probe` | run | H1 Reach · the emit face · H6 by value · H7 Reach |
 
-**The control is not optional.** A compile-fail check reports its strongest result when the
-crate does not build at all — wrong rustc, missing vendor mirror, a moved symbol. "The symbol is
-absent" and "this crate does not build here" are the same exit code. The driver refuses to
-interpret `access_absent` unless `access_control` compiled in the same run (D15), and it
-requires **four** distinct `error[E…]` diagnostics because a single early error can mask the
-other three and turn one measurement into four claims.
+**Each code, not a count.** The arm used to require four distinct diagnostics. Keystone measured it
+still reporting four-of-four after `register_handler` went public, because the fixture's call had
+turned into `E0061` (wrong argument count). A count survives a change of cause; a code does not.
+An unclaimed error code is refused too — then the fixture failed for a reason it does not name.
 
-## Result — keystone `8156792` + uncommitted working tree, 2026-09-06
+## Result — keystone `dev` `029d1c7`, 2026-09-12
 
 ```
-== 1. access_control — MUST COMPILE ==
-   compiled. The peer IS reachable as a library across the crate boundary.
+== 2. access_absent ==
+     error[E0603]: type alias `Outcome` is private
+     error[E0616]: field `native_handlers` of struct `Peer` is private
+     error[E0609]: no field `handlers` on type `Peer`
+     error[E0624]: method `resolve_handler` is private
+   claimed codes present: 4 of 4
 
-== 2. access_absent — MUST FAIL TO COMPILE ==
-   error[E0603]: struct `Outcome` is private
-   error[E0624]: method `register_handler` is private
-   error[E0609]: no field `handlers` on type `Peer`
-   error[E0624]: method `resolve_handler` is private
-   distinct type errors: 4 of 4 claimed
-
-== 3. probe ==
-Scenario 1 — the Reach layer (handler face)
-  A. nothing bound                          404  handler_not_found
-  B. all four §11.6.1 tree writes bound     501  no_handler_body
-  C. that body called DIRECTLY              200  witness=rs-seam-9c41:hello
-     invocations: before=0 after dispatch=0 after direct=1
-  => Reach (handler face): NO
-
-Scenario 2 — the emit face (§6.10 / §6.13(c))
-  D. consumer registered, one bind          1 event   rs-seam-9c41:created:/<peer>/probe/emit
-  E. no consumer, one bind                  0 events
-  F. identical re-bind (no change)          1 event total
-  => Reach (emit face): YES
-
-Scenario 3 — the connection frame budget (CONTENT Am. 1 §6.2)
-  wire::MAX_FRAME                           16777216
-  => readable by a body: NO. And NOT configurable, so the by-value check K-1
-     forced has no second arm here. UNSATISFIABLE-AND-VACUOUS, not a failed check.
+Scenario 1 — H1
+  A. nothing installed                      404  handler_not_found
+  B. register_handler -> Ok                200  witness=rs-seam-9c41:hello   invocations 0 -> 1
+  C. unregister_handler -> true            404  handler_not_found            invocations stay 1
+Scenario 2 — emit face: D 1 event · E 0 events · F identical re-bind silent · G re-entrant write OK
+Scenario 4 — emit face over the wire: H PUT -> consumer -> GET 200 · I no consumer -> GET 404
+Scenario 3 — H6 by value: configured 3,145,749 -> read 3,145,749 · default -> 16,777,216
+Scenario 5 — H7: K no evaluator 501 · L literal 200, evaluator asked 0x · M 200 value=43 · N declined 501
+probe integrity: OK — every arm discriminated
 ```
 
-**Scenario 1's three arms are the whole argument.** A alone would say "nothing is installed".
-B alone would say "something is broken". **B against A** says the four tree writes took effect
-and the peer resolved the pattern; **C** says the body works and its invocation counter went
-`0 → 1` on a direct call while staying at `0` through the dispatch. Together they say the one
-thing worth saying: *there is nowhere to install a body, so it was never asked.* That is D13's
-required distinguisher between "not installed" and "installed and never asked", landing on a
-third case neither sibling probe has ever had to express.
+**C is the arm that makes B attributable.** A alone says nothing is installed; B's witness folds a
+request field into a registration nonce; C returns the peer to `404` with the counter unmoved, so the
+`200` belonged to the install and to nothing else on the dispatch path. The binary exits non-zero if
+any face the contracts claim installed measures NO.
 
-**Scenario 2 has two negatives and they are not redundant.** E is "no consumer → no events".
-F is "an identical re-bind → **no additional** event", which is the arm that separates *the
-counter tracks events* from *the counter tracks calls*. Only the first is the property §6.10
-states, and only F can tell them apart.
+## The pre-H1 record — keystone `8156792` + working tree, 2026-09-06
 
-**Scenario 3 is reported as vacuous rather than scored.** The `python` K-1 upgrade made the
-frame-budget check measure **by value** — configure the peer to enforce 3,145,749, assert the
-body reads back 3,145,749, and carry a negative arm that reads the 16 MiB default and rejects
-it. Here there is no configuration to vary, so that comparison has no second arm. Saying so is
-different from reporting a failure, and different again from reporting a pass.
+```
+access_absent: E0603 struct `Outcome` is private · E0624 register_handler is private ·
+               E0609 no field `handlers` · E0624 resolve_handler is private
+Scenario 1: A nothing bound 404 · B all four §11.6.1 writes bound 501 no_handler_body ·
+            C the body called DIRECTLY 200, invocations before=0 after dispatch=0 after direct=1
+            => Reach (handler face): NO
+Scenario 3: wire::MAX_FRAME 16777216, not configurable => UNSATISFIABLE-AND-VACUOUS
+```
 
 ## What this measures, and what it does not
 

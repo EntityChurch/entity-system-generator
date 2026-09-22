@@ -23,6 +23,7 @@ path = "src/main.rs"
 [dependencies]
 entity-content = { path = "../../extensions/content" }
 entity-history = { path = "../../extensions/history" }
+entity-compute = { path = "../../extensions/compute" }
 
 # The peer, for `Value`/`Key` and the `Entity` type the cells hand back. Named here
 # rather than re-exported through a cell on purpose: this arm's normaliser walks the

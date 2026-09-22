@@ -80,7 +80,7 @@ evaluator     = "not-installable"
 
 [gate]
 oracle     = "entity-core-go validate-peer"
-categories = ["compute"]
+categories = ["compute", "entity_native"]
 profiles   = ["core"]
 
 # ── [gate.expectation] — PRE-REGISTERED, written BEFORE the first composed run ───────
@@ -149,6 +149,24 @@ of anything language-specific — so a number there is not a prediction, it is t
 as risk 4 restated.
 """
 
+# ── `entity_native` — ADDED 2026-09-12 (second session), PRE-REGISTERED BEFORE ITS FIRST RUN ─────
+#
+# `validate-peer`'s `entity_native` category (13 checks, `cmd/internal/validate/entity_native.go`
+# @ 78db4a9) measures §3.2 E1 — the H7 evaluator face — and it sits OUTSIDE `--profile core`, so no
+# run in this tree had ever reached it. The contract row that read "§3.2 ... Not measured here" was
+# a statement about the categories WE declare, not about the oracle (D22). Found by the compute-arc
+# review. Five checks have a `compute/literal` body the PEER answers before any evaluator is asked,
+# so they read the same in both arms by construction: `dispatch_basic`, `hot_swap_expression`,
+# `missing_grant_fail_closed`, `empty_handler_grant_dispatches`, `dispatch_with_deliver_to`.
+# `result_unwrapped` is also a literal body and FAILS in both arms on every keystone peer: the
+# peer's literal floor returns a `compute/result` wrapper (§3.2 E1 says unwrap) — keystone's, routed.
+#
+#   PREDICTED improvements: 0. This peer has no H7 seam (`evaluator = "not-installable"`), so every
+#   non-literal body answers the peer's own `501` in both arms. Run anyway, as the CONTROL for the
+#   other two ports: a composed arm that moved here would be measuring something other than H7.
+#   MEASURED 2026-09-12 (UTC 09-13), ROUNDS=2: RIGHT — 0 improvements, 0 regressions; bare and composed
+#   identical, 3 PASS / 10 FAIL. The control read as a control.
+
 # ── [compute] — what the composition configures ──────────────────────────────────────
 [compute]
 # §9.3's recommended limits, taken as-is and identical to `ts-compute`'s. §10.4 makes both
@@ -202,7 +220,7 @@ the same numbers for the same reason.
 # one check that is a function of machine speed and of nothing else.
 
 [gate.baseline.compute]
-measured = "2026-09-11"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 128
 composed = { PASS = 125, FAIL = 3 }
 bare     = { FAIL = 128 }
@@ -335,7 +353,7 @@ improved = [
 ]
 
 [gate.baseline.core]
-measured = "2026-09-11"   # 2 round(s)
+measured = "2026-09-13"   # 2 round(s)
 total    = 778
 composed = { PASS = 398, WARN = 273, SKIP = 107 }
 bare     = { PASS = 335, WARN = 336, SKIP = 107 }
@@ -403,4 +421,13 @@ improved = [
   "type_system.type_system_compute_store_args_match",
   "type_system.type_system_compute_subgraph_fetch",
   "type_system.type_system_compute_subgraph_match",
+]
+
+[gate.baseline.entity_native]
+measured = "2026-09-13"   # 2 round(s)
+total    = 13
+composed = { PASS = 3, FAIL = 10 }
+bare     = { PASS = 3, FAIL = 10 }
+improved = [
+
 ]

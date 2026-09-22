@@ -41,8 +41,17 @@ LANGUAGE="$(plan_field language)"
 [ "$LANGUAGE" = "typescript" ] || { echo "build: plan language is '$LANGUAGE', not typescript" >&2; exit 2; }
 
 PEER_REL="$(plan_field peer.path)"
-PEER="$(cd "$ROOT/$PEER_REL" 2>/dev/null && pwd)" || {
-  echo "build: peer not found at \$ROOT/$PEER_REL" >&2; exit 2; }
+# PEER_ROOT overrides the plan's peer path with a COPY of the same peer — for the day the peer's
+# dist/ is older than its src/ and rebuilding it would write into another team's tree. The copy
+# is built under our own output/ from their unmodified source; the staleness check below applies
+# to it exactly as to the original. Same spelling as `languages/rust/host-entry`'s override.
+if [ -n "${PEER_ROOT:-}" ]; then
+  PEER="$(cd "$PEER_ROOT" 2>/dev/null && pwd)" || { echo "build: PEER_ROOT not found at $PEER_ROOT" >&2; exit 2; }
+  echo "build: PEER_ROOT override -- measuring a copy of $PEER_REL at $PEER"
+else
+  PEER="$(cd "$ROOT/$PEER_REL" 2>/dev/null && pwd)" || {
+    echo "build: peer not found at \$ROOT/$PEER_REL" >&2; exit 2; }
+fi
 
 [ -d "$PEER/dist" ] || { echo "build: peer has no dist/ at $PEER -- build the peer first" >&2; exit 2; }
 [ -d "$PEER/node_modules" ] || { echo "build: peer has no node_modules at $PEER" >&2; exit 2; }

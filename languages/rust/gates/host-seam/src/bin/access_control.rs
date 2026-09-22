@@ -12,7 +12,13 @@ use entity_core_protocol::peer::core::Conn;
 use entity_core_protocol::peer::model::{self, Entity};
 use entity_core_protocol::peer::store::{Store, TreeChangeEvent};
 use entity_core_protocol::peer::wire;
-use entity_core_protocol::peer::{CreateOptions, Envelope, Peer};
+use std::sync::Arc;
+
+use entity_core_protocol::peer::capability::check_path_permission;
+use entity_core_protocol::peer::handler::{
+    ExpressionEvaluator, FnHandler, Handler, HandlerContext, HandlerResult, LocalExecute, OperationSpec,
+};
+use entity_core_protocol::peer::{CreateOptions, Envelope, Peer, PeerConfig};
 
 fn main() {
     // Access, the parts that ARE public: construct the peer, reach its store, reach
@@ -60,5 +66,23 @@ fn main() {
     });
     let _ = peer.dispatch(&mut conn, &Envelope::new(exec));
 
-    println!("access_control: compiled and ran -- the peer IS reachable as a library");
+    // The host contract a third party installs through (keystone H1, H3, H6, H7, H9, K-5). Named
+    // here so that `access_absent`'s claims are about what is BEHIND these, not about these.
+    let _: fn(&Peer, Arc<dyn Handler>) -> _ = Peer::register_handler;
+    let _: fn(&Peer, &str) -> bool = Peer::unregister_handler;
+    let _: fn(&Peer, Option<Arc<dyn ExpressionEvaluator>>) = Peer::set_expression_evaluator;
+    let _: fn(&Peer) -> usize = Peer::max_frame_bytes;
+    let _: fn(&str, &str, &Entity, &str, &str) -> bool = check_path_permission;
+    let _ = PeerConfig::default().max_frame_bytes(1 << 20);
+    let _ = |c: &HandlerContext<'_>| -> usize { c.frame_budget() };
+    let _ = |c: &HandlerContext<'_>, l: LocalExecute| -> HandlerResult { c.dispatch_execute(l) };
+    let installed = peer.register_handler(Arc::new(FnHandler::new(
+        "app/control",
+        "control",
+        vec![OperationSpec::named("run")],
+        |_ctx: &HandlerContext<'_>| HandlerResult::ok(Entity::make("primitive/any", model::map(vec![]))),
+    )));
+    assert!(installed.is_ok() && peer.has_native_handler("app/control"));
+
+    println!("access_control: compiled and ran -- the peer IS reachable as a library, and a body installs");
 }

@@ -1,10 +1,10 @@
 # HISTORY
 
-Standard-extension implementations of `EXTENSION-HISTORY` v1.7, one per language.
+Standard-extension implementations of `EXTENSION-HISTORY` v1.10, one per language.
 
 **The spec is upstream and this is not a copy of it.** Read
-`shared/spec-data/history-v1.7/EXTENSION-HISTORY.md` — the pinned snapshot these ports
-were written against. A gap or contradiction in it is routed to
+`shared/spec-data/history-v1.10/EXTENSION-HISTORY.md` — the pinned snapshot the contract is
+held to. The ports were first written against v1.7 and re-pinned through v1.8 and v1.10. A gap or contradiction in it is routed to
 `entity-system-architecture` as a spec issue, never closed by a local decision and never
 worked around in generated output.
 
@@ -48,42 +48,40 @@ namespaces. The filled-in header went to arch as a **draft**, not as a request.
 | **Emit consumer** (§5.1) | **the face CONTENT never had.** SYSTEM-COMPOSITION §2.2 position 4, self-guarded per §3.2 |
 | **SDK** | `historyConfig` · `configPath` · `resolveConfig` · `buildContext` · the §2.2/§6.2 pattern algorithms |
 
-**Implemented is not the same as installed, and on `rust` they came apart in a new
-direction.** There the emit consumer **installs and runs** — the peer accumulates a real,
-correct, content-addressed audit chain — and the handler face **cannot be installed at any
-visibility**, so nothing can read that chain over the wire. The oracle's `history` category
-scores 7 of 34 against a recorder that is working perfectly. See
+**All four faces install on all three targets.** Until keystone landed H1 on the `rust` peer
+on 2026-09-12, the handler face could not be installed there: the emit consumer recorded a real
+audit chain that nothing could read over the wire, and the `history` category scored 7 of 34.
+`install_history` now installs the handler on `rust` as on the other two, and the category
+measures 32 PASS / 1 WARN / 1 FAIL of 34 there (oracle 78db4a9). The earlier state is recorded in
 `arch/AUTHORING-NOTES.md` §2.0 and `EXTENSION.toml [substrate.oracle_read_path]`.
 
 Not implemented, declared rather than silent:
 
-- **`max_depth` pruning (§3.3)**, a SHOULD. §3.3's algorithm describes severing an
-  immutable content-addressed chain, which cannot be done without rewriting every
-  transition's hash. Every port walks and reports; none severs. Routed as `A-4`.
+- **`max_depth` collection (§3.3)**, a SHOULD. Through v1.7 §3.3 described severing an
+  immutable content-addressed chain; we routed that as `A-4`, and v1.8 rewrote §3.3 so
+  `max_depth` is a retention floor and the chain is never rewritten. Every port walks and
+  reports; none collects, which v1.8 states is conformant.
 - **The `accessed` event (§2.1, §5.2)**, a MAY. §5.2 puts read-audit inside the TREE
   handler's `get`, and the emit pathway fires on Bind — a read binds nothing, so no
   consumer on any peer observes one. `config.events` accepts `"accessed"` and it never
   matches.
 
-## The MUST no port satisfies, and why that is the honest headline
+## The execution context, and what a green count does not say
 
 **§2.1 makes `author` and `capability` non-optional and §9.1 MUSTs recording them, from the
-execution context §5.1 says arrives with the tree-change event. No peer delivers one.**
+execution context §5.1 says arrives with the tree-change event.** Until keystone landed H8 on
+2026-09-07 no peer delivered one, and every transition recorded §2.1's **autonomous-case**
+values — wrong about the world for a write that arrived over the wire. All three peers now put
+a context on the event for a write made through dispatch, and the recorder uses it.
 
-`typescript` declares an `EmitContext` with almost exactly SYSTEM-COMPOSITION §1.4's
-inventory and constructs it at **zero sites**; `python` and `rust` have no context field on
-the event at all. So every transition records §2.1's **autonomous-case** values — which is
-the reading the spec supplies for "no external request", and which is wrong about the world
-for a write that arrived over the wire from a remote caller.
-
-**Four oracle checks pass on that, and they are presence checks over values we fabricate.**
-So the module records a `provenance` field **outside** the spec-declared entity (adding a
+The module still records a `provenance` field **outside** the spec-declared entity (adding a
 field to `system/history/transition` would move its content hash away from every other
-implementation's), the composition prints `context_available=false`, and the unit test
-asserts the fallback **FIRES** — so the day a context arrives, that test fails and says so.
+implementation's): `"context"` when the event carried one, `"autonomous-fallback"` when it did
+not. The installation's `context_available` is observed at runtime, never declared.
 
-**33 of 34 is a count of checks passed. It is not a claim that §9.1's MUST is satisfied.**
-Routed as `H8`.
+**A passing count is not a claim that §9.1's MUST is satisfied.** The four `context_*` oracle
+checks are presence checks and passed identically before and after H8; see `EXTENSION.toml`
+HIST-R3.
 
 ## The boundary, which is ours to draw
 
@@ -117,3 +115,6 @@ rust/compositions/content-history/status/CONFORMANCE-2026-09-07.md
 
 Every figure in them is the summary block of the JSON report named beside it, printed by
 the artifact rather than counted off a listing (D14).
+
+Those files are dated snapshots. The current measured numbers are the `[gate.baseline.*]`
+tables in each composition's `SYSTEM.toml`, checked by `make expectation`.

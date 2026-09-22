@@ -26,8 +26,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  CapabilityToken,
   ConnectionState,
   Ecf,
+  GrantEntry,
+  PeerIdentity,
+  Scope,
   Entity,
   Envelope,
   Execute,
@@ -83,7 +87,12 @@ async function rig(): Promise<Rig> {
 
 // ── in-process rig: the only thing a wire client cannot construct is a pinned budget ──
 
-function inProcess(peer: Peer, op: string, params: Entity, opts: { resource?: ResourceTarget | null; frameBudget?: number } = {}) {
+function inProcess(
+  peer: Peer,
+  op: string,
+  params: Entity,
+  opts: { resource?: ResourceTarget | null; frameBudget?: number; capability?: CapabilityToken } = {},
+) {
   const execute = Execute.build({
     requestId: "in-process-1",
     uri: `/${peer.localPeerId}/${CONTENT_PATTERN}`,
@@ -102,7 +111,7 @@ function inProcess(peer: Peer, op: string, params: Entity, opts: { resource?: Re
     envelope: new Envelope(execute.entity, []),
     pattern: CONTENT_PATTERN,
     suffix: "",
-    callerCapability: null,
+    callerCapability: opts.capability ?? null,
     handlerGrant: null,
     author: null,
     connection,
@@ -424,4 +433,29 @@ test("§3.3 closure: complete, missing_chunk, and blob_not_found are distinguish
 
   const absent = ensureClosure(peer.contentStore, new Uint8Array(33));
   assert.equal(!absent.complete && absent.code, "blob_not_found");
+});
+
+// §6.4 step 2 — the path-scope check against the caller's capability (`checkPathPermission`, handler
+// pattern `system/content`). A target INSIDE the namespace that the grant does not cover is 403.
+// CONTROL: the same request under a covering grant proceeds, so the 403 is the grant's and not a
+// handler that refuses every capability-bearing call.
+test("§6.4 step 2: a target the capability does not cover is 403 even inside the namespace", async () => {
+  const peer = new Peer();
+  const identity = PeerIdentity.fromSeed(new Uint8Array(32).fill(0x72));
+  const grant = (resource: string) =>
+    CapabilityToken.createRoot(
+      identity,
+      identity.identityHash,
+      [new GrantEntry(new Scope([CONTENT_PATTERN], null), new Scope([resource], null), new Scope(["get"], null), null, null, null)],
+      0n,
+    ).token;
+  const params = Entity.create(ContentTypes.GetRequest, Ecf.map(["hashes", Ecf.array([])]));
+  const target = new ResourceTarget([CONTENT_PATTERN + "/private/x"], null);
+
+  const denied = await inProcess(peer, "get", params, { resource: target, capability: grant(CONTENT_PATTERN + "/public/*") });
+  assert.equal(denied.status, 403);
+  assert.equal(errorCode(denied.result), "capability_denied");
+
+  const allowed = await inProcess(peer, "get", params, { resource: target, capability: grant(CONTENT_PATTERN + "/*") });
+  assert.equal(allowed.status, 200, "control: a covering grant proceeds");
 });

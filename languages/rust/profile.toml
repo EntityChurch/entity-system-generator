@@ -1,11 +1,11 @@
 ## languages/rust/profile.toml — the toolchain facts for ONE language.
 ##
-## THIRD LANGUAGE, and the first one that breaks the shape the first two shared.
-## Compare `../typescript/profile.toml` and `../python/profile.toml`: the FIELDS were
-## the same across those two, which is what "the language axis is a profile, not a
-## rewrite" meant. Here the fields are still the same — and one of them, `[gate]
-## host_entry`, has a value that changes what the composition can claim, because on
-## this peer a handler body cannot be installed at all.
+## THIRD LANGUAGE, and the first one that broke the shape the first two shared.
+## Compare `../typescript/profile.toml` and `../python/profile.toml`: the FIELDS are the
+## same across all three, which is what "the language axis is a profile, not a rewrite"
+## means. For the first nine compositions one VALUE here changed what a composition could
+## claim — on this peer a handler body could not be installed at all — until keystone
+## landed H1 on 2026-09-12 and `[extension_host]` below was re-measured.
 ##
 ## That is not a defect in the layout. It is the layout doing its job: the thing that
 ## differs is recorded as a VALUE in the one place per language, rather than as a
@@ -82,34 +82,38 @@ host_entry = "host/target/debug/composed-host"
 startup_ticks = 150
 
 [extension_host]
-# Facts about THIS peer that an extension module has to be built around. Every row was
-# MEASURED by `languages/rust/gates/host-seam/` -- half of it by a running program, half by rustc,
-# because on an AOT substrate "is the symbol there" is not a runtime question.
+# Facts about THIS peer that an extension module has to be built around, each MEASURED by
+# `languages/rust/gates/host-seam/probe-seam-rust.sh` (a running program for Reach, rustc for H3).
 #
-# keystone carries an [extension_host] block on `typescript` and `python` only; the
-# other 44 read `unknown`. These values are ours until they carry one here.
-registration_surface = "none"          # and not in the `python` sense. `python` has no
-                                       # registerHandler but the caller can perform all
-                                       # four §11.6.1 writes AND bind a body. Here the
-                                       # fifth step has no destination at any visibility.
-handler_install      = "IMPOSSIBLE"    # probe scenario 1: 501 no_handler_body with all
-                                       # four tree writes bound; 404 with none. Both arms.
-ctx_type             = "none"          # the dispatcher passes (&mut Conn, &Envelope) to
-                                       # PRIVATE code. There is no context type to receive.
-outcome_exported     = false           # error[E0603]: struct `Outcome` is private
-emit_consumer        = "Store::register_tree_consumer"   # ← AND THIS ONE IS LIVE.
-                                       # Measured with two negatives: no consumer -> 0
-                                       # events, and an identical re-bind -> no event.
-                                       # One peer, one extension, TWO faces, two answers.
-type_publication     = "Store::bind"   # public; the one install face that works
-frame_budget         = "wire::MAX_FRAME (a public const, NOT configurable)"
-                                       # 16,777,216 -- the exact literal CONTENT Am. 1
-                                       # names as the wrong answer. But it is also the
-                                       # bound `read_frame` actually enforces, and there
-                                       # is no other, so a body reading it reads the
-                                       # truth. Degenerate satisfaction, not a violation.
-                                       # Routed as "make it configurable", not as K-1's
-                                       # "unimplementable". Different packet, on purpose.
+# ** RE-MEASURED 2026-09-12 (second session) at keystone `dev` 029d1c7. ** Every handler-face row
+# below read the opposite until then — `registration_surface = "none"`, `handler_install =
+# "IMPOSSIBLE"`, `outcome_exported = false`, `frame_budget = "wire::MAX_FRAME (a public const, NOT
+# configurable)"` — and all of it was true of the peer it was measured on. Keystone landed H1, H3,
+# H6, H7, H9 and K-5 on this peer for our K-9
+# (`ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe`).
+# keystone now carries its own `[extension_host]` row for `rust`; these are ours, measured from
+# outside the crate, and where the two disagree that is a finding.
+registration_surface = "Peer::register_handler"   # public; probe scenario 1 B (witness, counter 0 -> 1)
+handler_install      = "installable"              # probe scenario 1 A/B/C: 404 -> 200 witness -> 404
+                                                  # after unregister_handler, counter unmoved
+ctx_type             = "HandlerContext"           # public type, `pub(crate)` fields: a body receives
+                                                  # one and cannot construct one (why each cell's
+                                                  # unit tests keep their own HandlerRequest)
+outcome_exported     = "HandlerResult"            # public. `peer::core::Outcome` is still private
+                                                  # (E0603, access_absent claim 3) and nothing needs it
+raw_container        = "private"                  # H3: E0616 `native_handlers`, E0609 `handlers`,
+                                                  # E0624 `resolve_handler` — access_absent, each code required
+emit_consumer        = "Store::register_tree_consumer"   # live, two negatives (scenario 2)
+type_publication     = "Store::bind"
+frame_budget         = "HandlerContext::frame_budget (configured by PeerConfig::max_frame_bytes)"
+                                                  # probe scenario 3, BY VALUE: 3,145,749 configured
+                                                  # -> read back; unconfigured -> 16,777,216
+expression_evaluator = "Peer::set_expression_evaluator"  # probe scenario 5: 501 -> 200 (a request
+                                                  # field folded in) -> 501 for a declined body; the
+                                                  # compute/literal floor answered unasked
+path_permission      = "capability::check_path_permission"  # H9; compiled against by access_control
+local_dispatch       = "HandlerContext::dispatch_execute"   # K-5; measured by the compute category's
+                                                  # three handler-mode checks through `install_compute`
 
 # ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
 # D17: a per-target VALUE lives in the profile. The type name is left open (`\w+::err`)
@@ -118,9 +122,20 @@ frame_budget         = "wire::MAX_FRAME (a public const, NOT configurable)"
 # field silently stop matching at the first cell that is not CONTENT, which is the exact
 # false green MIN_SITES and the self-test exist to refuse.
 [error_surface]
-emit_pattern = '\b\w+::err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"'
-# D15's control, as data — see `--self-test`.
-self_test_line = 'return ContentOutcome::err(400, "planted_bogus_code", "x");'
+# A LIST since 2026-09-12, at the third COMPUTE port — `typescript`'s reason, arriving here: the
+# evaluator returns a `compute/error` VALUE named by a `CODE_*` constant, and the handler passes
+# constants too, so the literal-string pattern saw five of the cell's sites and would have called
+# the surface clean. CONTENT and HISTORY on this target use no `CODE_*` constants, so pattern 2
+# adds nothing to their cells.
+emit_pattern = [
+  '\b\w+::err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"',
+  '\bCODE_(?P<code>[A-Z_]+)\b',
+]
+# D15's control, as data — ONE planted line per pattern, same order (see `--self-test`).
+self_test_line = [
+  'return ContentOutcome::err(400, "planted_bogus_code", "x");',
+  'return ComputeOutcome::err(400, CODE_PLANTED_BOGUS_CODE, "x");',
+]
 
 # ── [sdk_surface] — the D16 gate's per-target facts ─────────────────────────────
 # D17: a per-target VALUE lives in the profile. `entry_point` was a literal in

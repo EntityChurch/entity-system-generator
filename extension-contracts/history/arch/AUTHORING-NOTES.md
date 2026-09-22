@@ -116,6 +116,13 @@ is the kind of local decision this repo does not get to make quietly.
 
 ## 2. The substrate model — three peers, measured, not extrapolated
 
+> **Dated note, 2026-09-12.** Several `rust` rows below were measured before keystone landed H1 and
+> H9 on that peer. Since then the handler installs through `install_history` (§2.0), the autonomous
+> `capability` is the grant `register_handler` bound (§2.3), and §4.2's check calls
+> `capability::check_path_permission` (§2.4); the `history` category scores 32 PASS / 1 WARN /
+> 1 FAIL of 34 on `rust` (oracle 78db4a9). §2.2 was overtaken earlier, by H8 on 2026-09-07. The
+> tables are kept as the record of the port; the current values are in `../EXTENSION.toml`.
+
 Same five axes as CONTENT's §2, plus two that only HISTORY reaches. **Rows identical to
 CONTENT's are marked `= CONTENT` and not re-argued.**
 

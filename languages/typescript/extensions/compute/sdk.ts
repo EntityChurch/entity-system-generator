@@ -110,6 +110,12 @@ export interface EvaluateOptions {
    */
   readonly canReadPath?: (path: string) => boolean;
   readonly canWritePath?: (path: string) => boolean;
+  /**
+   * §3.2 E1 — scope bindings pre-populated by a dispatch layer (`operation`, `params`,
+   * `resource`, `caller_capability` for an entity-native body). Empty by default. A binding
+   * carries no authority: it is a value an expression can read through `compute/lookup/scope`.
+   */
+  readonly bindings?: ReadonlyMap<string, codec.EcfValue | Entity>;
 }
 
 /**
@@ -155,7 +161,9 @@ export class ComputeEvaluator {
     const budget: Budget = { operations, depth: this.#limits.maxDepth };
     const ctx = this.#context(subgraphRoot, options);
 
-    const out = evaluate(expression, emptyScope(), budget, ctx);
+    const scope = emptyScope();
+    for (const [name, value] of options.bindings ?? []) scope.bindings.set(name, value);
+    const out = evaluate(expression, scope, budget, ctx);
     const used = operations - budget.operations;
 
     if (isError(out)) {

@@ -260,7 +260,8 @@ model = "sdk-native"                 # installed in-process against a live peer 
 must         = "NONE -- 0.8.2.13 withdrew the reservation. What remains is a deployment policy the protocol explicitly declines to constrain either way."
 typescript   = "REFUSES -- `403 forbidden_pattern`, quoting the withdrawn §6.2 sentence"
 python       = "REFUSES -- same, via `_is_reserved_system_pattern`"
-rust         = "unknown -- never asked; this extension's handler face is not installable there at all, so the wire path was never reached"
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record.
+rust         = "REFUSES per keystone's own statement (`ROUTING-2026-09-12-a-entity-system-generator-rust-can-install-a-handler-and-h1-status-no-longer-reads-the-wire-probe` §1: the wire register op still refuses `system/*`, deliberately, while the in-process `register_handler` does not). Unmeasured here."
 other_peers  = "unknown (43) -- no probe has ever run this on any peer outside the tier-A pair"
 consequence  = "`model = 'sdk-native'` is unchanged and is still the only thing that works TODAY on the peers we compose against. It is no longer FORCED, so it is no longer a fact a new extension may inherit without asking."
 probe        = "unknown -- no gate in this tree exercises a wire register at a `system/*` pattern. The refusal was read out of peer source and out of a spec sentence, never executed here (D13: a source read decides what to build, never what is true)."
@@ -274,7 +275,12 @@ probe        = "unknown -- no gate in this tree exercises a wire register at a `
 [sdk.EnsureClosure]
 cite       = "§3.3 verify_content"
 public     = true
-reached_by = ["content/handler_op_get (indirectly, via get)"]
+reached_by = []                      # CORRECTED 2026-09-12. This read
+                                     # ["content/handler_op_get (indirectly, via get)"], and no
+                                     # port's handler calls it: `grep -n -i 'ensure_\?closure'`
+                                     # over languages/{typescript,python}/extensions/content/handler.*
+                                     # and languages/rust/extensions/content/src/handler.rs
+                                     # returns nothing. Unmeasured.
 note       = "completeness + size consistency. §3.7 classifies it Conformance: the verdict is cross-peer-uniform."
 
 [sdk.AtPeer]
@@ -295,10 +301,12 @@ callable from third-party / SDK / external consumer code without an explicit cap
 wrapper -- direct substrate access bypasses the dispatcher cap discipline and creates a
 capability-escalation surface for consumers holding non-root caps."
 
-So the module ships the algorithm as MODULE-PRIVATE, reachable only from inside the handler body,
-which is already past the dispatcher's cap check. It is not exported from the module's public
-entry point in ANY language. The generation-time check is a grep on the language's export surface,
-not a code review: see extensions/content/<lang>/test/.
+So the module ships the algorithm as MODULE-PRIVATE. It is not exported from the module's public
+entry point in ANY language; the only public route is the SDK's `reassemble_under_capability`
+wrapper, which no handler calls today (see [substrate.capability_wrapper] for what that wrapper does
+and does not check). The export check is a test on the language's export surface, not a code
+review: see languages/typescript/extensions/content/test,
+languages/python/extensions/content/test and languages/rust/extensions/content/tests.
 """
 
 # ── [assumptions] — open questions resolved to a value, greppable ───────────────────────
@@ -325,7 +333,8 @@ python     = "satisfiable"           # ctx.frame_budget() -> conn.max_frame_byte
                                      # conn/ctx/peer/store carried a budget and wire.MAX_FRAME
                                      # was a module constant equal to the forbidden literal.
                                      # Routed as K-1, closed by keystone, re-measured here.
-rust       = "satisfied-degenerately"
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record.
+rust       = "satisfiable"           # HandlerContext::frame_budget() — connection value, peer default fallback; PeerConfig::max_frame_bytes. Probe scenario 3 BY VALUE, both arms.
                                      # AND THIS IS A THIRD VERDICT, not a repeat of K-1.
                                      # `wire::MAX_FRAME` is a pub const == 16,777,216, the
                                      # exact literal the amendment names as wrong, and
@@ -340,7 +349,7 @@ rust       = "satisfied-degenerately"
                                      # "unimplementable". A different packet on purpose:
                                      # python's body could not see the number at all.
 probe      = "languages/python/gates/host-seam/probe-seam.py + probe-seam.mjs + rust/probe-seam-rust.sh"
-measured   = "BY VALUE, not by attribute name. The probe configures the peer to enforce 3,145,749 and asserts the body reads back 3,145,749; its negative-control arm builds the peer unconfigured and asserts the body reads 16,777,216, which the scoring REJECTS. The name-matching version of this check went green the day the fix landed and could not have gone red for a peer that stamped MAX_FRAME onto every connection -- that is D15, applied to our own instrument the session after ratifying it. ON `rust` THE BY-VALUE CHECK HAS NO SECOND ARM: there is no configuration to vary, so the probe reports UNSATISFIABLE-AND-VACUOUS rather than scoring an arm it could not construct."
+measured   = "BY VALUE, not by attribute name. The probe configures the peer to enforce 3,145,749 and asserts the body reads back 3,145,749; its negative-control arm builds the peer unconfigured and asserts the body reads 16,777,216, which the scoring REJECTS. The name-matching version of this check went green the day the fix landed and could not have gone red for a peer that stamped MAX_FRAME onto every connection -- that is D15, applied to our own instrument the session after ratifying it. ON `rust` THE BY-VALUE CHECK HAD NO SECOND ARM until keystone's H6 (2026-09-12) added `PeerConfig::max_frame_bytes`; the probe reported UNSATISFIABLE-AND-VACUOUS rather than scoring an arm it could not construct. It now measures both arms by value: `languages/rust/gates/host-seam/src/bin/probe.rs` scenario 3 (H6 by value YES)."
 
 # §3.4 IS TWO CLAUSES, AND THEY DO NOT MOVE TOGETHER. Split at the third port, 2026-09-06,
 # because `rust` is the strongest of the three on one clause and the weakest on the other
@@ -371,20 +380,36 @@ note = "The same clause, three boundaries, three strengths: a manifest, a promis
 
 [substrate.capability_wrapper]
 must = "§3.4 clause 2 -- reassembly is reachable only behind an EXPLICIT CAPABILITY-CHECKING wrapper, because direct substrate access bypasses the dispatcher cap discipline"
-typescript = "DISPATCHER-ANCHORED"   # the wrapper demands `ctx`, which the dispatcher
-                                     # constructs only after check_permission returned ALLOW
-python     = "DISPATCHER-ANCHORED"   # same shape; also checks ctx.has_cap at runtime
-rust       = "CRATE-ANCHORED ONLY"   # ← WEAKEST OF THE THREE, and the inverse of the row
-                                     # above. There is no dispatcher-built value to demand:
-                                     # `Conn` is freely constructible, `Outcome` and
-                                     # `dispatch_outcome` are private (E0603), and no
-                                     # handler body is reachable from dispatch at all. So
-                                     # `DispatchAuthority` -- a tuple struct with a private
-                                     # field and a pub(crate) constructor -- is unforgeable
-                                     # and proves only "you came through this crate's
-                                     # handler", NOT "the dispatcher authorized you".
-                                     # Stated narrowly in sdk.rs rather than claimed as parity.
-note = "Reporting one verdict for two clauses that invert between substrates is the D13 error one level up: not two boundaries read as one, but two REQUIREMENTS read as one. The row above and this row disagree about which port is strongest, and both are right."
+typescript = "CALLER-CONSTRUCTIBLE CONTEXT, NO CAPABILITY CHECK"
+                                     # CORRECTED 2026-09-12 (cross-port review). This read
+                                     # "DISPATCHER-ANCHORED". `HandlerContext` is exported with a
+                                     # public constructor -- our own test/handler.test.ts builds
+                                     # one -- and the wrapper checks only `ctx.pattern` and that
+                                     # `callerCapability` is non-null, both caller-supplied. It
+                                     # never checks the capability against the blob or namespace.
+python     = "CALLER-CONSTRUCTIBLE CONTEXT, NO CAPABILITY CHECK"
+                                     # CORRECTED 2026-09-12. `DispatchCtx` is a plain dataclass;
+                                     # any object with `caller_cap`/`has_cap` passes, `store` is a
+                                     # free argument, the handler pattern is never checked.
+rust       = "CRATE-ANCHORED ONLY -- AND NOW THE ONLY ONE THAT IS UNFORGEABLE"
+                                     # `DispatchAuthority` (private field, pub(crate) ctor) proves
+                                     # "you came through this crate's handler", not "the dispatcher
+                                     # authorized you". Until keystone's H1 (2026-09-12) there was
+                                     # no dispatcher-built value to demand. THERE IS NOW:
+                                     # `HandlerContext` has pub(crate) fields and one construction
+                                     # site, `Peer::route`, after `check_permission`. Re-anchoring:
+                                     # take `&HandlerContext`, require `ctx.pattern() ==
+                                     # CONTENT_PATTERN`, call `check_path_permission` against
+                                     # `ctx.caller_capability()`. OPEN -- see the handoff.
+note = """
+**This row's verdict inverted on 2026-09-12, and the old note's framing was wrong.** It said the two
+§3.4 clauses invert between substrates (typescript/python strongest on the anchor, rust weakest) and
+"both rows are right". The review found the typescript and python contexts are constructible by any
+caller, so on the ANCHOR clause rust's crate-private token is the only unforgeable one of three, and
+on the CHECK clause no port checks the capability at all. The fix is one design (demand a
+dispatcher-built context AND check the capability against the target) applied three times; rust is
+the only peer where the first half is available today.
+"""
 
 # ── [substrate.faces] — the row the third port added, and the one that reframes the tier ──
 # An extension has four faces (docs/DESIGN-THE-SDK-LAYER.md §1). On the first two peers all
@@ -394,7 +419,8 @@ note = "Reporting one verdict for two clauses that invert between substrates is 
 [substrate.faces]
 typescript = { types = "installed", handler = "installed", emit_consumer = "available", sdk = "usable" }
 python     = { types = "installed", handler = "installed", emit_consumer = "available", sdk = "usable" }
-rust       = { types = "installed", handler = "NOT-INSTALLABLE", emit_consumer = "available", sdk = "library-only" }
+# RE-MEASURED 2026-09-12 (second session), keystone `dev` 029d1c7 — H1/H3/H6/H7/H9/K-5 landed on `rust` for our K-9. The comment below this line describes the value this row held BEFORE, and is kept as the record. The `measured` text below is the pre-H1 run; scenario 1 is now install -> 200 witness -> unregister -> 404.
+rust       = { types = "installed", handler = "installed", emit_consumer = "available", sdk = "usable" }
 probe      = "languages/rust/gates/host-seam/probe-seam-rust.sh"
 measured   = """
 handler, by execution over real loopback TCP, both arms: nothing bound -> 404 handler_not_found;
@@ -414,7 +440,7 @@ re-bind of the same entity at the same path -> no additional event. The second a
 that separates "the counter tracks events" from "the counter tracks calls", and only the first
 is the property §6.10 states.
 """
-consequence = "The composition REFUSES to perform the four handler writes. Performing them would move the peer from `404 handler_not_found` -- which is true -- to `501 no_handler_body`, which says a handler exists and is broken. Making a peer worse to make a report look more installed is the failure mode `make regression` exists to catch, and doing it deliberately would be worse than tripping it by accident. `tools/compose.py` enforces the refusal by dropping the pattern from the plan when `[system.faces].handler = \"not-installable\"`."
+consequence = "Since keystone's H1 (2026-09-12) `install_content` installs the handler on `rust` through `Peer::register_handler`, which binds the four entities and the body in one call. WAS: The composition REFUSES to perform the four handler writes. Performing them would move the peer from `404 handler_not_found` -- which is true -- to `501 no_handler_body`, which says a handler exists and is broken. Making a peer worse to make a report look more installed is the failure mode `make regression` exists to catch, and doing it deliberately would be worse than tripping it by accident. `tools/compose.py` enforces the refusal by dropping the pattern from the plan when `[system.faces].handler = \"not-installable\"`."
 
 # ── [sdk_surface] — OUR standard, because nobody upstream owns this ──────────────────
 #
@@ -466,39 +492,29 @@ required = [
   # the constants a consumer must agree with us on
   "const:content_pattern", "const:default_chunk_size",
   "const:min_chunk_size", "const:max_chunk_size", "const:get_batch_size",
+  # ── PROMOTED BACK TO `required` 2026-09-12 (second session). The install call and its return
+  # were substrate-conditional while `rust` could not host the handler face (`register_handler`
+  # private) — a call that meant "installed" on two peers and "partly installed" on the third.
+  # Keystone landed H1 on `rust` for K-9, all three ports export the name, and the gate reported
+  # the old declaration as a failure on its first run afterwards, which is the refusal working.
+  "fn:install_content", "type:content_installation",
 ]
 
 # Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate allows. Exporting one
 # of these from a port NOT listed is a failure: if the substrate does not force it, it is
 # not substrate-conditional, it is drift with an excuse.
 
-[sdk_surface.substrate."fn:install_content"]
-ports  = ["typescript", "python"]
-reason = "installs the handler face. `rust` cannot: 501 no_handler_body with all four §11.6.1 tree writes bound, and register_handler/handlers/Outcome are all private. languages/rust/gates/host-seam."
-
-[sdk_surface.substrate."type:content_installation"]
-ports  = ["typescript", "python"]
-reason = "the return of install_content; same cause."
-
-[sdk_surface.substrate."fn:install_content_types"]
-ports  = ["rust"]
-reason = "the ONLY install face that works on that peer. Store::bind is public; the handler container is not. Deliberately a different name from install_content rather than a narrower version of it -- a caller must not be able to write one call that means 'installed' on two peers and 'partly installed' on a third."
-
-[sdk_surface.substrate."type:content_type_installation"]
-ports  = ["rust"]
-reason = "the return of install_content_types; same cause."
-
 [sdk_surface.substrate."type:content_outcome"]
 ports  = ["rust"]
-reason = "the peer's own `Outcome` is a bare struct with no `pub` -- error[E0603]. The cell cannot name it, so it defines its own. D13 Export layer, as a compile error rather than a review finding."
+reason = "the body's own return shape, mapped one-for-one onto the peer's `HandlerResult` at the dispatch boundary. It existed because `Outcome` was private (E0603); `HandlerResult` is public since keystone H1, so this is now a CANDIDATE FOR REMOVAL rather than a substrate fact — kept only because the unit tests assert on it. Undecided, recorded."
 
 [sdk_surface.substrate."type:handler_request"]
 ports  = ["rust"]
-reason = "there is no dispatch context type to receive. The peer passes (&mut Conn, &Envelope) to private code, so the shape a body would need is ours to declare."
+reason = "a third party cannot construct the peer's `HandlerContext` (its fields are `pub(crate)`), so the body is written against a request shape of ours and the unit tests reach it through that; the `Handler` impl builds one from the context on the dispatch path. The other two ports' tests construct the peer's own context. Was: \"there is no dispatch context type\" — true until keystone H1 (2026-09-12)."
 
 [sdk_surface.substrate."type:frame_budget"]
 ports  = ["rust"]
-reason = "wire::MAX_FRAME is a public const with nothing to configure, so the budget's PROVENANCE has to be carried in a type. On the other two ports ctx.frameBudget()/ctx.frame_budget() carries it."
+reason = "the budget's PROVENANCE carried in a type (CONTENT Am. 1). Since keystone H6 the dispatch path reads `HandlerContext::frame_budget` through `FrameBudget::from_context`, which is what the other two ports' `ctx.frame_budget()` is; the type remains because `HandlerRequest` carries it. Stands or falls with `type:handler_request`."
 
 [sdk_surface.substrate."const:frame_reserve_bytes"]
 ports  = ["rust"]
@@ -506,7 +522,7 @@ reason = "public only because FrameBudget's unit test needs it. Candidate for de
 
 [sdk_surface.substrate."type:dispatch_authority"]
 ports  = ["rust"]
-reason = "§3.4 clause 2. The other two ports demand the peer's dispatch context, which the dispatcher builds after check_permission ALLOWs. There is no such value here, so the wrapper is anchored to an unforgeable crate-local token instead -- materially weaker, and recorded as such in [substrate.capability_wrapper]."
+reason = "§3.4 clause 2. The other two ports demand the peer's dispatch context, which the dispatcher builds after `check_permission` ALLOWs. This port anchored the wrapper to an unforgeable crate-local token because no such value existed; since keystone H1 a `HandlerContext` does, and re-anchoring `reassemble_under_capability` to it is OPEN — the token is still materially weaker, recorded in [substrate.capability_wrapper]."
 
 # Class 3 — DRIFT. Measured, unresolved, and NOT blessed. `--strict-drift` turns every one
 # of these into an error; the flag is off today so the gate is honest on the day it was
@@ -709,7 +725,7 @@ id     = "C-R9"
 text   = "FastCDC content-defined chunking with the specified gear table and parameters (§3.6)"
 oracle = []
 ours   = ["gates/chunking-parity"]
-note   = "C-R3's instrument and C-R3's absence upstream; the gear table is compared field for field there."
+note   = "C-R3's instrument and C-R3's absence upstream. The gear table is not compared directly: the gate compares each port's chunking OUTPUT on one corpus -- boundary count, boundary-offset digest, blob hash, chunk count, first and last chunk hash (`gates/chunking-parity/compare.py` FIELDS) -- so a wrong gear table shows up as divergent boundaries. `gates/chunking-parity/corpus.py` re-derives the §3.6.1 table independently for its corpus assertion."
 
 [[conformance.requirement]]
 id     = "C-R10"

@@ -500,6 +500,24 @@ test("§2.1 Q23: a builtin-path apply carrying capability or resource is invalid
   assert.equal(out.error?.code, "invalid_expression");
 });
 
+test("§2.1 MUST: an apply carrying BOTH path and fn is invalid_expression, before either mode", () => {
+  // CONTROL: the same closure applied through `fn` alone evaluates. Without it, a closure that
+  // itself errored would satisfy the code assertion for a reason the rule does not name.
+  const peer = services();
+  const lambda = put(peer.contentStore, Entity.create(LAMBDA, Ecf.map(
+    ["params", Ecf.array([])],
+    ["body", Ecf.bytes(literal(peer.contentStore, uint(7)))],
+  )));
+  assert.equal(run(peer, Entity.create(APPLY, Ecf.map(["fn", Ecf.bytes(lambda)]))).error, null);
+  const both = run(peer, Entity.create(APPLY, Ecf.map(
+    ["path", Ecf.text("system/compute/builtins/arithmetic")],
+    ["operation", Ecf.text("eval")],
+    ["fn", Ecf.bytes(lambda)],
+  )));
+  assert.equal(both.error?.code, "invalid_expression");
+  assert.match(both.error?.detail ?? "", /not both/);
+});
+
 // ── §4.1 — construct ────────────────────────────────────────────────────────────
 
 test("§4.1 construct: fields evaluate in ECF CANONICAL key order (length, then lex)", () => {

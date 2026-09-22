@@ -705,6 +705,12 @@ def _eval_apply(entity: Entity, scope: Scope, budget: Budget, ctx: EvalContext) 
     path = entity.text("path")
     fn_ref = entity.bytes_("fn")
 
+    # §2.1 [MUST] — "either `path` or `fn`, not both and not neither". §4.1's listing tests `path`
+    # first and would silently take handler mode; the prose MUST is the rule (routed: the listing
+    # omits it). Keyed on PRESENCE, before either mode is entered.
+    if isinstance(entity.data, dict) and "path" in entity.data and "fn" in entity.data:
+        return _err(CODE_INVALID_EXPRESSION, "compute/apply MUST have either path or fn, not both")
+
     if path is not None:
         has_capability = entity.bytes_("capability") is not None
         has_resource = entity.bytes_("resource") is not None
@@ -1861,7 +1867,13 @@ def _apply_arithmetic(op: str, ops: _Operands) -> Any:
             return _err(CODE_DIVISION_BY_ZERO, "Division by zero")
         if _truncated_remainder(l, r) == 0:
             return _wrap64(_truncated_quotient(l, r))
-        return l / r
+        # §4.1: `to_float(left) / to_float(right)` — convert EACH operand, THEN divide. NOT
+        # Python's `l / r`, which is CORRECTLY ROUNDED over the exact rational and differs from
+        # §4.1 once an operand exceeds 2^53: (2^60 + 127) / 3 is 384307168202282368.0 that way
+        # and 384307168202282304.0 by §4.1, `typescript` and `entity-core-go`. An eighth native
+        # semantics this port adopted without noticing — found by the third port (rust),
+        # 2026-09-12, reading the helper while writing its own arm.
+        return float(l) / float(r)
     if op == "mod":
         l, r = (
             (_as_unsigned64(raw_l), _as_unsigned64(raw_r))

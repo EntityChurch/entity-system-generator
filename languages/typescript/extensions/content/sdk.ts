@@ -168,11 +168,14 @@ export function descriptorMatchesAnchor(descriptor: Entity, blobHash: Uint8Array
  * "explicit capability-checking wrapper" §3.4 requires before reassembly may be
  * reachable from outside the handler body at all.
  *
- * The check is structural rather than advisory. A `HandlerContext` cannot be
- * manufactured by a consumer: the dispatcher builds one, and only after
- * `check_permission` (core §5.2) returned ALLOW for this caller, this operation and
- * this resource. Requiring one as the first argument means the capability
- * discipline has already run by the time this function has anything to do.
+ * **The check is weaker than this comment used to claim.** It said a `HandlerContext`
+ * cannot be manufactured by a consumer. It can: the class is exported with a public
+ * constructor, and this repo's own `test/handler.test.ts` builds one. What the wrapper
+ * demands is a context naming this pattern and carrying SOME capability — both
+ * caller-supplied — and it does not check that capability against the blob or the
+ * namespace. Recorded in `EXTENSION.toml [substrate.capability_wrapper]` (corrected
+ * 2026-09-12 by the cross-port review); not fixed here, because the fix is the same
+ * design question on all three ports.
  *
  * The two assertions below are defence-in-depth against the one way that could be
  * false — a context from a DIFFERENT handler's dispatch being passed in, which

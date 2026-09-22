@@ -171,6 +171,23 @@ def test_div_exact_stays_integer_inexact_promotes_to_float():
     assert isinstance(inexact, float) and inexact == 2.5
 
 
+def test_inexact_div_converts_EACH_operand_before_dividing():
+    """§4.1 — **substrate, the eighth, found by the third port.**
+
+    §4.1's inexact integer quotient is ``to_float(left) / to_float(right)``. Python's ``int / int``
+    is correctly rounded over the exact rational instead, and the two disagree once an operand
+    exceeds 2^53. The expected value is §4.1's, and ``typescript`` / ``entity-core-go`` produce
+    it; the ``!=`` is the planted-defect control, because it is exactly what ``l / r`` returns.
+    """
+    peer = services()
+    l = (1 << 60) + 127
+    got = value_of(run(peer, Entity.make(ARITHMETIC, {
+        "op": "div", "left": literal(peer.store, l), "right": literal(peer.store, 3),
+    })))
+    assert got == 384307168202282304.0
+    assert got != l / 3, "that is the correctly-rounded quotient §4.1 does not use"
+
+
 def test_integer_div_by_zero_errors_float_div_by_zero_is_ieee():
     """§4.1 — **substrate.**
 
@@ -769,6 +786,20 @@ def test_a_near_miss_builtin_path_is_NOT_a_builtin():
     # Handler mode, which this port does not implement — NOT "no such builtin".
     assert code_of(out) == "invalid_expression"
     assert "handler mode" in out.error.detail
+
+
+def test_an_apply_carrying_both_path_and_fn_is_invalid_before_either_mode():
+    """§2.1 [MUST] — "either `path` or `fn`, not both". CONTROL: the same closure through `fn`
+    alone evaluates, so the refusal is the rule's and not the closure's."""
+    peer = services()
+    body = put(peer.store, Entity.make(LITERAL, {"value": 7}))
+    lam = put(peer.store, Entity.make(LAMBDA, {"params": [], "body": body}))
+    assert run(peer, Entity.make(APPLY, {"fn": lam})).error is None
+    out = run(peer, Entity.make(APPLY, {
+        "path": "system/compute/builtins/arithmetic", "operation": "eval", "fn": lam,
+    }))
+    assert code_of(out) == "invalid_expression"
+    assert "not both" in out.error.detail
 
 
 # ── §3.5 — the builtins ─────────────────────────────────────────────────────────

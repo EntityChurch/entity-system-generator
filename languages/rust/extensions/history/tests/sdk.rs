@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use entity_core_protocol::peer::handler::RegisterError;
 use entity_core_protocol::peer::model::Entity;
 use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::peer::{CreateOptions, Peer};
@@ -22,9 +23,9 @@ use entity_core_protocol::peer::{CreateOptions, Peer};
 use entity_history::{
     build_context, canonicalize_pattern, compare_specificity, config_path, from_core_event_type,
     history_config, history_entity, history_type_defs, history_type_entities,
-    install_history_recorder, install_history_types, pattern_matches, pattern_specificity,
+    install_history, pattern_matches, pattern_specificity,
     publish_history_types, resolve_config, CarriedContext, ConfigLookup, HistoryConfig,
-    HistoryRecorder, HistoryRecorderInstallation, HistoryTypeInstallation, RecordedTransition,
+    HistoryInstallation, HistoryRecorder, RecordedTransition,
     RecorderIdentity, RecorderStats, Specificity, TransitionContext, ALL_TYPES, CONFIG,
     CONFIG_PREFIX, DEFAULT_EVENTS, DEFAULT_QUERY_LIMIT, EVENT_ACCESSED, EVENT_CREATED,
     EVENT_DELETED, EVENT_UPDATED, HEAD_PREFIX, HISTORY_PATTERN, QUERY_PARAMS, QUERY_RESULT,
@@ -46,10 +47,9 @@ fn the_public_route_exists_at_the_signatures_the_boundary_claims() {
     let _: fn(&RecorderIdentity, &str, &str, Option<&CarriedContext>) -> TransitionContext =
         build_context;
 
-    // The two install faces this peer HAS, at the names that say which face they are.
-    let _: fn(&Store, &str) -> HistoryTypeInstallation = install_history_types;
-    let _: fn(&Arc<Peer>, RecorderIdentity) -> HistoryRecorderInstallation =
-        install_history_recorder;
+    // The install surface — the other two ports' name, now that keystone's H1 hosts the handler.
+    let _: fn(&Arc<Peer>, Option<u64>) -> Result<HistoryInstallation, RegisterError> =
+        install_history;
 
     // Types, patterns, config.
     let _: fn(&str, &str) -> String = canonicalize_pattern;
@@ -70,88 +70,61 @@ fn the_public_route_exists_at_the_signatures_the_boundary_claims() {
     let _ = history_entity(TRANSITION, entity_core_protocol::value::Value::Map(vec![]));
 }
 
-/// **There is no `install_history` on this port, and its absence is the deliberate
-/// half of the surface.**
-///
-/// The other two ports export one; it registers the handler face, and here the handler
-/// face has no install path. A narrower `install_history` would let a caller write one
-/// call that means "installed" on two peers and "partly installed" on a third, so the
-/// two faces that DO install are named individually and `[sdk_surface]` files all three
-/// names as substrate-conditional.
-///
-/// This test cannot assert the absence of a name — a missing symbol is a compile error,
-/// not a test failure — so what it asserts is the shape that makes the absence safe:
-/// installing types does not register a consumer, and installing the recorder does not
-/// publish types. Either one silently doing the other's job is how a "partly installed"
-/// call gets reinvented.
+/// `install_history` installs every face, and the recorder does NOT observe its own installation:
+/// four §11.6.1 entities and six types are bound before the consumer exists, so `observed` is 0.
+/// The CONTROL is the first application write, which it must observe — without it, a recorder that
+/// was never registered would pass the zero.
 #[test]
-fn the_two_install_faces_are_independent() {
-    let store = Store::new();
-    let types = install_history_types(&store, PEER);
-    assert_eq!(types.type_paths.len(), 6);
-    // No consumer was registered: a bind fires nothing that writes a head pointer.
-    let path = format!("/{PEER}/app/doc");
-    store.bind(&path, &history_entity("x", entity_core_protocol::value::Value::Map(vec![])));
-    assert!(store.hash_at(&format!("/{PEER}/{HEAD_PREFIX}{path}")).is_none());
-
+fn install_history_installs_every_face_and_the_recorder_sees_none_of_it() {
     let peer = Arc::new(Peer::create(CreateOptions {
         seed: [0x55; 32],
         open_grants: false,
         conformance: false,
     }));
-    let install = install_history_recorder(
-        &peer,
-        RecorderIdentity {
-            local_identity_hash: peer.identity.identity_hash.clone(),
-            handler_grant_hash: peer.identity.identity_hash.clone(),
-            local_peer: peer.local_peer.clone(),
-        },
-    );
-    // No types were published by the recorder install.
+    assert!(!peer.has_native_handler(HISTORY_PATTERN), "control: nothing installed yet");
+    let install = install_history(&peer, None).expect("install");
+    assert!(peer.has_native_handler(HISTORY_PATTERN));
+    assert_eq!(install.type_paths.len(), 6);
     for name in ALL_TYPES {
-        assert!(
-            peer.store
-                .get_at(&format!("/{}/system/type/{name}", peer.local_peer))
-                .is_none(),
-            "install_history_recorder must not publish types"
-        );
+        assert!(peer
+            .store
+            .get_at(&format!("/{}/system/type/{name}", peer.local_peer))
+            .is_some());
     }
-    assert_eq!(install.recorder.stats().recorded, 0);
+    assert_eq!(install.recorder.stats().observed, 0, "the recorder observed its own installation");
+
+    peer.store.bind(
+        &format!("/{}/app/doc", peer.local_peer),
+        &history_entity("x", entity_core_protocol::value::Value::Map(vec![])),
+    );
+    assert_eq!(install.recorder.stats().observed, 1, "control: an application write is observed");
+
+    match install_history(&peer, None) {
+        Err(RegisterError::AlreadyRegistered(p)) => assert_eq!(p, HISTORY_PATTERN),
+        other => panic!("a second install must be refused, got {:?}", other.map(|i| i.pattern)),
+    }
 }
 
-/// The two honest fields on the installation result, and why they are on the result
-/// rather than in the stats: a system recording fabricated provenance and one recording
-/// real provenance are different systems, and the difference has to be visible where
-/// someone decides to trust the audit trail.
+/// The two honest fields on the installation result. `handler_grant_available` is READ BACK from
+/// the tree, and it is `true` now: `register_handler` binds a self-issued grant, and the recorder's
+/// autonomous `capability` is that grant's hash rather than the local identity hash this port used
+/// to substitute. The negative half: the hash the recorder carries is NOT the identity hash.
 #[test]
-fn the_installation_reports_both_things_this_peer_cannot_supply() {
+fn the_installation_reports_the_handler_grant_and_an_unobserved_context() {
     let peer = Arc::new(Peer::create(CreateOptions {
         seed: [0x56; 32],
         open_grants: false,
         conformance: false,
     }));
-    let install = install_history_recorder(
-        &peer,
-        RecorderIdentity {
-            local_identity_hash: peer.identity.identity_hash.clone(),
-            handler_grant_hash: peer.identity.identity_hash.clone(),
-            local_peer: peer.local_peer.clone(),
-        },
-    );
-    // WAS: `assert!(!install.context_available, "the peer's TreeChangeEvent has four
-    // fields and none is a context")`. That sentence became false on 2026-09-07 when
-    // keystone landed H8 (`dc5a458`) and the event gained a fifth field -- and the
-    // assertion kept passing, because the value it read was a constant WE wrote about
-    // THEIR peer. Now observed: nothing seen yet, so nothing claimed.
-    assert_eq!(
-        install.context_available(),
-        "unknown",
-        "no event has been observed yet, so the peer's behaviour is not yet known"
-    );
-    assert!(
-        !install.handler_grant_available,
-        "there is no handler to grant for, and Peer exposes no mint"
-    );
+    let install = install_history(&peer, None).expect("install");
+    // Observed, never declared: nothing seen yet, so nothing claimed (the H8 lesson).
+    assert_eq!(install.context_available(), "unknown");
+    assert!(install.handler_grant_available);
+    let grant = peer
+        .store
+        .get_at(&format!("/{}/system/capability/grants/{HISTORY_PATTERN}", peer.local_peer))
+        .expect("register_handler bound a grant");
+    assert_ne!(grant.hash, peer.identity.identity_hash);
 }
 
 /// The constants a consumer must agree with us on, at the values the spec fixes.

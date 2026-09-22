@@ -1,51 +1,29 @@
 //! HISTORY §4 — the system history handler. `query` (§4.3.1) and `rollback` (§4.3.2).
 //!
-//! # This handler is written and tested. It cannot be installed. Both facts are real.
+//! # Installed through `Peer::register_handler` (keystone H1)
 //!
-//! Identical to `../content/src/handler.rs`'s position and measured by the same arms:
+//! This body was written and tested for a peer with nowhere to install it (`register_handler`
+//! private, `E0624`), which made HISTORY on `rust` the sharpest case of D13's face amendment: the
+//! recorder installed and ran, and the only route by which anything could READ what it wrote was
+//! this handler. Keystone landed H1 for K-9; [`crate::install_history`] installs it, and the
+//! [`Handler`] impl at the bottom of this file is the whole of the change. The body did not change.
 //!
-//! ```text
-//! A. nothing bound                    404  handler_not_found
-//! B. all four §11.6.1 tree writes     501  no_handler_body
-//! C. the same body called DIRECTLY    200  witness=...   invocations 0 -> 1
-//! error[E0624]: method `register_handler` is private
-//! error[E0609]: no field `handlers` on type `Peer`
-//! error[E0603]: struct `Outcome` is private
-//! ```
+//! [`HandlerRequest`] stays ours: a third party cannot construct the peer's `HandlerContext`, so the
+//! unit tests reach the body through this type.
 //!
-//! **What is different here, and it is the finding of this port:** for CONTENT, the
-//! un-installable handler meant the extension did nothing at runtime on this peer. For
-//! HISTORY it does not. The emit consumer installs and records transitions into the tree
-//! — so the peer accumulates a real, correct, content-addressed audit chain that
-//! **nothing can read over the wire**, because every read path in §4.3 is an operation
-//! on this handler. `validate-peer`'s `history` category reaches the chain only through
-//! `system/history:query` (`history.go:141,293,380,409,483,529` — six call sites, one
-//! helper), so 23 of its 34 checks fail on a peer where the recorder is working
-//! perfectly.
-//!
-//! That is a sharper statement of D13's amendment than `rust × CONTENT` could make. It
-//! is not "two faces, two answers"; it is **one extension whose write face installs and
-//! whose read face cannot**, which is a state no roster column with one value per peer
-//! can spell.
-//!
-//! # Three context facts this handler is built around
-//!
-//! 1. **There is no dispatch context type.** `typescript` has `ctx`, `python` has
-//!    `DispatchCtx`; here the dispatcher passes `(&mut Conn, &Envelope)` to private
-//!    code. So [`HandlerRequest`] is OURS — a claim about what a body would need rather
-//!    than a mirror of what a body is given.
-//! 2. **The store arrives by registration-time capture**, exactly as on `python`.
-//! 3. **§4.2's dual check has no `check_path_permission` to call**, on this peer or on
-//!    `python`. See [`HistoryHandler::check_target_access`].
+//! §4.2's dual check calls keystone's H9 `check_path_permission` — see
+//! [`HistoryHandler::check_target_access`].
 
-use entity_core_protocol::peer::capability::{self, Verdict};
+use entity_core_protocol::peer::capability;
+use entity_core_protocol::peer::handler::{Handler, HandlerContext, HandlerResult, OperationSpec};
 use entity_core_protocol::peer::model::Entity;
-use entity_core_protocol::peer::store::Store;
+use entity_core_protocol::peer::store::{ExecContext, Store};
 use entity_core_protocol::peer::wire;
 use entity_core_protocol::value::{Key, Value};
 
 use crate::types::{
-    DEFAULT_QUERY_LIMIT, HEAD_PREFIX, HISTORY_PATTERN, QUERY_RESULT, ROLLBACK_RESULT,
+    DEFAULT_QUERY_LIMIT, HEAD_PREFIX, HISTORY_PATTERN, QUERY_PARAMS, QUERY_RESULT, ROLLBACK_PARAMS,
+    ROLLBACK_RESULT,
 };
 
 /// §4.1 / §9.3 manifest operations, in the mapped §3.7 form.
@@ -65,7 +43,8 @@ pub const OPERATIONS: [&str; 2] = ["query", "rollback"];
 /// get to make quietly.
 pub const DEFAULT_MAX_WALK: u64 = 1000;
 
-/// What a §11.6.1 body would receive, if there were a way to be one.
+/// What the body reads from a request. Built from the peer's `HandlerContext` on the dispatch
+/// path, and by hand in `tests/`.
 pub struct HandlerRequest<'a> {
     /// The `system/protocol/execute` entity (§3.2).
     pub exec: &'a Entity,
@@ -79,14 +58,14 @@ pub struct HandlerRequest<'a> {
     /// `None` models an in-process call with no token. §4.2 check 2 DENIES on it — see
     /// [`HistoryHandler::check_target_access`].
     pub caller_capability: Option<&'a Entity>,
+    /// The §6.8a execution context of this dispatch, stamped on the rollback write so the recorder
+    /// attributes it to the caller. `None` in a test models an autonomous write.
+    pub context: Option<&'a ExecContext>,
 }
 
-/// A handler outcome: status, the result entity, and protocol entities to bundle.
-///
-/// **This type exists because the peer's does not export.** `peer::core::Outcome` is a
-/// bare `struct` with no `pub` (`error[E0603]`, measured), so a third party cannot name
-/// it, construct it, or return it. That is D13's Export layer, and on this substrate it
-/// is a compile error rather than a review finding.
+/// A handler outcome: status, the result entity, and protocol entities to bundle. Mapped onto
+/// the peer's [`HandlerResult`] one-for-one at the dispatch boundary; kept because the tests
+/// assert on it.
 #[derive(Clone, Debug)]
 pub struct HistoryOutcome {
     pub status: u64,
@@ -180,23 +159,13 @@ impl HistoryHandler {
     /// history system to access data the caller couldn't otherwise read." A handler
     /// grant on `system/history` alone must not become a read primitive over the tree.
     ///
-    /// # There is no `check_path_permission` on this peer, and that is a routed finding
+    /// # `check_path_permission` — keystone's H9, called
     ///
-    /// §4.2 names core's `check_path_permission` (§6.3) for the second check.
-    /// `typescript` exports it. **`python` and this peer do not** — this one exposes
-    /// `capability::check_permission`, which takes an EXECUTE entity and answers about
-    /// the dispatch as a whole. So an extension author following §4.2 literally can
-    /// implement it on one substrate of three.
-    ///
-    /// The answer is `python`'s and it is the L7 one: **reuse the predicate the peer
-    /// has** rather than hand-walk the token's grants with the public `matches_pattern`.
-    /// `python`'s first draft did hand-walk them, denied every request the oracle made,
-    /// and was the wrong shape even when fixed — re-transcribing part of core §5.2's
-    /// scope logic inside an extension is a security divergence waiting to be found by
-    /// somebody else (L18, D12). So we synthesise an EXECUTE describing the TARGET
-    /// access and hand it to `check_permission`. It is never signed, never dispatched,
-    /// and never leaves this function; it is an argument shaped the way the peer's own
-    /// predicate expects.
+    /// §4.2 names core's `check_path_permission` (§6.3) for the second check. Until keystone
+    /// landed H9 on this peer there was none, and this function synthesised an EXECUTE for
+    /// `check_permission` — which also resolved no granter frame, a limit recorded in
+    /// `[substrate.path_permission]`. The predicate is now the peer's own and the call is the one
+    /// the other two ports make.
     pub fn check_target_access(
         &self,
         req: &HandlerRequest<'_>,
@@ -218,40 +187,19 @@ impl HistoryHandler {
             ));
         };
 
-        let probe = wire::make_execute(wire::ExecuteFields {
-            request_id: "history-4.2-check",
-            uri: target_path,
-            operation: target_operation,
-            params: wire::empty_params(),
-            resource: Some(Value::Map(vec![(
-                Key::Text("targets".into()),
-                Value::Array(vec![Value::Text(target_path.to_string())]),
-            )])),
-            author: None,
-            capability: None,
-        });
-
-        // §4.2 passes `"system/tree"` as the handler pattern, NOT `"system/history"`.
-        // That is deliberate in the spec and is the crux of the dual model: the caller
-        // must hold authority over the target path as a TREE path, exactly as if they
-        // were reading or writing it directly.
-        //
-        // The granter frame is the local peer. `capability::granter_frame` wants an
-        // Envelope and there is none here — the probe is synthetic — so §PR-8's
-        // canonicalization frame degrades to the local one. That is correct for a
-        // self-issued or locally-granted token and is a stated limit for a delegated
-        // one whose parent chain rides in the request envelope. Recorded in
-        // `EXTENSION.toml [substrate.path_permission]`.
-        let verdict = capability::check_permission(
-            req.local_peer,
-            req.local_peer,
-            &probe,
+        // §4.2 passes `"system/tree"` as the handler pattern, NOT `"system/history"`. That is
+        // the crux of the dual model: the caller must hold authority over the target path as a
+        // TREE path, exactly as if they were reading or writing it directly.
+        let allowed = capability::check_path_permission(
+            target_operation,
+            target_path,
             token,
             "system/tree",
+            req.local_peer,
         );
-        match verdict {
-            Verdict::Allow => None,
-            Verdict::Deny => Some(HistoryOutcome::err(
+        match allowed {
+            true => None,
+            false => Some(HistoryOutcome::err(
                 403,
                 "capability_denied",
                 &format!(
@@ -463,7 +411,13 @@ impl HistoryHandler {
         // This goes through normal put, which will itself be recorded in history." So
         // this write fires the emit pathway and our own recorder observes it — the
         // rollback appears in the chain as an ordinary `updated`.
-        req.store.bind(&path, &entity);
+        //
+        // §4.3.2: "the transition's `operation` field will reflect the rollback operation", and §2.1
+        // records the remote caller as `author`. So the write carries THIS dispatch's execution context.
+        // It did not in any of our three ports until 2026-09-12 (cross-port review): every rollback was
+        // recorded as the peer's own `system/tree:put`, and the oracle's `rollback_new_transition`
+        // checks only `event` and `hash`, so nothing could see it.
+        req.store.bind_with_context(&path, &entity, req.context.cloned());
 
         HistoryOutcome::ok(Entity::make(
             ROLLBACK_RESULT,
@@ -481,6 +435,11 @@ impl HistoryHandler {
     /// is some transition's `hash`. It fails only for the FIRST entity ever at the path
     /// when you roll back past the write that replaced it — the oldest reachable state,
     /// which is the one an undo most wants.
+    ///
+    /// **UNCAPPED, deliberately** — unlike `query`. `max_walk` bounds a READ whose caller has
+    /// `has_more` to continue with; applied here it turned a real rollback target deeper than
+    /// `max_walk` transitions into a false `404 not_in_history`, which breaks §4.3.2's MUST. The chain
+    /// is content-addressed and cannot cycle. (`[assumptions].max_walk`; 2026-09-12 cross-port review.)
     pub fn is_in_history(
         &self,
         req: &HandlerRequest<'_>,
@@ -488,13 +447,11 @@ impl HistoryHandler {
         target_hash: &[u8],
     ) -> bool {
         let mut current = req.store.hash_at(&self.head_path(req.local_peer, path));
-        let mut walked = 0u64;
-        while walked < self.max_walk {
+        loop {
             let Some(h) = current.clone() else { return false };
             let Some(transition) = req.store.get_by_hash(&h) else {
                 return false;
             };
-            walked += 1;
             if transition.bytes_field("hash") == Some(target_hash)
                 || transition.bytes_field("previous_hash") == Some(target_hash)
             {
@@ -502,7 +459,43 @@ impl HistoryHandler {
             }
             current = transition.bytes_field("previous").map(|b| b.to_vec());
         }
-        false
+    }
+}
+
+/// H1 — the dispatch path. `route` calls this after §6.6 resolution and the dispatch-time
+/// `check_permission` have allowed the request (§4.2's first check).
+impl Handler for HistoryHandler {
+    fn pattern(&self) -> &str {
+        HISTORY_PATTERN
+    }
+
+    fn name(&self) -> &str {
+        "history"
+    }
+
+    fn operations(&self) -> Vec<OperationSpec> {
+        vec![
+            OperationSpec::typed("query", QUERY_PARAMS, QUERY_RESULT),
+            OperationSpec::typed("rollback", ROLLBACK_PARAMS, ROLLBACK_RESULT),
+        ]
+    }
+
+    fn handle(&self, ctx: &HandlerContext<'_>) -> HandlerResult {
+        let peer = ctx.peer();
+        let context = ctx.exec_context();
+        let req = HandlerRequest {
+            exec: ctx.execute(),
+            store: &peer.store,
+            local_peer: &peer.local_peer,
+            caller_capability: ctx.caller_capability(),
+            context: Some(&context),
+        };
+        let outcome = self.handle_op(ctx.operation(), &req);
+        HandlerResult {
+            status: outcome.status,
+            result: outcome.result,
+            included: outcome.included,
+        }
     }
 }
 
