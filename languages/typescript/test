@@ -1,0 +1,38 @@
+#!/bin/sh
+# languages/typescript/test — run every staged extension's unit tests.
+#
+#   test <composition-name>
+#
+# Runs against the BUILT packages under output/<composition>/build/node_modules, so the
+# tests resolve the module by package name through its own `exports` map. That is not a
+# convenience: `test/export-surface.test.ts` asserts on that map, and a test that
+# imported the module by relative path would be asserting on the source tree instead.
+#
+# `build` must have run. This does not build — a test driver that silently rebuilds
+# hides which change was measured.
+
+set -eu
+
+COMP="${1:?usage: test <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -d "$STAGE/node_modules/@entity-core" ] || { echo "test: nothing staged at $STAGE" >&2
+  echo "  run: ./languages/typescript/build $COMP" >&2; exit 2; }
+
+RC=0
+for PKG in "$STAGE"/node_modules/@entity-core/*; do
+  [ -d "$PKG" ] || continue
+  NAME="$(basename "$PKG")"
+  if [ ! -d "$PKG/dist/test" ]; then
+    # A cell with no tests is a real answer, not a pass. Say so on stderr and score it.
+    echo "test: $NAME has NO compiled tests -- not a pass, an absence" >&2
+    RC=1
+    continue
+  fi
+  echo "test: $NAME"
+  (cd "$PKG" && node --test "dist/test/*.test.js") || RC=1
+done
+
+[ "$RC" -eq 0 ] && echo "test: OK" || echo "test: FAILURES" >&2
+exit "$RC"

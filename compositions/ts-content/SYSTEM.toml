@@ -1,0 +1,50 @@
+## SYSTEM.toml — ts-content
+##
+## A composition NAMES things and DECLARES NOTHING NEW. Every fact about CONTENT lives in
+## `extensions/content/EXTENSION.toml`; every fact about the toolchain lives in
+## `languages/typescript/profile.toml`. If a fact is in two places, one of them is wrong.
+##
+## The resolved plan — dependency closure, handler patterns, namespace set, install order —
+## is DERIVED by `tools/compose.py` and written to `output/ts-content/PLAN.json` as an
+## OUTPUT. Never edited, and regenerating it must be byte-identical.
+
+[system]
+name       = "ts-content"
+extensions = ["CONTENT"]
+
+[system.peer]
+generator = "entity-core-keystone"
+language  = "typescript"
+# Read-only, another team's tree. The composition consumes the peer's PUBLISHED artifact
+# (`exports["."]` -> dist/src/index.js) exactly as an external npm consumer would; it does
+# not compile the peer from source and it never patches it. A peer that cannot host what we
+# generate is a finding about the seam, routed -- not a peer we fork.
+path      = "../entity-core-keystone/protocol-generator/typescript"
+
+[gate]
+# What this composition is measured by. `content` is the extension under test; `core` is the
+# regression guard, and it is not optional: our second failure mode is one keystone never has
+# --- the peer was right and we broke it.
+oracle     = "entity-core-go validate-peer"
+categories = ["content"]
+profiles   = ["core"]
+
+[gate.expectation]
+# The HONEST target, computed by reading every check body in the oracle's content category
+# (cmd/internal/validate/content.go @ ed9b547) --- 13 checks, not 12:
+#   8 measure our handler   handler_manifest, handler_op_get, handler_op_ingest,
+#                           type_blob, type_chunk, type_descriptor,
+#                           get_path_required, ingest_path_required
+#   4 measure the oracle's own library   inline_include_at_threshold and
+#                           inline_include_above_threshold call exerciseInlineInclude, which
+#                           builds an in-memory store and never contacts the peer;
+#                           descriptor_presence_rule and descriptor_integrity_check call
+#                           content.ValidateDescriptor in-process
+#   1 declared skip         frame-limit-respected needs a writable local/files root to seed
+#                           oversized content, which a CONTENT-only composition has no way
+#                           to provide
+# Never report this as 13P/0F. A skip is a failure, reported with its cause.
+measures_us        = 8
+inattributable     = 4
+declared_skips     = ["frame-limit-respected"]
+skip_cause         = "needs a local/files root to seed >16 MiB of content; not installed in this composition"

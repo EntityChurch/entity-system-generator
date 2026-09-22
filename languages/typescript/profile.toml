@@ -1,0 +1,61 @@
+## languages/typescript/profile.toml — the toolchain facts for ONE language.
+##
+## There is exactly one of these per language and never one per (extension x language)
+## cell. That is the firm part of the layout: a build driver in the cell position is
+## 26 x 46 = 1,196 copies of one script, and keystone reached 46 copies of `run-s4.sh`
+## with one defect -- a `-json-out` default that republished the tracked report --
+## reproduced in 36 of them. `languages/<lang>/` exists so that number is 46 forever.
+
+[language]
+name      = "typescript"
+packaging = "npm"                    # boundary: the `exports` map in package.json.
+                                     # D13 Access layer -- the boundary is the MANIFEST,
+                                     # not the module. Our own module is staged as a real
+                                     # package and consumed by name, so the extension's
+                                     # public surface is enforced by node, not by review.
+compilation = "jit"
+
+[toolchain]
+image = "localhost/entity-core-keystone/node24:latest"
+# ANOTHER TEAM'S IMAGE, used read-only and recorded as a dependency rather than assumed.
+# We do not author a node Containerfile in cycle 1: the peer under test is built by that
+# toolchain, and compiling our extension against the peer's own `dist/` under a different
+# node would measure a combination nobody ships. Revisit when a second peer generator exists.
+node       = ">=24"
+typescript = "5.8.3"                 # resolved from the peer's devDependencies, NOT pinned
+                                     # here. Pinning it twice is the drift D14 is about:
+                                     # the compiler that builds our module MUST be the one
+                                     # that built the peer's .d.ts we type against.
+
+[deps]
+# We add NOTHING. The extension's only import is the peer package. An extension that
+# needed a runtime dependency would declare it in its own EXTENSION.toml, not here --
+# a language profile that accumulates per-extension deps has stopped being language-major.
+runtime = []
+dev     = []
+
+[build]
+# `build <composition>` stages into output/<composition>/build and runs tsc TWICE:
+#
+#   1. the extension cell -> node_modules/@entity-core/extension-<name>/dist
+#   2. the composition host -> dist/host.js, importing the extension BY PACKAGE NAME
+#
+# Two passes rather than one, on purpose. A single `rootDir: .` pass would compile the
+# extension and the host together and resolve the import by relative path, which is
+# exactly the read that D13's Access row calls the cheapest wrong answer: it proves the
+# symbol is reachable in the SOURCE TREE and says nothing about the packaging boundary.
+# Compiling the cell into a package and importing it by name means node's `exports` map
+# decides what the host can see -- and `test/export-surface.test.ts` asserts on the same
+# boundary, so the §3.4 MUST is enforced by the module resolver.
+stage    = "output/<composition>/build"
+offline  = true                       # --network=none. Nothing is fetched; node_modules
+                                      # is staged from the peer's own resolved tree.
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+oracle_bin = "../entity-core-keystone/output/s4-oracles/validate-peer"
+# The oracle is NOT ours and is not in this tree. It is the oracle BECAUSE it is not the
+# thing under test. Path recorded; the binary is a gitignored local build.
+host_entry = "dist/host.js"           # speaks keystone's host CLI verbatim: --port /
+                                      # --name / --debug-open-grants / --validate, and a
+                                      # single `LISTENING ...` readiness line on stdout.

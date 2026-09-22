@@ -1,0 +1,128 @@
+## EXTENSION.toml — CONTENT
+##
+## The machine-readable contract. EVERY field in [contract] is TRANSCRIBED from the
+## spec header in `shared/spec-data/content-v3.6/EXTENSION-CONTENT.md`
+## (sha256 4bf4a43bd7b99adf20cb989581743348bbf8edf9c2a64f52a03764ddca03c5af), not
+## authored here. GUIDE-EXTENSION-DEVELOPMENT §3.3 requires each spec to declare its
+## depends / owned namespaces / owned kinds / owned ops / extension points; this file is a
+## projection of that declaration, and the projection is checkable against its source.
+##
+## Everything below [contract] IS authored here, and each block says why it exists.
+
+[extension]
+name    = "CONTENT"
+spec    = "EXTENSION-CONTENT.md"
+version = "3.6"                      # + Amendments 1-3; see the snapshot's §12 history table
+snapshot = "content-v3.6"            # shared/spec-data/<snapshot>/ — the pinned input
+grade   = "draft"                    # spec header "Conformance grade: Draft" (GUIDE §9)
+                                     # draft means: expect defects, and four have already been routed
+
+# ── [contract] — transcribed. Do not edit without re-reading the snapshot. ──────────────
+[contract]
+depends          = []                # no EXTENSION prerequisite. The spec's "Depends" names
+                                     # ENTITY-CORE-PROTOCOL v7.51+ and ENTITY-CBOR-ENCODING v1.4+,
+                                     # which are the CORE, not extensions — see [core_depends].
+owned_namespaces = ["system/content/"]
+owned_ops        = ["system/content:get", "system/content:ingest"]
+owned_types      = [
+  "system/content/blob",              # §2.1  — §11.1 MUST
+  "system/content/chunk",             # §2.2  — §11.1 MUST
+  "system/content/descriptor",        # §2.4  — v3.5 A1
+  "system/content/get-request",        # §6.2
+  "system/content/content-response",   # §6.2
+  "system/content/ingest-request",     # §6.3
+  "system/content/ingest-result",      # §6.3
+]
+owned_kinds      = []                # spec declares none
+points_exposed   = []                # spec header: "Extension points exposed: None."
+points_consumed  = []                # spec header: "Extension points consumed: None."
+
+[core_depends]                       # kept OUT of `depends` on purpose: the closure resolver in
+                                     # `compositions/` resolves extension prerequisites, and a core
+                                     # version floor is a different check with a different failure.
+protocol = ">=7.51"                  # request-side envelope-`included` preservation (v3.4 ingest
+                                     # result pass-through + the §4 handler-mediated included map)
+cbor     = ">=1.4"                   # canonical ECF for blob/chunk entity-hash stability
+
+# ── [surfaces] — which of the extension's faces an installed module actually uses ───────
+# CONTENT has THREE faces, not four. It registers no emit consumer: "consumer" in this spec
+# means a client of content, not a §6.13(c) emit subscriber. Face 3 (emit) arrives with
+# HISTORY. Do not add an empty `emit_consumers` module "for symmetry" — an unused face is a
+# surface nothing tests.
+[surfaces]
+handler        = "system/content"    # §6.1 manifest at the pattern path; index at
+                                     # system/handler/system/content
+types          = true                # the module publishes its own system/type/* entities:
+                                     # keystone's registerHandler does NOT write them (measured,
+                                     # gates/host-seam/probe-seam.mjs: type_blob/chunk/descriptor = NO)
+sdk            = true                # §3.4 + §4.3 + §5.3 — see [sdk]
+emit_consumers = []                  # none. See the paragraph above.
+service_owning = false               # §11.6.9 start/stop not required; the handler is stateless
+                                     # over the peer's content store
+
+[install]
+model = "sdk-native"                 # installed in-process against a live peer object, NOT over the
+                                     # wire. Forced, not chosen: the peer's `system/handler:register`
+                                     # op refuses `system/*` patterns (§6.2 "user-installed handlers
+                                     # MUST NOT register at system/* paths"), and CONTENT's pattern
+                                     # IS system/content. Every system-namespace extension inherits
+                                     # this. Measured on both tier-A peers.
+
+# ── [sdk] — the operation inventory, and the one entry that is a security surface ───────
+# There is no conformance gate anywhere on the SDK face and per the operator that is correct:
+# the SDK is a convention. So THE EXTENSION IS THE INSTRUMENT — the handler's own conformance
+# path runs THROUGH these, not beside them. `reached_by` names which conformance check
+# exercises each one. An entry whose `reached_by` is empty is genuinely unmeasured, and that
+# set should stay near-empty.
+[sdk.EnsureClosure]
+cite       = "§3.3 verify_content"
+public     = true
+reached_by = ["content/handler_op_get (indirectly, via get)"]
+note       = "completeness + size consistency. §3.7 classifies it Conformance: the verdict is cross-peer-uniform."
+
+[sdk.AtPeer]
+cite       = "§6.4.2 Hash Tree Presence"
+public     = true
+reached_by = []                      # honestly unmeasured: the oracle's content category never
+                                     # exercises namespace scoping. Named so it stays visible.
+note       = "namespace binding probe: tree:get({namespace}/{hex(H)}). hex(H) INCLUDES the format byte (66 chars under SHA-256), per §6.4.2 + ENTITY-CORE-PROTOCOL §3.5."
+
+[sdk.Reassemble]
+cite       = "§3.4"
+public     = false                   # ← THE MUST. NOT NEGOTIABLE, NOT A STYLE QUESTION.
+capability_wrapper_required = true
+reached_by = []
+note = """
+§3.4: "Implementations MUST NOT expose `reassemble_content` as a public substrate primitive
+callable from third-party / SDK / external consumer code without an explicit capability-checking
+wrapper -- direct substrate access bypasses the dispatcher cap discipline and creates a
+capability-escalation surface for consumers holding non-root caps."
+
+So the module ships the algorithm as MODULE-PRIVATE, reachable only from inside the handler body,
+which is already past the dispatcher's cap check. It is not exported from the module's public
+entry point in ANY language. The generation-time check is a grep on the language's export surface,
+not a code review: see extensions/content/<lang>/test/.
+"""
+
+# ── [assumptions] — open questions resolved to a value, greppable ───────────────────────
+# Every entry is a place the spec did not decide for us. Each carries the value we used, the
+# citation, and what would change if the resolution is wrong. NOT a place to record things the
+# spec DOES decide.
+[assumptions]
+chunk_size   = { value = 1048576, cite = "§3.5 + §10.1 DEFAULT_CHUNK_SIZE (v3.6 reconciled both to 1 MiB)", note = "the v3.5 4 MiB reading is dead; §10.1 was the site that had drifted, and v3.6 fixed it" }
+chunking_id  = { value = 1, cite = "§2.1 standardized values + §11.2 SHOULD FastCDC", note = "0 = fixed-size is conformant but loses edit-stability" }
+path_required = { value = 400, cite = "§6.2/§6.3 MUST, code pinned by GUIDE-EXTENSION-DEVELOPMENT §171", note = "was OURS to route: PROPOSAL-PIN-THE-PATH-REQUIRED-STATUS, landed. The oracle checks the CODE only, not the status, so a peer answering 404 passes the gate and fails the spec." }
+topology     = { value = "single-trust-domain", cite = "§6.4.1", note = "OPT-IN AND RESTRICTED. §6.4.1: MUST be documented as opt-in and MUST NOT be the default configuration; multi-party deployments under it are 'out-of-spec and security-defective'. Cycle 1 composes a single-peer conformance target, which is the one place §6.4.1 permits it. Namespace-scoped (§6.4.2) is the production default and is NOT implemented in cycle 1 -- named here so its absence is a declared gap, not a silent one." }
+pending_field = { value = "omitted", cite = "§6.2 Amendment 2 sidecar", note = "OPTIONAL and SHOULD-populate only for impls with sync-state visibility. We have none: no subscription, no inbox. §6.2 says a receiver without sync-state awareness MAY omit, and callers then treat all `missing` as terminal 404. Emitting an empty array would ADVERTISE a capability we do not have." }
+
+# ── [unimplementable] — MUSTs this module cannot satisfy on a given substrate ───────────
+# Not a TODO list. Each entry is a measured fact about a peer, with the probe that measured it.
+# D13: a capability claim reads `unknown` unless it cites four sites or an executed probe.
+[unimplementable.frame_budget]
+must = "§6.2 + §4.2 Amendment 1 -- consult the connection's configured budget at response-construction time, NOT a hardcoded 16 MiB literal"
+typescript = "satisfiable"           # ctx.frameBudget() -> connection.maxFrameBytes ?? peer.maxFrameBytes
+python     = "UNSATISFIABLE"         # nothing on conn/ctx/peer/store carries a budget; wire.MAX_FRAME
+                                     # is a module constant == 16 MiB, i.e. the exact literal the
+                                     # amendment forbids
+probe      = "gates/host-seam/probe-seam.py (executed 2026-09-05) + gates/host-seam/probe-seam.mjs"
+routed     = "one line to keystone; not ours to fix, and not ours to work around in generated output"

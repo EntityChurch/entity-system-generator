@@ -1,0 +1,208 @@
+#!/bin/sh
+# languages/typescript/build — stage and compile ONE composition. Language-major:
+# one copy, shared by every extension, forever.
+#
+#   build <composition-name>
+#
+# Runs inside the node toolchain image with --network=none. Reads the RESOLVED PLAN
+# (output/<composition>/PLAN.json, an output of tools/compose.py) rather than
+# SYSTEM.toml, so the composition-time refusals -- I6 pattern collision, I7 namespace
+# overlap, I9 unmet dependency -- have already happened before anything is staged.
+#
+# Two tsc passes. See languages/typescript/profile.toml [build] for why: a single pass
+# would resolve the extension import by relative path and prove nothing about the
+# packaging boundary.
+
+set -eu
+
+COMP="${1:?usage: build <composition-name>}"
+ROOT="${GENERATOR_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+PLAN="$ROOT/output/$COMP/PLAN.json"
+STAGE="$ROOT/output/$COMP/build"
+
+[ -f "$PLAN" ] || { echo "build: no resolved plan at $PLAN" >&2
+  echo "  run: ./tools/compose.py compositions/$COMP" >&2; exit 2; }
+
+# ---- read the plan (node is the one interpreter guaranteed present here) ----
+plan_field() { node -e '
+  const p = require(process.argv[1]);
+  const path = process.argv[2].split(".");
+  let v = p; for (const k of path) v = v?.[k];
+  process.stdout.write(Array.isArray(v) ? v.join("\n") : String(v ?? ""));
+' "$PLAN" "$1"; }
+
+LANGUAGE="$(plan_field language)"
+[ "$LANGUAGE" = "typescript" ] || { echo "build: plan language is '$LANGUAGE', not typescript" >&2; exit 2; }
+
+PEER_REL="$(plan_field peer.path)"
+PEER="$(cd "$ROOT/$PEER_REL" 2>/dev/null && pwd)" || {
+  echo "build: peer not found at \$ROOT/$PEER_REL" >&2; exit 2; }
+
+[ -d "$PEER/dist" ] || { echo "build: peer has no dist/ at $PEER -- build the peer first" >&2; exit 2; }
+[ -d "$PEER/node_modules" ] || { echo "build: peer has no node_modules at $PEER" >&2; exit 2; }
+
+# REFUSE A STALE PEER BUILD. We compile against the peer's .d.ts and link its .js;
+# measuring a dist/ older than its src/ is a gate on the past. keystone caught exactly
+# this on their own instrument after a planted-defect run left a mutated dist/ on disk.
+# Adopted here before it happens to us -- our probes already carry it.
+#
+# NEWEST FILE vs NEWEST FILE. `find src -newer dist` compares against the DIRECTORY's
+# mtime, which a directory only updates when an entry is added or removed — so a
+# rebuild that overwrites existing outputs in place leaves it stale by construction.
+# Written that way first, and it red-flagged a peer whose dist/ was 10 minutes NEWER
+# than its src/. A staleness gate that fires on a fresh build is worse than none: the
+# next person adds `|| true`.
+newest_mtime() { find "$1" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1; }
+SRC_AGE="$(newest_mtime "$PEER/src")"
+DIST_AGE="$(newest_mtime "$PEER/dist")"
+if [ -z "$SRC_AGE" ] || [ -z "$DIST_AGE" ]; then
+  echo "build: cannot compare peer src/ and dist/ -- build the peer first" >&2
+  exit 3
+fi
+if [ "$(printf '%s\n%s\n' "$SRC_AGE" "$DIST_AGE" | sort -rn | head -1)" = "$SRC_AGE" ] \
+   && [ "$SRC_AGE" != "$DIST_AGE" ]; then
+  echo "build: peer dist/ is older than peer src/ -- this would compile against a build" >&2
+  echo "  nobody asked for. Rebuild the peer, then re-run. (Not a verdict about the peer.)" >&2
+  exit 3
+fi
+
+echo "build: composition=$COMP peer=$PEER"
+
+# ---- stage ----------------------------------------------------------------
+rm -rf "$STAGE"
+mkdir -p "$STAGE/node_modules"
+
+# The peer's resolved dependency tree, verbatim. Nothing is fetched; nothing is
+# resolved differently from how the peer resolved it.
+cp -R "$PEER/node_modules/." "$STAGE/node_modules/"
+
+# The peer itself, as the package a consumer resolves: its manifest plus the dist/ its
+# `exports["."]` names. Source is NOT staged -- if the map stops publishing an entry
+# point that is a real failure and the build must say so rather than reach into src/.
+PEERPKG="$STAGE/node_modules/entity-core-protocol-typescript"
+mkdir -p "$PEERPKG"
+cp "$PEER/package.json" "$PEERPKG/"
+cp -R "$PEER/dist" "$PEERPKG/dist"
+
+# ---- pass 1: each extension cell, compiled INTO a package ------------------
+# Written to a file and read back WITHOUT a pipeline. `cmd | while read` puts the loop
+# in a subshell, where `set -e` cannot abort the parent: a tsc failure inside the loop
+# would print its errors and the build would carry on to report OK. That is the shape of
+# keystone's swallowed-build-failure defect, one layer down.
+CELLS="$STAGE/.cells"
+node -e '
+  const p = require(process.argv[1]);
+  process.stdout.write(p.installs.map(i => i.extension + "\t" + i.cell).join("\n") + "\n");
+' "$PLAN" > "$CELLS"
+
+while IFS="$(printf '\t')" read -r EXT CELL; do
+  [ -n "$EXT" ] || continue
+  SLUG="$(printf '%s' "$EXT" | tr '[:upper:]' '[:lower:]')"
+  PKG="$STAGE/node_modules/@entity-core/extension-$SLUG"
+  mkdir -p "$PKG"
+  cp -R "$ROOT/$CELL/." "$PKG/"
+
+  cat > "$PKG/package.json" <<PKGJSON
+{
+  "name": "@entity-core/extension-$SLUG",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "entity-core-protocol-typescript": "*"
+  }
+}
+PKGJSON
+
+  # The MODULE compiles first, WITHOUT its tests. The tests then compile against the
+  # built package, resolved by name through the `exports` map they are asserting on --
+  # which is only possible once `dist/index.d.ts` exists. Two passes rather than one
+  # `include: **/*.ts`, and the ordering is the point: a test that resolved the module
+  # by relative path would typecheck against the source tree and prove nothing about
+  # what a consumer can reach.
+  cat > "$PKG/tsconfig.json" <<'TSCONFIG'
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "declaration": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["*.ts", "internal/**/*.ts"]
+}
+TSCONFIG
+
+  cat > "$PKG/tsconfig.test.json" <<'TSCONFIG'
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "types": ["node"]
+  },
+  "include": ["test/**/*.ts"]
+}
+TSCONFIG
+
+  echo "build: compiling $EXT -> @entity-core/extension-$SLUG"
+  (cd "$PKG" && "$STAGE/node_modules/.bin/tsc" -p tsconfig.json) || exit 1
+  echo "build: compiling $EXT tests against the built package"
+  (cd "$PKG" && "$STAGE/node_modules/.bin/tsc" -p tsconfig.test.json) || exit 1
+done < "$CELLS"
+rm -f "$CELLS"
+
+# ---- pass 2: the composition host, importing extensions BY PACKAGE NAME ----
+cp "$ROOT/compositions/$COMP/host.ts" "$STAGE/host.ts"
+
+# The staging root needs its own manifest, and `"type": "module"` is load-bearing:
+# without it node (and tsc under `nodenext`) reads every .ts/.js here as CommonJS and
+# refuses the ESM syntax the peer package is written in.
+cat > "$STAGE/package.json" <<PKGJSON
+{
+  "name": "composition-$COMP",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module"
+}
+PKGJSON
+
+cat > "$STAGE/tsconfig.json" <<'TSCONFIG'
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "declaration": false,
+    "rootDir": ".",
+    "outDir": "dist",
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": ["host.ts"]
+}
+TSCONFIG
+
+echo "build: compiling composition host"
+(cd "$STAGE" && "$STAGE/node_modules/.bin/tsc" -p tsconfig.json)
+
+echo "build: OK -> $STAGE/dist/host.js"
