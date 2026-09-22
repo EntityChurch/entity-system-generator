@@ -172,6 +172,19 @@ fi
 mkdir -p "$TARGET_DIR/output/$COMP/reports"
 "$ORACLE" -addr "127.0.0.1:$PORT" "$@" || true
 
+# REAP BEFORE SURFACING, and the order is the whole point.
+#
+# This used to fall through to the EXIT trap, so the host was STILL RUNNING when its
+# stderr was dumped -- which meant anything a host writes during shutdown was captured
+# by nothing. The composition hosts print a post-traffic observation on SIGTERM
+# (`COMPOSED-FINAL`), and it was invisible: the `COMPOSED` line printed at startup is
+# necessarily before any traffic, so the only line that can answer "did a wire-driven
+# write carry the caller's context" was the one being discarded.
+#
+# Reaping here is idempotent -- `reap_host` returns immediately if the pid is gone -- so
+# the EXIT trap still covers every abort path above this point.
+reap_host
+
 # Surface the peer's own stderr. /tmp inside a --rm container is discarded with it, so
 # without this a mid-run abort leaves a log reading only "connection refused". Not
 # hypothetical: keystone's zig intermittent survived four investigations reported as

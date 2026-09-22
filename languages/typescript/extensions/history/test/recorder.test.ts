@@ -126,7 +126,13 @@ test("the provenance of that author/capability is FALLBACK, and the module says 
   peer.tree.put(abs(TRACKED), payload("v1"));
 
   const stats = install.recorder.stats;
-  assert.equal(install.contextAvailable, false);
+  // WAS `assert.equal(install.contextAvailable, false)` against a hardcoded constant —
+  // an assertion about ANOTHER TEAM'S PEER that our own source supplied, which is why it
+  // kept passing when keystone landed H8 on 2026-09-07. Now observed, and "not-observed"
+  // rather than "no": this rig drives autonomous writes, so these events carried no
+  // context. That is a fact about these events, not about the peer.
+  assert.equal(install.contextAvailable(), "not-observed");
+  assert.equal(stats.contextContexts, 0);
   assert.ok(stats.recorded > 0);
   // Every event that REACHED context construction fell back. The self-guarded ones return
   // before a context is built, so they are subtracted rather than compared — the first

@@ -76,12 +76,28 @@ class HistoryInstallation:
     type_paths: tuple[str, ...]
     handler_paths: tuple[str, ...]
     recorder: HistoryRecorder
-    #: Whether the peer's tree-change events can carry an execution context AT ALL.
-    #: ``False`` on every peer measured. On the installation result rather than buried in
-    #: stats, because a system recording fabricated provenance and one recording real
-    #: provenance are different systems, and the difference has to be visible where
-    #: someone decides to trust the audit trail.
-    context_available: bool
+    #: Whether the peer's tree-change events carry an execution context.
+    #:
+    #: **A METHOD, NOT A FIELD, AS OF 2026-09-07, AND THAT IS THE POINT.** This was a
+    #: hardcoded ``False`` carrying the comment "measured" -- a claim about ANOTHER TEAM'S
+    #: PEER, frozen in our source, asserted by our tests. When keystone landed H8 and the
+    #: peers began delivering a context, all three ports went on reporting
+    #: ``context_available=false`` and three test suites went on asserting it. Nothing
+    #: could have noticed: we wrote the value and we wrote the check.
+    #:
+    #: D13 already forbids this shape -- *a capability claim cites an executed probe, or it
+    #: reads ``unknown``* -- and it had been applied to every claim about a peer EXCEPT the
+    #: one we stored in our own struct. So the value is now OBSERVED at runtime and is
+    #: three-valued, because "we have not seen an event yet" is not "the peer cannot".
+    #:
+    #: On the installation result rather than buried in stats, because a system recording
+    #: fabricated provenance and one recording real provenance are different systems, and
+    #: the difference has to be visible where someone decides to trust the audit trail.
+
+    @property
+    def context_available(self) -> str:
+        """``"unknown"`` | ``"yes"`` | ``"no"`` -- observed, never declared."""
+        return self.recorder.context_observed()
 
 
 def install_history(peer, max_walk: int | None = None) -> HistoryInstallation:
@@ -158,7 +174,6 @@ def install_history(peer, max_walk: int | None = None) -> HistoryInstallation:
         type_paths=tuple(type_paths),
         handler_paths=tuple(handler_paths),
         recorder=recorder,
-        context_available=False,  # measured; EXTENSION.toml [substrate.execution_context]
     )
 
 

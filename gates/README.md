@@ -26,8 +26,52 @@ assertion we wrote ourselves has nothing watching it.
 | **`error-codes`** | **OURS, and the axis that LOOKED covered.** The `system/content` handler puts **7** distinct codes on the wire and the oracle's `content` category asserts **2** of them (`get_path_required`, `ingest_path_required`). Nothing anywhere checks the rest. D16's third instance | `tools/check-error-codes.py` against `EXTENSION.toml [error_surface]` | `make error-codes`, in `make check`; `make error-codes-control` runs D15's planted-code control | **built 2026-09-06 at the v3.7 re-pin**, which is the event that produced the failure it catches (AP-11). First run: 4 `spec` · 2 `core` · **1 `unresolved`** (`path_required`, routed) · 0 undeclared |
 | **`type-parity`** | **OURS, and the gap is measured rather than assumed.** The oracle spends six `history` checks and seven `content` checks on `client.TreeGet(path)` — it asserts the type path **RESOLVES** and never reads what is at it. Routed as **G-3** (`ROUTING-2026-09-07-core-go-*`); the consistency half is ours (D16) | each arm's `<ext>_type_entities()` through the packaging boundary → the neutral `gates/type-parity/compare.py`. **Two independent measurements**: the peer's own content hash, and our normalisation of the field map | `make type-parity`, a double `wildcard` over arms × `extension-contracts/*`; both counts echoed before each verdict | **built 2026-09-07.** HISTORY: 3 ports agree on all 6. CONTENT: 2 ports agree on all 7, `typescript` **`unknown`** (exit 3 — its stage cannot be rebuilt while keystone is mid-edit on the peer). Negative control executed |
 | **`glue`** | **OURS, and the only axis here whose authority is an OPERATOR REQUIREMENT rather than an incident** — *"the glue code should be pretty stable; we don't want big if blocks of oh, if it's this container and this extension."* D20 | `tools/check-glue.py` — identity leakage, not mass: `make scale` cannot see a 46-way branch because it is still one file in the `neutral` column | `make glue`, in `make check`; `make glue-control` runs both planted directions | **built 2026-09-07.** First run found `tools/sdk-parity.py` holding three per-target extractors behind a `{target: fn}` dispatch. Factored; output verified identical. Per-target→extension is a printed CENSUS, not a verdict — see D20 |
+| **`req-coverage`** | **the SPEC's own conformance section** — `EXTENSION-HISTORY` §9.1, `EXTENSION-CONTENT` §11.1–§11.4. The only axis here whose authority is the requirement inventory itself rather than a check somebody wrote | `tools/req-coverage.py` — the spec's rows × the oracle's executed check set, joined through `EXTENSION.toml [conformance]` | `make req-coverage`, in `make check`; `make req-coverage-control` runs the 15 planted-defect and refusal controls | **built 2026-09-07.** 38 rows, 24 binding: **0 fully oracle-measured · 11 partial · 2 ours · 11 nothing.** Its first real run failed on a §11.4 row missed while transcribing the inventory by hand |
 | **`isolation`** | **ours, and that is the warning** — see below | owed | owed | unbuilt |
 | **`composition-ordering`** | `SYSTEM-COMPOSITION` §2.2 / §2.10 — normative, but **no oracle category tests consumer ordering** (68 of them, none) | **routed to `entity-core-go`, not authored here** | n/a | routed |
+
+## What KIND each of these is, and what it may conclude
+
+**Adopted, not invented.** `entity-core-keystone` ratified `docs/VERIFICATION-ARCHITECTURE.md` on
+2026-09-07 after a standalone probe drove implementation across 46 peers while belonging to no
+declared category, no axis and no README. Its rule is the one worth having: **a verification
+artifact declares its kind before it is written, and its kind decides what it may conclude.**
+Three kinds — **A probe** (censuses a cohort, produces a finding, never gates, expires when the
+oracle ships a vector on its surface) · **B transcription** (one pinned reading of a normative
+rule so that fixing N ports yields one reading instead of N) · **C independent check** (authored
+from the spec at the oracle's own target; a second *measurement*, never a second *authority*).
+
+The operator's ruling there is a standing condition, and it binds identically here: **an official
+green requires the suite we do not author.** Nothing in this directory is a conformance verdict.
+
+**Two of our axes do not fit those three, and naming them is this repo's contribution to that
+standard rather than a local exception:**
+
+| Kind | What it concludes | What it may NOT do | Here |
+|---|---|---|---|
+| **A · probe** | a finding about a cohort, with per-peer evidence | gate; enter a published number | `host-seam` |
+| **B · transcription** | that a port agrees with one pinned reading | that the reading is right | — none yet |
+| **C · independent check** | that our ports satisfy our reading of the spec | override the oracle; be published | — **none, deliberately** |
+| **D · cross-port coherence** | that N of **our own** ports agree with each other | **anything about correctness** — N agreeing is N agreeing (L18) | `chunking-parity` · `type-parity` · `sdk-parity` |
+| **E · instrument coverage** | what the measuring apparatus does and does not reach | that an unmeasured requirement is unmet | `req-coverage` |
+
+**D is the one keystone's taxonomy has no room for, and the gap is real rather than a naming
+quibble.** Their Kind A explicitly may not gate; ours *do* gate, and correctly — because what
+they gate is **us**, not a peer, and their authority is internal consistency rather than a
+normative target. A cross-port comparison that failed to gate would be a report nobody reads, and
+one that claimed conformance would be L18 in a costume. The distinction that makes it safe is the
+subject: **a coherence gate's red means our ports disagree, and never means anyone is wrong.**
+
+**E is stranger and is worth stating out loud: it measures the instrument, not the subject.**
+`req-coverage`'s output is a fact about `validate-peer`'s reach, and its most dangerous possible
+misreading is *"11 binding requirements unmeasured"* → *"11 requirements unmet."* Several of those
+rows have no wire form at all. The number is an assignment of work between three seats, not a
+score.
+
+**The lint axes — `structure` `drivers` `error-codes` `citations` `glue` `scale`** — are none of
+the five. They check *this tree's* declarations against *this tree's* rules and conclude nothing
+about any implementation. Filed here so that the absence of a kind is deliberate rather than an
+omission.
 
 ## The three entries that need explaining
 

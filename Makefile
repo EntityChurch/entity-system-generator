@@ -9,7 +9,8 @@
 #   make conformance      validate-peer -category <ext> against the composed peer
 #   make regression       the two-arm core-profile diff (bare vs composed)
 #   make check            build + test + conformance + regression + plan-check + sdk-parity
-#                         + structure + drivers + error-codes + citations + scale --check
+#                         + structure + drivers + error-codes + citations + glue
+#                         + req-coverage + scale --check
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
@@ -17,6 +18,7 @@
 #   make type-parity      every port's type entities agree, by content hash (G-3)
 #   make error-codes      every wire code a port emits is declared with an authority (D16)
 #   make citations        every path a declaration file cites resolves (D18)
+#   make req-coverage     every requirement the spec declares is mapped to an instrument
 #   make clean            remove every target's output/
 #
 # THE LAYOUT IS TARGET-MAJOR. A target is a unified bundle:
@@ -89,6 +91,7 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
 .PHONY: all build test conformance regression check check-all plan plan-check probe \
         parity clean sdk-parity structure drivers error-codes error-codes-control \
         scale scale-control type-parity glue glue-control \
+        req-coverage req-coverage-control \
         citations citations-control \
         build-native test-native \
         conformance-native probe-native
@@ -199,7 +202,26 @@ error-codes:
 error-codes-control:
 	./tools/check-error-codes.py --self-test
 
-check: build test conformance regression plan-check sdk-parity structure drivers error-codes citations glue
+# ── the requirement-coverage map ────────────────────────────────────────────────
+# The axis with the MOST upstream coverage, and therefore the one nobody was asking about.
+# `validate-peer`'s `history` category is 34 checks deep and cites HISTORY section numbers; its
+# `content` category is 13. Neither answers — and nothing anywhere answered — how many of the
+# spec's OWN §9.1 / §11 requirement rows those checks reach.
+#
+# It compares two inventories that both already exist (the spec's conformance section, and the
+# `checks[]` of the reports we already produce) and requires `EXTENSION.toml [conformance]` to
+# declare what measures each row. An undeclared row is a failure, so a re-pin cannot add or
+# re-word a requirement unnoticed. It is NOT a second scorer and produces no conformance verdict.
+#
+# Its first run against the real contracts failed on a §11.4 row missed while transcribing the
+# inventory by hand, which is the argument for the gate in one line.
+req-coverage:
+	./tools/req-coverage.py
+
+req-coverage-control:
+	./tools/req-coverage.py --self-test
+
+check: build test conformance regression plan-check sdk-parity structure drivers error-codes citations glue req-coverage
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every

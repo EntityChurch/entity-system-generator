@@ -631,3 +631,144 @@ note = "ts grouping object over the six flat type-path constants, which are `req
 note = "ts grouping object over the four flat EVENT_* constants; same decision, same reason."
 [sdk_surface.drift."const:operations"]
 note = "rust exports the §4.1 op list as a module const; ts carries it as an instance field (`HistoryHandler.operations`, which also carries the input/output types) and py as a class attribute (`HistoryHandler.OPERATIONS`). **CONTENT filed the identical difference as drift** and this is the second extension to reproduce it, which makes it a candidate for a decision rather than a third entry: the ts form carries MORE information than the other two (the §4.1 manifest's input/output types, not just the names), so the resolution is probably to give all three the richer shape rather than to pick a spelling. Not decided here — one instrument, two extensions, and the decision belongs with whoever writes the third."
+
+# ── [conformance] — §9.1's requirement inventory, and what measures each row ────────────
+#
+# **The axis with the most upstream coverage, and therefore the one nobody was asking about.**
+# `entity-core-go`'s `history` category is 34 checks deep, cites HISTORY section numbers, and
+# scores 33 of 34 on two of our three targets. It reads like coverage of EXTENSION-HISTORY. The
+# question it does not answer — and that nothing anywhere answered before `tools/req-coverage.py`
+# — is which of §9.1's own ten requirement rows those 34 checks actually reach.
+#
+# That is D16's third instance generalised: an axis with SOME upstream coverage is more dangerous
+# than one with none, because the coverage is what stops anyone asking. Every row below is
+# declared with the check that measures it, a `gap` where the check is weaker than the row, or a
+# `note` where nothing measures it at all. **An undeclared row is a gate failure**, so a re-pin
+# that adds or re-words a requirement cannot land unnoticed.
+#
+# `gap` is not a softer `note`. A row with an oracle check AND a gap is reported PARTIAL and never
+# counted as covered, because "a check is named after this requirement" and "this requirement is
+# measured" are two sentences. Collapsing them is exactly the error the four `context_*` checks
+# make, and this file is where we stop repeating it.
+#
+# Scope of every negative claim here: the executed corpus printed by `./tools/req-coverage.py`
+# — 764 checks over 18 categories at the time these rows were written. A check in a category we
+# have never run is invisible to this file and would read as absent.
+
+[conformance]
+spec_file       = "EXTENSION-HISTORY.md"
+section         = "9.1"
+shape           = "level-table"
+oracle_category = "history"
+
+# ── MUST ────────────────────────────────────────────────────────────────────────────────
+
+[[conformance.requirement]]
+id     = "H-R1"
+text   = "Store transition entities in content store"
+oracle = ["transition_recorded", "transition_hash_matches"]
+gap    = """PARTIAL — neither check reads WHERE the transition is stored. `transition_recorded` \
+counts transitions returned by `system/history:query`; `transition_hash_matches` compares the \
+transition's hash to the put entity's. §3.1 requires the CONTENT STORE specifically, and a port \
+that materialised transitions in the entity tree would pass both. `grep content_store` over the \
+executed corpus returns 0."""
+
+[[conformance.requirement]]
+id     = "H-R2"
+text   = "Store head pointers at `system/history/head/{path}`"
+oracle = ["head_pointer_set"]
+gap    = """PARTIAL — the check reads the head pointer out of the QUERY RESULT ("head pointer set \
+in query result"), not out of the tree at `system/history/head/{path}`. The path clause is the \
+half that matters for interop: it is how another extension or another peer finds the head without \
+going through this extension's handler, and on `rust` — where the handler face is not installable \
+— it is the ONLY way. Unmeasured."""
+
+[[conformance.requirement]]
+id     = "H-R3"
+text   = "Record `author`, `capability`, `timestamp` in transitions"
+oracle = ["context_author_present", "context_capability_present", "transition_has_timestamp"]
+gap    = """PARTIAL, and this is the row we routed. All three are presence checks — `IsZero()` / \
+`== ""` — and none compares a value to anything. A peer that records §2.1's AUTONOMOUS reading for \
+every write, including one that arrived over the wire from a remote caller, produces a well-formed \
+chained content-addressed transition whose `author` is a lie and passes all three. We proved it \
+rather than suspected it: the three checks passed identically before and after keystone's H8 \
+landed and all three ports began consuming a real execution context. \
+`ROUTING-2026-09-07-b-core-go-the-context-checks-assert-presence-not-provenance.md`."""
+
+[[conformance.requirement]]
+id     = "H-R4"
+text   = "Exclude local peer's `system/history/*` from history recording"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is a MUST. `grep -i recurs` over the executed corpus \
+returns 0; no check in `history` or any other category writes to a `system/history/*` path and \
+asserts that no transition was recorded for it. §3.2 is the recursion-prevention clause: the \
+recorder writes head pointers into `system/history/head/...`, so a port that failed to exclude its \
+own namespace would record a transition for each head-pointer write, whose head-pointer write \
+records another. Our three ports assert it in their own unit tests, which is our code checking our \
+code (L18). Routed to `entity-core-go` — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
+
+[[conformance.requirement]]
+id     = "H-R5"
+text   = "Dual capability check on all operations"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is a MUST. `grep -i dual` over the executed corpus \
+returns 0. §4.2 and §7.1 require BOTH the caller's grant for the history operation AND the \
+underlying path's read grant; the `history` category drives `query` and `rollback` with a grant \
+that satisfies both, and never drives the case that separates them — a caller authorized for \
+`system/history:query` but not for the path whose history it asks for. That is the case §7.5 calls \
+exfiltration. Routed alongside H-R4."""
+
+[[conformance.requirement]]
+id     = "H-R6"
+text   = "Validate rollback target is in path history"
+oracle = ["rollback_invalid_hash_rejected"]
+gap    = """PARTIAL, in two directions. The check plants a syntactically invalid hash and requires \
+a non-200; §7.5's requirement is that the target be in THIS PATH's history, and a hash that is \
+perfectly valid but belongs to a DIFFERENT path is the exfiltration case the clause exists for. It \
+is not exercised. And this is the single check that PASSES on a peer with NO history handler at \
+all, because `404 handler_not_found` is not 200 — 1 of 34 in the bare arm on every target. Routed \
+as G-1 in `ROUTING-2026-09-07-core-go-the-history-category-on-a-peer-that-has-the-types-and-not-the-handler.md`."""
+
+# ── SHOULD ──────────────────────────────────────────────────────────────────────────────
+
+[[conformance.requirement]]
+id     = "H-R7"
+text   = "Record `caller_capability` when it differs from `capability`"
+oracle = ["w6_caller_cap_absent"]
+gap    = """The only check in this category that COMPARES rather than asserts presence, and the \
+only one measuring the negative half of the row — §5.1: when `caller_capability` would equal \
+`capability` (a caller-authorized write) it is OMITTED. The positive half — a handler-authorized \
+write inside an externally-triggered chain, where the two differ and `caller_capability` MUST be \
+recorded — is driven by nothing. **This check is FAILING on `typescript` and `python` as of \
+2026-09-07T17:41 and the failure is ours**, introduced by the §9.1 execution-context work earlier \
+the same day; see docs/status/HANDOFF-2026-09-07-c-*."""
+
+[[conformance.requirement]]
+id     = "H-R8"
+text   = "Record `handler`, `operation`, `chain_id` in transitions"
+oracle = ["context_handler_present", "context_operation_present"]
+gap    = """PARTIAL — the row names three fields and two are checked, both for presence only \
+(H-R3's mechanism). Nothing reads `chain_id`, which is the field §5.3 makes the multi-path \
+correlation key, so a port that omitted it entirely, or emitted a fresh one per write instead of \
+propagating the chain's, scores identically."""
+
+[[conformance.requirement]]
+id     = "H-R9"
+text   = "Support `max_depth` pruning"
+oracle = []
+note   = """NOTHING MEASURES THIS. `grep -i 'prun|depth'` over the executed corpus returns only \
+`resource_bounds/r2_chain_depth_over_limit`, which is the core capability-chain depth and \
+unrelated. §3.3 is also one of the four defects we routed to arch on 2026-09-06 — it describes an \
+IN-PLACE MUTATION of immutable content-addressed entities — so this row is unmeasured upstream and \
+unimplementable as written. Our ports implement the reachable reading and say so."""
+
+# ── MAY ─────────────────────────────────────────────────────────────────────────────────
+
+[[conformance.requirement]]
+id     = "H-R10"
+text   = 'Support `"accessed"` event type'
+oracle = []
+note   = """Nothing measures it: `grep -i accessed` over the executed corpus returns 0, and \
+`event_filter_only_created` filters on `created`. MAY, so this is reported and never failed — \
+§5.2's audit mode is optional by the spec's own word. Recorded because "no check" and "no \
+requirement" are different facts and only one of them is a gap."""

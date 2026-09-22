@@ -459,3 +459,254 @@ note = "rust convenience for the default target size, which the other two get fr
 note = "ts named-argument interface; the other two use keyword/Option parameters"
 [sdk_surface.drift."type:content_handler_options"]
 note = "ts constructor options object; the other two take positional/keyword args"
+
+# ── [conformance] — §11's requirement inventory, and what measures each row ─────────────
+#
+# See `extension-contracts/history/EXTENSION.toml [conformance]` for why this block exists and
+# what `gap` means. Two things are specific to CONTENT.
+#
+# **The inventory has a different SHAPE here, and that is itself the finding routed to arch.**
+# HISTORY declares §9.1 as one table with a `Level` column; CONTENT declares §11.1-§11.4 as four
+# level-named subsections of bullets. Both are machine-readable and neither is machine-readable
+# the same way, so `tools/req-coverage.py` carries two parsers for two specs. At twenty-six
+# extensions that is a parser per author's taste. Neither shape gives a row a STABLE ID either,
+# so `H-R4` and `C-R7` below are OUR invention and cannot be cited by anyone else.
+#
+# **The strongest and the weakest rows in this tree are both here.** C-R1/C-R2's
+# `type_system_content_*_match` renders the type from `entity-core-go`'s own independent
+# transcription of §2.1/§2.2 and compares CONTENT HASHES — the only place in the corpus where an
+# extension's types are measured by value rather than by resolution. And four of the thirteen
+# `content` checks PASS IN THE BARE ARM, on a peer with no content extension installed at all,
+# on all three targets: they measure core-go's own in-process library. That is not a criticism of
+# what they measure; it is that `summary.self_checks` reads `0`, so nothing in the output says so.
+
+[conformance]
+spec_file       = "EXTENSION-CONTENT.md"
+section         = "11"
+shape           = "level-sections"
+oracle_category = "content"
+
+[conformance.levels]
+# DECLARED rather than inferred from the heading text. Inferring "a heading containing MUST is
+# the MUST section" is one re-worded heading away from silently dropping eight requirements, and
+# the drop presents as a clean run.
+"MUST Implement"        = "MUST"
+"SHOULD Implement"      = "SHOULD"
+"MAY Implement"         = "MAY"
+"Implementation-Defined" = "IMPL-DEFINED"
+
+# ── §11.1 MUST ──────────────────────────────────────────────────────────────────────────
+
+[[conformance.requirement]]
+id     = "C-R1"
+text   = "Content blob type (`system/content/blob`) — creation and parsing (§2.1)"
+oracle = ["type_blob", "type_system/type_system_content_blob_fetch",
+          "type_system/type_system_content_blob_match"]
+gap    = """PARTIAL, and the partiality is on the second clause only. `_match` compares the type \
+entity's CONTENT HASH against core-go's own independent transcription of §2.1 — the strongest \
+type measurement in the corpus and the one `gates/type-parity` exists to give HISTORY, which has \
+no equivalent. What none of the three does is exercise "creation and parsing": no check builds a \
+blob from bytes on the peer and reads it back."""
+
+[[conformance.requirement]]
+id     = "C-R2"
+text   = "Content chunk type (`system/content/chunk`) — creation and parsing (§2.2)"
+oracle = ["type_chunk", "type_system/type_system_content_chunk_fetch",
+          "type_system/type_system_content_chunk_match"]
+gap    = "PARTIAL, identical in shape to C-R1: the type is hash-compared, the round trip is not driven."
+
+[[conformance.requirement]]
+id     = "C-R3"
+text   = "Content creation algorithm — fixed-size (§3.2) or FastCDC (§3.6)"
+oracle = []
+ours   = ["gates/chunking-parity"]
+note   = """NO ORACLE CHECK CHUNKS ANYTHING — established at `ed9b547` and unchanged in the \
+executed corpus, where every name matching `chunk` is a type-definition check. §3.7 makes §3.2 \
+and §3.6 Conformance algorithms whose divergence DOES NOT FAIL LOUDLY: every blob still \
+reassembles and the peers simply stop deduplicating, with no error and no status code. §3.6.5's \
+cross-impl vectors are named in the spec as a Stage-4 byproduct that does not exist. \
+`gates/chunking-parity` puts one corpus through every port's §3.6 and compares byte for byte — \
+3 ports agreeing on all 6 fields — and it is a CROSS-PORT COHERENCE instrument, never a \
+conformance verdict: three of our own transcriptions agreeing is three of our own transcriptions \
+agreeing (L18)."""
+
+[[conformance.requirement]]
+id     = "C-R4"
+text   = "Content entities stored in content store, not entity tree (§3.1)"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is a MUST whose whole content is a negative — "not \
+entity tree". `grep -i content_store` over the executed corpus returns 0. HISTORY's H-R1 is the \
+same clause in a second spec with the same absence, which makes it a shape rather than an \
+oversight: the corpus has no vocabulary for asserting WHERE an entity lives, because every check \
+reaches it through a path that resolves either way."""
+
+[[conformance.requirement]]
+id     = "C-R5"
+text   = "Content verification — completeness and size consistency (§3.3)"
+oracle = []
+note   = """NOTHING MEASURES THIS. `descriptor_integrity_check` is §5.3's body-to-path anchor \
+mismatch, a different clause, and it is one of the four self-checks (see C-R12). No check \
+assembles a blob from its chunks and compares total_size, and none plants a missing chunk."""
+
+[[conformance.requirement]]
+id     = "C-R6"
+text   = "Handlers returning content refs **MUST** include the blob entity in the response envelope (§5.2)"
+oracle = []
+note   = """NOTHING MEASURES THIS. It is also the clause behind one of the three findings we \
+routed to keystone on 2026-09-05: the peer dropped the `included` map at three call sites, not \
+the one we named (AP-5). A MUST that another team fixed in three places, on our report, with no \
+check anywhere that would have caught the regression or will catch the next one."""
+
+[[conformance.requirement]]
+id     = "C-R7"
+text   = "Handlers serving content **MUST** validate blob ownership and chunk membership on get-request (§4.4)"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is the SECURITY MUST of this extension. `grep -i \
+ownership` over the executed corpus returns 0. §4.4 is what stops a caller with a grant on one \
+blob's path fetching chunks belonging to another; the `content` category drives `get` twice and \
+both times on its error path (`get_path_required`). Same shape as HISTORY's H-R5."""
+
+[[conformance.requirement]]
+id     = "C-R8"
+text   = "`content:ingest` result **MUST** include `root` when called in envelope mode with non-null `envelope.root` (§6.3)"
+oracle = []
+note   = """NOTHING MEASURES THIS. `ingest_path_required` drives `ingest` with no resource and \
+asserts the error code; nothing drives a successful envelope-mode ingest and reads the result. \
+This is one of the two rows where a wrong answer is invisible to the caller until a later fetch."""
+
+# ── §11.2 SHOULD ────────────────────────────────────────────────────────────────────────
+
+[[conformance.requirement]]
+id     = "C-R9"
+text   = "FastCDC content-defined chunking with the specified gear table and parameters (§3.6)"
+oracle = []
+ours   = ["gates/chunking-parity"]
+note   = "C-R3's instrument and C-R3's absence upstream; the gear table is compared field for field there."
+
+[[conformance.requirement]]
+id     = "C-R10"
+text   = "Chunk sizes that fit within the transport's frame limit when one exists (§10.1)"
+oracle = ["frame-limit-respected"]
+gap    = """The check exists and has SKIPPED on every run to date — "no writable local/files root \
+configured; frame-limit check needs a root to seed large content" — on all three targets, both \
+arms. A skip is a failure (`gates/README.md`), so Amendment 1's frame-budget MUST is UNEXERCISED, \
+not passing, everywhere. It is the one row where the instrument is present and the measurement is \
+absent, which is a different state from the other nine and is why it is not filed as `none`."""
+
+[[conformance.requirement]]
+id     = "C-R11"
+text   = "Handler content get operation for handlers that serve binary content (§4.2)"
+oracle = ["handler_op_get", "get_path_required"]
+gap    = """PARTIAL. `handler_op_get` asserts the operation is ADVERTISED in the manifest \
+("system/content:get advertised"); `get_path_required` drives it and asserts an ERROR code. \
+Nothing drives a get that returns bytes and checks the bytes."""
+
+[[conformance.requirement]]
+id     = "C-R12"
+text   = "Small content optimization — include chunks in metadata response when they fit (§4.3)"
+oracle = ["inline_include_at_threshold", "inline_include_above_threshold"]
+gap    = """SELF-CHECKS, proved by execution rather than by reading their source: both PASS in the \
+BARE arm — a peer with no content extension installed — on all three targets, so they cannot be \
+contacting the peer. They measure core-go's own in-memory store against §4.3's 65,536 boundary, \
+which is worth measuring and is a statement about the oracle. The report says `self_checks: 0`; \
+`DeclareSelf` exists in the runner for exactly this and these are declared with `Declare`. Four \
+of thirteen `content` checks are in this class. Routed — see \
+docs/status/ROUTING-2026-09-07-c-core-go-what-the-requirement-map-found.md."""
+
+[[conformance.requirement]]
+id     = "C-R13"
+text   = "Resumable transfer (§7.3)"
+oracle = []
+note   = "NOTHING MEASURES THIS. No check in the corpus interrupts and resumes a transfer."
+
+[[conformance.requirement]]
+id     = "C-R14"
+text   = "Default target chunk size of 1 MiB (§3.5, §10.1)"
+oracle = []
+note   = """NOTHING MEASURES THIS, and it is the row this repo's FIRST routed finding was about: \
+§3.5/§3.6.2 said 1 MiB and §10.1/§11.2 said 4 MiB, the pair (chunking, chunk_size) IS the \
+deduplication identity by §2.1, and two implementations reading different sections both conform \
+and silently fail to deduplicate. Arch closed it at v3.6 — every site now reads 1 MiB — and there \
+is still no check that reads the value. `gates/chunking-parity` runs at an explicit 4,096-byte \
+target, so it does not measure the DEFAULT and must not be cited here."""
+
+[[conformance.requirement]]
+id     = "C-R15"
+text   = "CBOR binary encoding for chunk payloads (§2.2)"
+oracle = []
+note   = """NOTHING MEASURES THIS at the chunk level. The `encoding` category's six checks are \
+core ECF round-trips and never touch a chunk payload."""
+
+# ── §11.3 MAY ───────────────────────────────────────────────────────────────────────────
+# Reported, never failed: by the spec's own word these are not requirements on an implementation.
+# They are declared so that a re-pin promoting one to SHOULD or MUST cannot land unnoticed —
+# which is exactly what v3.4 -> v3.5 did to `path_required` in the other direction.
+
+[[conformance.requirement]]
+id     = "C-R16"
+text   = "System content handler at `system/content/*` (§6)"
+oracle = ["handler_manifest"]
+
+[[conformance.requirement]]
+id     = "C-R17"
+text   = "System content `ingest` operation (§6.3) — SHOULD be supported when system content handler is installed"
+oracle = ["handler_op_ingest", "ingest_path_required"]
+gap    = """The row carries a SHOULD inside a MAY section — the parser files it at its section's \
+level, which is the spec's structure and not a reading. Worth noting because it means this \
+inventory's levels are not a total order over the requirements."""
+
+[[conformance.requirement]]
+id     = "C-R18"
+text   = "System content namespace scoping (§6.4)"
+oracle = []
+note   = """Nothing measures it — and §6.4 is where v3.7 changed `403 forbidden` to \
+`403 capability_denied`, a behaviour change carried into three ports with nothing in this tree or \
+upstream able to say so (AP-11). `tools/check-error-codes.py` is the instrument that now would."""
+
+[[conformance.requirement]]
+id   = "C-R19"
+text = "Fixed-size chunking as alternative to FastCDC (§3.2)"
+
+[[conformance.requirement]]
+id   = "C-R20"
+text = "Alternative target chunk sizes based on content size (§3.5)"
+
+[[conformance.requirement]]
+id   = "C-R21"
+text = "Local re-chunking after transfer (receiver re-chunks to preferred chunk size)"
+
+# ── §11.4 Implementation-Defined ────────────────────────────────────────────────────────
+# The spec DECLINES to constrain these. "Nothing checks it" is the correct state, not a gap, and
+# reporting them as uncovered would be the category error the `IMPL-DEFINED` level exists to
+# prevent. Declared so the inventory is complete and a promotion cannot slip through.
+
+[[conformance.requirement]]
+id   = "C-R22"
+text = "Chunk size selection strategy"
+
+[[conformance.requirement]]
+id   = "C-R23"
+text = "Transfer parallelism (concurrent chunk gets)"
+
+[[conformance.requirement]]
+id   = "C-R24"
+text = "Handler blob ownership check mechanism (§4.4 Step 1)"
+
+[[conformance.requirement]]
+id   = "C-R25"
+text = "Namespace-to-content mapping strategy when using system content handler (§6.4)"
+
+[[conformance.requirement]]
+id   = "C-R26"
+text = "Storage backend for chunks and blobs"
+
+[[conformance.requirement]]
+id   = "C-R27"
+text = "Cache eviction policy for chunk entities"
+
+[[conformance.requirement]]
+id   = "C-R28"
+text = "Re-chunking policy after transfer"
+# Added because the gate FAILED on it — a §11.4 row missed on the first pass through the
+# inventory, caught by rule 1 on this instrument's first real run against this file. That is the
+# whole argument for the gate: the inventory is 28 rows and a human transcribing it will drop one.

@@ -99,14 +99,7 @@ pub fn install_history_types(store: &Store, local_peer: &str) -> HistoryTypeInst
 #[derive(Clone)]
 pub struct HistoryRecorderInstallation {
     pub recorder: Arc<HistoryRecorder>,
-    /// Whether the peer's tree-change events can carry an execution context AT ALL.
-    ///
-    /// `false` on every peer measured, and the composition prints it. It is on the
-    /// installation result rather than buried in stats because a system that records
-    /// transitions with fabricated provenance and a system that records real provenance
-    /// are different systems, and the difference has to be visible at the seam where
-    /// someone decides to trust the audit trail.
-    pub context_available: bool,
+
     /// Whether §2.1's "handler grant" — the autonomous case's `capability` value — has a
     /// referent on this peer.
     ///
@@ -117,6 +110,16 @@ pub struct HistoryRecorderInstallation {
     /// `author == capability` on every transition. The oracle's
     /// `context_capability_present` checks only for non-zero and would pass on that.
     pub handler_grant_available: bool,
+}
+
+impl HistoryRecorderInstallation {
+    /// `"unknown"` | `"yes"` | `"not-observed"` — OBSERVED, never declared.
+    ///
+    /// A method, not a field, and that is the point: the field it replaced was a
+    /// hardcoded `false` that said "measured". See `HistoryRecorder::context_observed`.
+    pub fn context_available(&self) -> &'static str {
+        self.recorder.context_observed()
+    }
 }
 
 /// Install the §5.1 recorder as a position-4 emit consumer.
@@ -164,8 +167,6 @@ pub fn install_history_recorder(
 
     HistoryRecorderInstallation {
         recorder,
-        // Measured; see `EXTENSION.toml [substrate.execution_context]`.
-        context_available: false,
         handler_grant_available,
     }
 }

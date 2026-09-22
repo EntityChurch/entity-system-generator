@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use entity_core_protocol::peer::model::Entity;
-use entity_core_protocol::peer::store::{Store, TreeChangeEvent};
+use entity_core_protocol::peer::store::{ExecContext, Store, TreeChangeEvent};
 use entity_core_protocol::value::{Key, Value};
 
 use crate::internal::recorder::{
@@ -97,6 +97,31 @@ pub fn build_context(
         },
     }
 }
+/// The peer's `ExecContext` -> this extension's `CarriedContext`.
+///
+/// A BOUNDARY FUNCTION, and the same split the other two ports use: the recorder speaks
+/// one vocabulary and each port converts into it exactly once. The peer's slot names are
+/// SYSTEM-COMPOSITION §1.4's RESERVED names and are identical across all three peers;
+/// what differs is the container, which is what a boundary is for.
+///
+/// **Returns `None` when the context carries no `author`, and that is not a shortcut.**
+/// §6.8a: every slot is read from the wire rather than synthesized, so a slot the request
+/// did not carry stays `None`. A context present but authorless cannot satisfy §2.1's
+/// `author`, and defaulting it to the local identity here would silently produce the exact
+/// forgery §9.1 exists to prevent -- while looking like provenance `"context"`. Falling
+/// back explicitly keeps the honest label.
+pub fn carried_from_exec(ctx: &ExecContext) -> Option<CarriedContext> {
+    Some(CarriedContext {
+        author: ctx.author.clone()?,
+        caller_capability: ctx.caller_capability.clone(),
+        handler_grant: ctx.handler_grant.clone(),
+        handler_pattern: Some(ctx.handler_pattern.clone()),
+        operation: Some(ctx.operation.clone()),
+        chain_id: ctx.chain_id.clone(),
+        parent_chain_id: ctx.parent_chain_id.clone(),
+    })
+}
+
 
 /// SYSTEM-COMPOSITION §1.4's inventory, as the recorder would consume it.
 ///
@@ -123,6 +148,11 @@ pub struct RecorderStats {
     pub skipped_self_guard: u64,
     pub skipped_unconfigured: u64,
     pub fallback_contexts: u64,
+    /// Events whose carried context supplied an author. The counterpart of
+    /// `fallback_contexts`; together they are the evidence behind `context_observed()`,
+    /// counted rather than inferred so the composition can print the quantity beside the
+    /// verdict.
+    pub context_contexts: u64,
 }
 
 /// The §5.1 recorder, as a peer emit consumer.
@@ -148,6 +178,7 @@ pub struct HistoryRecorder {
     skipped_self_guard: AtomicU64,
     skipped_unconfigured: AtomicU64,
     fallback_contexts: AtomicU64,
+    context_contexts: AtomicU64,
     last: Mutex<Vec<RecordedTransition>>,
 }
 
@@ -160,6 +191,7 @@ impl HistoryRecorder {
             skipped_self_guard: AtomicU64::new(0),
             skipped_unconfigured: AtomicU64::new(0),
             fallback_contexts: AtomicU64::new(0),
+            context_contexts: AtomicU64::new(0),
             last: Mutex::new(Vec::new()),
         }
     }
@@ -175,10 +207,18 @@ impl HistoryRecorder {
             return;
         }
 
-        // `None` on this peer, always. See `build_context`.
-        let ctx = build_context(&self.identity, "put", "system/tree", None);
+        // H8 LANDED 2026-09-07 (`dc5a458`). This was `None` UNCONDITIONALLY, with the
+        // comment "`None` on this peer, always" -- because `TreeChangeEvent` had no
+        // context slot, so every transition this recorder wrote took §2.1's autonomous
+        // reading and attributed a remote caller's write to the local peer. Routed as H8;
+        // the peer now carries it and §9.1's MUST on `author`/`capability` becomes
+        // satisfiable here for the first time.
+        let carried = ev.context.as_ref().and_then(carried_from_exec);
+        let ctx = build_context(&self.identity, "put", "system/tree", carried.as_ref());
         if ctx.provenance == PROVENANCE_AUTONOMOUS_FALLBACK {
             self.fallback_contexts.fetch_add(1, Ordering::SeqCst);
+        } else {
+            self.context_contexts.fetch_add(1, Ordering::SeqCst);
         }
 
         let change = TreeChange {
@@ -207,6 +247,30 @@ impl HistoryRecorder {
             skipped_self_guard: self.skipped_self_guard.load(Ordering::SeqCst),
             skipped_unconfigured: self.skipped_unconfigured.load(Ordering::SeqCst),
             fallback_contexts: self.fallback_contexts.load(Ordering::SeqCst),
+            context_contexts: self.context_contexts.load(Ordering::SeqCst),
+        }
+    }
+
+    /// `"unknown"` | `"yes"` | `"not-observed"` — what this recorder has SEEN.
+    ///
+    /// **`"not-observed"`, never `"no"`, and the name is the whole correction.** "No" is
+    /// a claim about the PEER; what this counter knows is a fact about THESE EVENTS. A
+    /// composition driven only by autonomous writes — a bare `Store::bind`, the peer's own
+    /// bootstrap — legitimately sees zero contexts on a peer that delivers them perfectly.
+    ///
+    /// This replaced a hardcoded `context_available: false` carrying the comment
+    /// "measured": a claim about ANOTHER TEAM'S PEER, frozen in our source and asserted by
+    /// our own tests. When keystone landed H8 the peers began delivering a context and all
+    /// three ports went on reporting `false`. Nothing could have noticed — we wrote the
+    /// value and we wrote the check. D13 already forbids the shape; it had been applied to
+    /// every claim about a peer except the one we stored in our own struct.
+    pub fn context_observed(&self) -> &'static str {
+        if self.context_contexts.load(Ordering::SeqCst) > 0 {
+            "yes"
+        } else if self.observed.load(Ordering::SeqCst) > 0 {
+            "not-observed"
+        } else {
+            "unknown"
         }
     }
 

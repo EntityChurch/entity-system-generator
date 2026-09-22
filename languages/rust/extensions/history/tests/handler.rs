@@ -134,6 +134,12 @@ fn write(store: &Store, rec: &HistoryRecorder, path: &str, value: &str) -> Entit
             path: path.to_string(),
             new_hash: Some(ent.hash.clone()),
             previous_hash: previous,
+            // AUTONOMOUS, and that is the fixture's CLAIM rather than a placeholder:
+            // these drive a bare store write with no dispatch above them, which is
+            // precisely §2.1's autonomous case. The peer gained this slot with H8
+            // (`dc5a458`) -- a fixture that omitted it would stop compiling, and one
+            // that filled it would assert a provenance it never had.
+            context: None,
         },
     );
     ent

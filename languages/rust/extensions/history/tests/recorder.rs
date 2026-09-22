@@ -58,6 +58,12 @@ fn write(store: &Store, rec: &HistoryRecorder, path: &str, value: &str) -> Entit
             path: path.to_string(),
             new_hash: Some(ent.hash.clone()),
             previous_hash: previous,
+            // AUTONOMOUS, and that is the fixture's CLAIM rather than a placeholder:
+            // these drive a bare store write with no dispatch above them, which is
+            // precisely §2.1's autonomous case. The peer gained this slot with H8
+            // (`dc5a458`) -- a fixture that omitted it would stop compiling, and one
+            // that filled it would assert a provenance it never had.
+            context: None,
         },
     );
     ent
@@ -187,6 +193,12 @@ fn an_unrecognised_core_event_is_not_recorded_as_a_nearest_neighbour() {
             path: path.clone(),
             new_hash: Some(vec![1; 33]),
             previous_hash: None,
+            // AUTONOMOUS, and that is the fixture's CLAIM rather than a placeholder:
+            // these drive a bare store write with no dispatch above them, which is
+            // precisely §2.1's autonomous case. The peer gained this slot with H8
+            // (`dc5a458`) -- a fixture that omitted it would stop compiling, and one
+            // that filled it would assert a provenance it never had.
+            context: None,
         },
     );
     assert_eq!(rec.stats().recorded, 0);
@@ -255,6 +267,12 @@ fn the_recorders_own_head_write_is_guarded() {
             path: head.clone(),
             new_hash: store.hash_at(&head),
             previous_hash: None,
+            // AUTONOMOUS, and that is the fixture's CLAIM rather than a placeholder:
+            // these drive a bare store write with no dispatch above them, which is
+            // precisely §2.1's autonomous case. The peer gained this slot with H8
+            // (`dc5a458`) -- a fixture that omitted it would stop compiling, and one
+            // that filled it would assert a provenance it never had.
+            context: None,
         },
     );
     assert_eq!(rec.stats().skipped_self_guard, 1);
@@ -278,6 +296,12 @@ fn a_config_write_is_recorded_not_guarded() {
             path: cfg.clone(),
             new_hash: store.hash_at(&cfg),
             previous_hash: None,
+            // AUTONOMOUS, and that is the fixture's CLAIM rather than a placeholder:
+            // these drive a bare store write with no dispatch above them, which is
+            // precisely §2.1's autonomous case. The peer gained this slot with H8
+            // (`dc5a458`) -- a fixture that omitted it would stop compiling, and one
+            // that filled it would assert a provenance it never had.
+            context: None,
         },
     );
     assert_eq!(rec.stats().skipped_self_guard, 0);
@@ -430,7 +454,11 @@ fn the_real_seam_records_a_transition() {
             local_peer: local.clone(),
         },
     );
-    assert!(!install.context_available);
+    // "unknown" at install time, before any event: the recorder has observed nothing, so
+    // it claims nothing. This was `assert!(!install.context_available)` against a hardcoded
+    // `false` -- an assertion about ANOTHER TEAM'S PEER that our own source supplied, which
+    // is why it survived H8 landing without anything failing.
+    assert_eq!(install.context_available(), "unknown");
     assert!(!install.handler_grant_available);
 
     let app = format!("/{local}/app/doc");

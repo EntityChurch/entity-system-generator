@@ -153,10 +153,14 @@ def main(argv: list[str]) -> int:
         f"types={len(content.type_paths) + len(history.type_paths)} "
         f"handler_writes={len(content.handler_paths) + len(history.handler_paths)} "
         f"consumers=1 "
-        # The honest field. `false` on every peer measured, and it means every
-        # transition's `author` and `capability` are §2.1's autonomous-case values rather
-        # than the caller's. A reader of the audit trail needs this at the seam.
-        f"context_available={str(history.context_available).lower()} "
+        # The honest field, and it is now THREE-VALUED and OBSERVED rather than a
+        # hardcoded `false` that said "measured". `unknown` until an event arrives; then
+        # `yes` or `no` by what the recorder actually saw. The counts are printed beside
+        # it because a verdict with no quantity under it cannot be debugged by the person
+        # who runs it.
+        f"context_available={history.context_available} "
+        f"contexts={history.recorder.stats.context_contexts} "
+        f"fallbacks={history.recorder.stats.fallback_contexts} "
         f"recorded={history.recorder.stats.recorded}\n"
     )
     sys.stderr.flush()
@@ -167,6 +171,21 @@ def main(argv: list[str]) -> int:
     try:
         stop.wait()
     finally:
+        # THE POST-TRAFFIC OBSERVATION, and the reason it is here rather than beside the
+        # COMPOSED line: the COMPOSED line is printed before the peer has served anything,
+        # so its `context_available` is necessarily `unknown` or reflects the peer's own
+        # bootstrap. The question §9.1 turns on -- does a WIRE-DRIVEN write carry the
+        # caller's context -- can only be answered after the traffic. `tools/host-launch`
+        # already surfaces the host's stderr after the oracle finishes, so this needs no
+        # new harness.
+        stats = history.recorder.stats
+        sys.stderr.write(
+            f"COMPOSED-FINAL context_available={history.context_available} "
+            f"contexts={stats.context_contexts} "
+            f"fallbacks={stats.fallback_contexts} "
+            f"observed={stats.observed} recorded={stats.recorded}\n"
+        )
+        sys.stderr.flush()
         listener.close()
     return 0
 

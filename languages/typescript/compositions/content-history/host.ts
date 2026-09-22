@@ -155,7 +155,9 @@ async function main(): Promise<number> {
       // transition's `author` and `capability` are the §2.1 autonomous-case values
       // rather than the caller's. A reader of the audit trail needs this at the seam,
       // not buried in a report.
-      `context_available=${history.contextAvailable} ` +
+      `context_available=${history.contextAvailable()} ` +
+      `contexts=${history.recorder.stats.contextContexts} ` +
+      `fallbacks=${history.recorder.stats.fallbackContexts} ` +
       `recorded=${stats.recorded}\n`,
   );
 
@@ -164,6 +166,19 @@ async function main(): Promise<number> {
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
   });
+
+  // THE POST-TRAFFIC OBSERVATION. The COMPOSED line above is printed before the peer has
+  // served anything, so its `context_available` necessarily reflects only the peer's own
+  // bootstrap. The question §9.1 turns on -- does a WIRE-DRIVEN write carry the caller's
+  // context -- can only be answered after the traffic. `tools/host-launch` reaps the host
+  // before surfacing its stderr, so this line is captured.
+  process.stderr.write(
+    `COMPOSED-FINAL context_available=${history.contextAvailable()} ` +
+      `contexts=${history.recorder.stats.contextContexts} ` +
+      `fallbacks=${history.recorder.stats.fallbackContexts} ` +
+      `observed=${history.recorder.stats.observed} ` +
+      `recorded=${history.recorder.stats.recorded}\n`,
+  );
 
   await peer.dispose();
   return 0;

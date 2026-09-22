@@ -162,7 +162,7 @@ fn main() {
          recorded={} observed={}",
         content.type_paths.len() + history_types.type_paths.len(),
         CONTENT_TYPES.len() + HISTORY_TYPES.len(),
-        history.context_available,
+        history.context_available(),
         history.handler_grant_available,
         stats.recorded,
         stats.observed,
@@ -175,6 +175,42 @@ fn main() {
         eprintln!("COMPOSED   bind {path}");
     }
     let _ = std::io::stderr().flush();
+
+    // THE POST-TRAFFIC OBSERVATION, on a MONITOR THREAD.
+    //
+    // The other two ports print `COMPOSED-FINAL` from a SIGTERM handler; this host blocks
+    // in `incoming()` with no signal hook, so a TERM kills it outright and a shutdown line
+    // would never run.
+    //
+    // The first attempt latched at the top of the accept loop and NEVER FIRED, which is
+    // worth keeping in the record because it looked right: the check runs before each
+    // `accept`, connections are served on spawned threads, and the writes therefore land
+    // *after* the loop has already blocked waiting for a connection that never comes. An
+    // observation placed on the path that CAUSES the thing it observes cannot see the
+    // last one -- and the last one is the whole run when the oracle uses a single
+    // connection.
+    //
+    // So: an independent poller. It observes rather than participates, which is the only
+    // arrangement that can report on the final event.
+    {
+        let watch = history.recorder.clone();
+        std::thread::spawn(move || {
+            let mut latched = false;
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if !latched && watch.context_observed() == "yes" {
+                    latched = true;
+                    let st = watch.stats();
+                    eprintln!(
+                        "COMPOSED-FINAL context_available=yes contexts={} fallbacks={} \
+                         observed={} recorded={}",
+                        st.context_contexts, st.fallback_contexts, st.observed, st.recorded
+                    );
+                    let _ = std::io::stderr().flush();
+                }
+            }
+        });
+    }
 
     for stream in listener.incoming() {
         match stream {

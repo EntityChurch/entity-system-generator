@@ -80,7 +80,7 @@ export interface HistoryInstallation {
    * different systems, and the difference has to be visible at the seam where someone
    * decides to trust the audit trail.
    */
-  readonly contextAvailable: boolean;
+  readonly contextAvailable: () => "unknown" | "yes" | "not-observed";
 }
 
 /**
@@ -137,6 +137,8 @@ export function installHistory(
     interfacePath,
     typePaths,
     recorder,
-    contextAvailable: false, // measured; see EXTENSION.toml [substrate.execution_context]
+    // OBSERVED, never declared. Was a hardcoded `false` that said "measured" — a
+    // claim about another team's peer, frozen here and asserted by our own tests.
+    contextAvailable: () => recorder.contextObserved(),
   };
 }

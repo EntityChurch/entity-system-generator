@@ -6,6 +6,91 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**The requirement map exists, and the answer it gives is an assignment of work rather than a
+score.** `tools/req-coverage.py` joins two inventories that both already existed — each
+extension spec's own conformance section (`EXTENSION-HISTORY` §9.1, `EXTENSION-CONTENT`
+§11.1–§11.4) and the executed check set in the oracle's own JSON reports — through a mapping
+declared per row in `EXTENSION.toml [conformance]`. Run it; do not quote this table:
+
+```
+$ ./tools/req-coverage.py
+    level         total  oracle  partial  ours  none
+    MUST             14       0        6     1     7
+    SHOULD           10       0        5     1     4
+```
+
+**Two extensions, 38 declared requirements, 24 of them binding: zero fully measured by the
+oracle, 11 partial, 2 by our own cross-port gates, 11 by nothing.** That is not an indictment
+of the oracle and must not be published as one — several of these rows have no wire form at
+all, and both specs carry the *"stored in the content store, not the entity tree"* clause with
+the identical absence, which makes it a property of the corpus rather than an oversight. **The
+product is the assignment**: which rows a wire client could reach and does not, which need a
+different instrument, and which are MAY and need none.
+
+**`partial` is the column that matters.** A row with an oracle check *and* a declared gap is
+never counted as covered, because *"a check is named after this requirement"* and *"this
+requirement is measured"* are two sentences. Four of the thirteen `content` checks **pass in
+the bare arm** — a peer with no content extension installed at all, on all three targets — so
+they measure the oracle's own in-process library, and the report says `self_checks: 0`. That is
+a check name read as a check (AP-19), caught by execution rather than by reading.
+
+**Three packets routed, all from this repo's own build:** `G-4/G-5/G-6` to `entity-core-go`
+(the four unlabelled self-checks; two HISTORY MUSTs and five CONTENT MUSTs with no check
+anywhere in a 764-check corpus; and the ask for a `-list-checks`, so a *declared* check set
+exists as data alongside the executed one). A structural packet to arch: the conformance
+inventory has **two shapes in two specs and no stable row ids**, so nothing can cite a
+requirement and every consumer writes its own parser. And one to keystone: H8's execution
+context omits `capability`, which `SYSTEM-COMPOSITION` §1.4 declares and `EXTENSION-HISTORY`
+§5.1 tells the extension to record *"without interpretation — it does not select between
+caller capability and handler grant."*
+
+**That last one arrived as a live FAIL of ours, not as a reading.** `history/w6_caller_cap_absent`
+went `PASS → FAIL` on `typescript` and `python` during the §9.1 work and **every gate reported
+green** — because the bare arm has always failed it, so `bare FAIL vs composed FAIL` reads as
+*no difference* rather than as the improvement we lost. **A differential gate whose only
+baseline is the other arm is structurally blind to "we stopped doing something we used to
+do"** (AP-18). Not patched: inverting our precedence turns the check green and is still the
+interpretation §5.1 forbids, decided by us, on a seam question that is not ours.
+
+---
+
+**§9.1 is satisfied, on all three ports, measured.** It was this extension's headline
+unsatisfied MUST since 2026-09-06 — *no port records a real `author` or `capability`,
+because no peer delivers an execution context.* Keystone landed H8 on all three peers;
+all three ports now consume it, and the composed hosts report it after the traffic rather
+than before:
+
+```
+python      COMPOSED-FINAL context_available=yes contexts=9  fallbacks=30 observed=51 recorded=12
+typescript  COMPOSED-FINAL context_available=yes contexts=9  fallbacks=29 observed=50 recorded=12
+rust        COMPOSED-FINAL context_available=yes contexts=1  fallbacks=14 observed=18 recorded=3
+```
+
+0 core regressions, 6 improvements, 0 flaky on both targets measured.
+
+**And the oracle cannot tell.** Its four `context_*` checks are `IsZero()` / `== ""` —
+presence, not provenance. They passed identically before and after, so the behaviour they
+exist to verify changed completely and the score did not move. A peer that attributes every
+remote caller's write to itself scores the same as one that carries real provenance. Routed
+as `ROUTING-2026-09-07-b-core-go-*`; the oracle already holds the ground truth, because it
+is the caller.
+
+**The value that said `measured` was a constant.** `context_available` was a hardcoded
+`false` in all three ports, commented "measured", and **asserted by all three test suites** —
+a claim about another team's peer, frozen in our source and checked by our own checks. When
+the substrate moved, nothing could notice. It is now observed at runtime and three-valued:
+`unknown` before any event, then `yes` or **`not-observed`** — never `"no"`, because "no" is
+a claim about the peer and what the counter knows is a fact about these events. That
+conflation is the one the boolean was making.
+
+**One tripwire fired as designed.** The python and typescript recorder tests asserted the
+fallback path with a docstring reading *"if this ever fails because fallbackContexts is 0,
+the peer started supplying a context… that is the good failure, and it is why this is
+asserted rather than commented."* It failed. Writing an assertion whose failure you have
+described in advance is the cheapest early warning here.
+
+---
+
 **Latest: the cost model exists, and it says the refactor we were deferring is not the
 expensive one.** `tools/scale-report.py` classifies every tracked path by what it
 multiplies by — 1, E, E's contracts, T's targets, or E·T — because in this layout a file's

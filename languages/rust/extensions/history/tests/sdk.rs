@@ -133,9 +133,15 @@ fn the_installation_reports_both_things_this_peer_cannot_supply() {
             local_peer: peer.local_peer.clone(),
         },
     );
-    assert!(
-        !install.context_available,
-        "the peer's TreeChangeEvent has four fields and none is a context"
+    // WAS: `assert!(!install.context_available, "the peer's TreeChangeEvent has four
+    // fields and none is a context")`. That sentence became false on 2026-09-07 when
+    // keystone landed H8 (`dc5a458`) and the event gained a fifth field -- and the
+    // assertion kept passing, because the value it read was a constant WE wrote about
+    // THEIR peer. Now observed: nothing seen yet, so nothing claimed.
+    assert_eq!(
+        install.context_available(),
+        "unknown",
+        "no event has been observed yet, so the peer's behaviour is not yet known"
     );
     assert!(
         !install.handler_grant_available,

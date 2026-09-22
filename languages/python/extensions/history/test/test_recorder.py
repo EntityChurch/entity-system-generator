@@ -114,21 +114,32 @@ def test_author_capability_and_timestamp_are_present(rig):
     assert (t.uint("timestamp") or 0) > 0
 
 
-def test_the_provenance_of_that_author_and_capability_is_fallback(rig):
-    """THE MOST IMPORTANT ASSERTION IN THIS FILE.
+def test_an_autonomous_write_records_the_autonomous_reading(rig):
+    """THE MOST IMPORTANT ASSERTION IN THIS FILE — and it has already done its job once.
 
-    The test above passes on presence and would keep passing if the values were
-    meaningless — which today they are. `python`'s ``TreeEvent`` has no context field at
-    all, so ``author`` is the local peer and ``capability`` is our own grant on EVERY
-    write, including one that arrived from a remote caller.
+    **It was written as a tripwire and the tripwire fired.** Its previous form asserted
+    ``context_available is False`` and said, in its own docstring: *"if this ever fails
+    because fallback_contexts is 0, the peer started supplying a context... that is the
+    good failure, and it is why this is asserted rather than commented."* On 2026-09-07
+    keystone landed H8, and it failed. Writing an assertion whose failure you have
+    described in advance is the cheapest early-warning this repo has, and it is worth
+    more than the assertion itself.
 
-    If this ever fails because ``fallback_contexts`` is 0, the peer started supplying a
-    context and the four oracle ``context_*`` checks became meaningful. That is the good
-    failure, and it is why this is asserted rather than commented.
+    **What it asserts now is narrower and true.** ``rig`` drives a bare ``store.bind`` —
+    no dispatch above it, so no execution context — and §2.1 defines that case exactly:
+    author is the local peer's identity hash, capability is the handler grant. So this is
+    the AUTONOMOUS control, and it stays valuable for the opposite reason it used to: it
+    is what must keep passing once the context path works, or the recorder has started
+    inventing provenance for writes that genuinely have none.
+
+    ``context_available`` reads ``"not-observed"`` here, NOT ``"no"``: these events carried
+    no context, which is a fact about these events and not about the peer. The wire-driven
+    counterpart is the composition's job, not this rig's.
     """
     rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
     stats = rig.install.recorder.stats
-    assert rig.install.context_available is False
+    assert rig.install.context_available == "not-observed"
+    assert stats.context_contexts == 0
     assert stats.recorded > 0
     assert stats.fallback_contexts == stats.observed - stats.skipped_self_guard
     assert stats.fallback_contexts > 0

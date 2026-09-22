@@ -31,6 +31,34 @@ from .types import CONFIG, CONFIG_PREFIX, HISTORY_PATTERN
 AUTONOMOUS_FALLBACK = "autonomous-fallback"
 
 
+def exec_context_fields(context) -> dict | None:
+    """The peer's `ExecContext` -> the carried-field dict `build_context` reads.
+
+    A BOUNDARY FUNCTION, deliberately, and this is the same split the `typescript` port
+    already had: the recorder speaks one vocabulary and each port converts into it once.
+    The peer's slot names are the §1.4 RESERVED names and are identical across the three
+    peers; what differs is the container (a frozen dataclass here, a struct on `rust`, an
+    object on `typescript`), which is exactly the kind of difference that belongs at a
+    boundary rather than threaded through shared logic.
+
+    §6.8a: "every one of them is read from the wire rather than synthesized -- a slot the
+    request did not carry stays None." So an absent slot stays absent here; it is never
+    defaulted to a local value, because a synthesized `author` is the forgery §9.1 exists
+    to prevent.
+    """
+    if context is None:
+        return None
+    return {
+        "author": getattr(context, "author", None),
+        "caller_capability": getattr(context, "caller_capability", None),
+        "handler_grant": getattr(context, "handler_grant", None),
+        "handler_pattern": getattr(context, "handler_pattern", None),
+        "operation": getattr(context, "operation", None),
+        "chain_id": getattr(context, "chain_id", None),
+        "parent_chain_id": getattr(context, "parent_chain_id", None),
+    }
+
+
 def build_context(
     identity: RecorderIdentity,
     operation: str,
@@ -88,6 +116,11 @@ class RecorderStats:
     skipped_self_guard: int = 0
     skipped_unconfigured: int = 0
     fallback_contexts: int = 0
+    #: Events whose carried context supplied an author. The counterpart of
+    #: ``fallback_contexts``; together they are the evidence behind
+    #: ``context_observed()``, and they are counted rather than inferred so the
+    #: composition can print the quantity beside the verdict.
+    context_contexts: int = 0
 
 
 class HistoryRecorder:
@@ -107,6 +140,29 @@ class HistoryRecorder:
         self.stats = RecorderStats()
         self.recorded_transitions: list[RecordedTransition] = []
 
+    def context_observed(self) -> str:
+        """``"unknown"`` | ``"yes"`` | ``"not-observed"`` -- what this recorder has SEEN.
+
+        **``"not-observed"``, never ``"no"``, and the name is the whole correction.**
+        "No" is a claim about the PEER; what this counter knows is a fact about THESE
+        EVENTS. A composition driven only by autonomous writes -- a bare ``store.bind``,
+        the peer's own bootstrap -- legitimately sees zero contexts on a peer that
+        delivers them perfectly. Collapsing those two into one word is precisely the
+        conflation the hardcoded ``False`` was making, and renaming it away is most of
+        the fix.
+
+        Before any event arrives the peer's behaviour is genuinely unknown, and
+        collapsing that to a boolean is how a hardcoded ``False`` survived a substrate
+        change: it was indistinguishable from a real measurement. D13's rule, applied to
+        our own struct instead of only to other people's peers -- a capability claim
+        cites an executed observation, or it reads ``unknown``.
+        """
+        if self.stats.context_contexts:
+            return "yes"
+        if self.stats.observed:
+            return "not-observed"
+        return "unknown"
+
     def on_tree_change(self, ev) -> None:
         self.stats.observed += 1
 
@@ -114,9 +170,23 @@ class HistoryRecorder:
             self.stats.skipped_self_guard += 1
             return
 
-        ctx = build_context(self.identity, "put", "system/tree", None)
+        # H8 LANDED 2026-09-07. This argument was a hardcoded `None` because the peer's
+        # TreeEvent had no context slot at all -- which meant every transition this
+        # recorder ever wrote took the autonomous reading and attributed a remote
+        # caller's write to the local peer. Routed as H8; keystone landed it on all three
+        # peers, and §9.1's MUST on `author`/`capability` becomes satisfiable here for
+        # the first time.
+        #
+        # `getattr`, not `ev.context`: the field is DEFAULTED on the peer so an existing
+        # consumer keeps working, and a cell compiled against an older peer would
+        # otherwise raise instead of falling back. The fallback is still correct -- it is
+        # §2.1's autonomous reading -- and `provenance` still records which one was taken.
+        ctx = build_context(self.identity, "put", "system/tree",
+                            exec_context_fields(getattr(ev, "context", None)))
         if ctx.provenance == AUTONOMOUS_FALLBACK:
             self.stats.fallback_contexts += 1
+        else:
+            self.stats.context_contexts += 1
 
         # `python`'s TreeEvent carries hashes as HEX STRINGS ("" for absent), where
         # `typescript` carries `Uint8Array | null`. Converted at the boundary rather than

@@ -115,6 +115,13 @@ export interface RecorderStats {
   readonly skippedSelfGuard: number;
   readonly skippedUnconfigured: number;
   readonly fallbackContexts: number;
+  /**
+   * Events whose carried context supplied an author. The counterpart of
+   * {@link fallbackContexts}; together they are the evidence behind
+   * `contextObserved()`, counted rather than inferred so the composition can print the
+   * quantity beside the verdict.
+   */
+  readonly contextContexts: number;
 }
 
 /**
@@ -136,6 +143,7 @@ export class HistoryRecorder implements EmitConsumer {
   #skippedSelfGuard = 0;
   #skippedUnconfigured = 0;
   #fallbackContexts = 0;
+  #contextContexts = 0;
 
   readonly #tree: EntityTree;
   readonly #store: Peer["contentStore"];
@@ -172,6 +180,8 @@ export class HistoryRecorder implements EmitConsumer {
     const ctx = buildContext(this.#identity, "put", "system/tree", ev.context);
     if (ctx.provenance === AUTONOMOUS_FALLBACK) {
       this.#fallbackContexts += 1;
+    } else {
+      this.#contextContexts += 1;
     }
 
     const recorded = recordTransition(
@@ -190,6 +200,27 @@ export class HistoryRecorder implements EmitConsumer {
     this.#last.push(recorded);
   }
 
+  /**
+   * `"unknown"` | `"yes"` | `"not-observed"` — what this recorder has SEEN.
+   *
+   * **`"not-observed"`, never `"no"`, and the name is the whole correction.** "No" is a
+   * claim about the PEER; what this counter knows is a fact about THESE EVENTS. A
+   * composition driven only by autonomous writes legitimately sees zero contexts on a
+   * peer that delivers them perfectly.
+   *
+   * This replaced a hardcoded `contextAvailable: false` carrying the comment "measured":
+   * a claim about ANOTHER TEAM'S PEER, frozen in our source and asserted by our own
+   * tests. When keystone landed H8 the peers began delivering a context and all three
+   * ports went on reporting `false`. Nothing could have noticed — we wrote the value and
+   * we wrote the check. D13 already forbids the shape; it had been applied to every claim
+   * about a peer except the one we stored in our own struct.
+   */
+  contextObserved(): "unknown" | "yes" | "not-observed" {
+    if (this.#contextContexts > 0) return "yes";
+    if (this.#observed > 0) return "not-observed";
+    return "unknown";
+  }
+
   get stats(): RecorderStats {
     return {
       observed: this.#observed,
@@ -197,6 +228,7 @@ export class HistoryRecorder implements EmitConsumer {
       skippedSelfGuard: this.#skippedSelfGuard,
       skippedUnconfigured: this.#skippedUnconfigured,
       fallbackContexts: this.#fallbackContexts,
+      contextContexts: this.#contextContexts,
     };
   }
 
