@@ -30,22 +30,30 @@ test("§3.4: no public export reassembles content", () => {
   );
 });
 
-test("§3.4: the only reassembly route requires a HandlerContext", () => {
+test("§3.4: the only reassembly route takes a context AND a target", () => {
   assert.equal(typeof publicSurface.reassembleUnderCapability, "function");
-  // Arity is the structural half of the check: the first parameter is the context a
-  // consumer cannot manufacture. A zero/one-arg variant would mean somebody "simplified"
-  // the wrapper into the primitive the MUST forbids.
+  // Arity is the structural half of the check. It was 2 until 2026-09-16 and reading
+  // `(ctx, blobHash)` was the whole tell: **a capability check needs something to check
+  // the capability AGAINST**, and §3.4 scopes materialization to a PATH, so a wrapper
+  // with nowhere to put one could not have been checking anything. A two-arg variant now
+  // means the target was dropped; a one-arg one means somebody "simplified" the wrapper
+  // into the primitive the MUST forbids.
   assert.equal(
     publicSurface.reassembleUnderCapability.length,
-    2,
-    "reassembleUnderCapability(ctx, blobHash) — the ctx argument IS the capability check",
+    3,
+    "reassembleUnderCapability(ctx, target, blobHash) — the target is what the grant is checked against",
   );
 });
+
+// The two cases below are duck-typed ON PURPOSE and stay that way: they measure the gates
+// that fire BEFORE any capability is read, so they must keep working for a caller holding
+// nothing that resembles a dispatch. The capability decision itself needs a real context
+// and a real grant, and lives in `test/sdk.test.ts`.
 
 test("§3.4: the wrapper refuses a context from another handler's dispatch", () => {
   const foreign = { pattern: "local/files", callerCapability: {} } as never;
   assert.throws(
-    () => publicSurface.reassembleUnderCapability(foreign, new Uint8Array(33)),
+    () => publicSurface.reassembleUnderCapability(foreign, "/p/system/content/x", new Uint8Array(33)),
     /system\/content handler context/,
   );
 });
@@ -53,7 +61,7 @@ test("§3.4: the wrapper refuses a context from another handler's dispatch", () 
 test("§3.4: the wrapper refuses a context carrying no caller capability", () => {
   const uncapped = { pattern: "system/content", callerCapability: null } as never;
   assert.throws(
-    () => publicSurface.reassembleUnderCapability(uncapped, new Uint8Array(33)),
+    () => publicSurface.reassembleUnderCapability(uncapped, "/p/system/content/x", new Uint8Array(33)),
     /no caller capability/,
   );
 });

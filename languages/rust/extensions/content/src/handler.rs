@@ -26,7 +26,6 @@ use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::peer::wire;
 use entity_core_protocol::value::{Key, Value};
 
-use crate::sdk::DispatchAuthority;
 use entity_core_protocol::peer::Peer;
 
 use crate::types::{CONTENT_PATTERN, CONTENT_RESPONSE, GET_REQUEST, INGEST_REQUEST, INGEST_RESULT};
@@ -214,10 +213,11 @@ impl ContentHandler {
     // ── §6.2 get ─────────────────────────────────────────────────────────────
 
     fn get(&self, req: &HandlerRequest<'_>) -> ContentOutcome {
-        // Minted here and nowhere else. Everything past this line is inside the
-        // "trusted handler-context boundary" §3.4 names.
-        let _authority = DispatchAuthority::mint();
-
+        // The `DispatchAuthority::mint()` that stood here until 2026-09-16 is gone with the
+        // type. It was minted, dropped on the next line and read by nothing: `get` does not
+        // reassemble — §6.2 returns the blob and chunk ENTITIES and the consumer assembles —
+        // so the token's only effect was to make this line look like a boundary. §3.4's
+        // wrapper is anchored to the dispatcher's `HandlerContext` now; see `sdk.rs`.
         let hashes = match req
             .exec
             .entity_field("params")

@@ -6,6 +6,37 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**THE ONE ROUTE TO MATERIALIZED CONTENT BYTES NOW CHECKS THE CALLER'S CAPABILITY AGAINST THE PATH
+IT ASKED FOR, ON EVERY LANGUAGE WE SHIP.** The content specification forbids exposing its
+reassembly primitive to outside code without an explicit capability-checking wrapper, because
+direct access bypasses the dispatcher's authorization and hands a consumer holding a narrow grant a
+way around it. The wrapper existed in all three languages and, on all three, **checked nothing**:
+it asked to be handed a dispatch context and asked that the context carry some capability, and it
+never compared that capability to anything — because its signature had nowhere to name the thing
+being read. There is now a target path in the signature, and the answer comes from the peer's own
+path-scope predicate: the same call the request handler makes, so the two cannot drift into two
+readings of one rule.
+
+**No conformance number moved, and that is the claim rather than a footnote.** The wrapper is an
+in-process library function and the conformance suite is a network client, so nothing it measures
+can reach this code — which means the requirement could have been, and was, unsatisfied for as long
+as it existed with every instrument reporting exactly what it reports today. Each language is
+measured instead by a unit suite over real capability tokens, five refusals and a positive control,
+and each was run once with the new check **deleted** to confirm the refusals turn red and the
+control does not. The full conformance matrix was re-run afterwards and compared against its
+recorded baselines — nine compositions, all matching — to show it did not move, which is a
+different statement from showing that it did.
+
+**What is still open is stated rather than folded in.** Two of the three languages export their
+dispatch context with a public constructor, so holding one is not yet proof that the dispatcher
+authorized the caller; that half is a question for the peer generator and is filed with it. The
+third enforces it at compile time. Same rule, three substrates, two strengths — recorded per
+language and per clause instead of averaged into one verdict.
+
+---
+
+### The previous entry
+
 **EVERY COMPOSED HOST IS NOW THE PEER'S OWN HOST PLUS AN INSTALL.** Nine wiring programs across
 three languages — `typescript`, `python`, `rust` — used to carry a hand copy of the peer's startup
 path: a flag parser, an on-disk keypair reader, the peer construction, the readiness line and the

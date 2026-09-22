@@ -71,32 +71,71 @@ for CELLDIR in "$STAGE"/cells/*; do
   fi
 
   # ── the compile-fail arm ─────────────────────────────────────────────────
-  if [ -f "$CELLDIR/src/bin/deep_import.rs" ]; then
-    echo "test: $NAME §3.4 export boundary (a compile that must FAIL)"
-    ERR="$CARGO_TARGET_DIR/$NAME-deep-import.err"
+  #
+  # THE FIXTURE DECLARES ITS CLAIMS, ONE ERROR CODE EACH, AND THIS DRIVER ENUMERATES
+  # NOTHING (D20). A `//! CLAIMS: E0603 E0451` line names every refusal the fixture is
+  # asserting; each must appear, and an error code the fixture did NOT claim fails the
+  # arm. That is AP-42's rule -- "a compile-fail arm names each claimed error CODE, never
+  # a count" -- and it is here because `content`'s fixture grew a SECOND claim on
+  # 2026-09-16 (§3.4's anchor: a consumer cannot construct the peer's `HandlerContext`),
+  # and a single hardcoded E0603 would have passed on a fixture whose new half never
+  # compiled far enough to be refused for its own reason.
+  #
+  # ONE FIXTURE PER CLAIM, and the driver globs rather than naming `deep_import`. Two
+  # claims in one binary is what the first draft did, and `rustc` refused the whole file
+  # at name resolution -- so the second claim's error was never REACHED and the arm
+  # reported it missing. That was the gate working on its author within the hour, and the
+  # lesson generalises past this cell: a compile-fail fixture measures ONE refusal,
+  # because the compiler stops at the first phase that has something to say.
+  for FIXTURE in "$CELLDIR"/src/bin/*.rs; do
+    [ -f "$FIXTURE" ] || continue
+    FNAME="$(basename "$FIXTURE" .rs)"
+    CLAIMS="$(sed -n 's/^\/\/!\s*CLAIMS:\s*//p' "$FIXTURE" | tr -s ' \t' ' ')"
+    # A fixture with no CLAIMS header is unreadable, not clean: the arm would have
+    # nothing to require and would report the refusal of a broken build as a boundary.
+    if [ -z "$CLAIMS" ]; then
+      echo "test: $NAME REFUSING -- src/bin/$FNAME.rs has no \`//! CLAIMS:\` line." >&2
+      echo "  Name each error code this fixture asserts, e.g. \`//! CLAIMS: E0603\`." >&2
+      RC=1
+      continue
+    fi
+    echo "test: $NAME export boundary: $FNAME (a compile that must FAIL)"
+    ERR="$CARGO_TARGET_DIR/$NAME-$FNAME.err"
     if ( cd "$CELLDIR" && cargo build --offline --quiet \
-           --bin deep_import --features compile-fail-fixture ) 2>"$ERR"; then
-      echo "test: $NAME DEEP IMPORT COMPILED." >&2
-      echo "  §3.4 forbids exposing reassemble_content outside a capability-checking" >&2
-      echo "  wrapper. If \`mod internal\` gained a \`pub\`, that is the finding." >&2
+           --bin "$FNAME" --features compile-fail-fixture ) 2>"$ERR"; then
+      echo "test: $NAME FIXTURE $FNAME COMPILED." >&2
+      echo "  It asserts a refusal ($CLAIMS) and got none. Whatever boundary it names" >&2
+      echo "  has moved -- that is the finding." >&2
       RC=1
     else
-      # E0603 specifically. Any OTHER compile error means the fixture failed for a
-      # reason that has nothing to do with the boundary -- a typo, a moved symbol, a
-      # broken build -- and reading that as "the boundary holds" is the false green
-      # this arm exists to avoid.
-      if grep -q "^error\[E0603\]" "$ERR"; then
-        echo "test:   refused with E0603 (private module), as required:"
-        grep "^error\[E0603\]" "$ERR" | sed 's/^/          /'
-      else
-        echo "test: $NAME deep import failed, but NOT with E0603:" >&2
-        grep -E "^error" "$ERR" | head -5 | sed 's/^/          /' >&2
-        echo "  The fixture must fail BECAUSE the module is private. Any other error" >&2
-        echo "  means this arm measured the build, not the boundary." >&2
+      # Every CLAIMED code must be present, and no UNCLAIMED one may be. A fixture that
+      # failed for a reason that has nothing to do with the boundary -- a typo, a moved
+      # symbol, a broken build -- reported as "the boundary holds" is the false green
+      # this arm exists to avoid, and a claim that silently stopped being refused for its
+      # own reason is the one four-of-four survived once already.
+      SEEN="$(grep -oE '^error\[E[0-9]+\]' "$ERR" | tr -d 'error[]' | sort -u | tr '\n' ' ')"
+      MISSING=""
+      for C in $CLAIMS; do
+        case " $SEEN " in *" $C "*) : ;; *) MISSING="$MISSING $C" ;; esac
+      done
+      UNCLAIMED=""
+      for C in $SEEN; do
+        case " $CLAIMS " in *" $C "*) : ;; *) UNCLAIMED="$UNCLAIMED $C" ;; esac
+      done
+      if [ -n "$MISSING" ] || [ -n "$UNCLAIMED" ]; then
+        [ -n "$MISSING" ] && echo "test: $NAME claimed refusal(s) NOT observed:$MISSING" >&2
+        [ -n "$UNCLAIMED" ] && echo "test: $NAME refused with UNCLAIMED code(s):$UNCLAIMED" >&2
+        grep -E "^error" "$ERR" | head -8 | sed 's/^/          /' >&2
+        echo "  The fixture must fail BECAUSE of what it claims. A different error means" >&2
+        echo "  this arm measured the build, not the boundary; an extra one means a claim" >&2
+        echo "  changed cause without anyone noticing (AP-42)." >&2
         RC=1
+      else
+        echo "test:   refused with exactly its claimed code(s): $CLAIMS"
+        grep -E "^error\[E[0-9]+\]" "$ERR" | sed 's/^/          /'
       fi
     fi
-  fi
+  done
 done
 
 # Zero suites is not a clean run. The same refusal `tools/diff-arms.py` carries, for the

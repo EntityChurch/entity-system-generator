@@ -14,6 +14,7 @@
 import {
   Ecf,
   Entity,
+  Permissions,
   type ContentStore,
   type EntityTree,
   type HandlerContext,
@@ -164,31 +165,78 @@ export function descriptorMatchesAnchor(descriptor: Entity, blobHash: Uint8Array
 // ── Reassembly — the §3.4 capability-checking wrapper ────────────────────────────
 
 /**
- * The **only** public route to materialized blob bytes in this module, and the
- * "explicit capability-checking wrapper" §3.4 requires before reassembly may be
- * reachable from outside the handler body at all.
+ * The **only** public route to materialized blob bytes in this module, and §3.4's
+ * *"explicit capability-checking wrapper"* — **clause 2, on this port, since 2026-09-16.**
  *
- * **The check is weaker than this comment used to claim.** It said a `HandlerContext`
- * cannot be manufactured by a consumer. It can: the class is exported with a public
- * constructor, and this repo's own `test/handler.test.ts` builds one. What the wrapper
- * demands is a context naming this pattern and carrying SOME capability — both
- * caller-supplied — and it does not check that capability against the blob or the
- * namespace. Recorded in `EXTENSION.toml [substrate.capability_wrapper]` (corrected
- * 2026-09-12 by the cross-port review); not fixed here, because the fix is the same
- * design question on all three ports.
+ * §3.4: *"Implementations MUST NOT expose `reassemble_content` as a public substrate
+ * primitive callable from third-party / SDK / external consumer code without an explicit
+ * capability-checking wrapper — direct substrate access bypasses the dispatcher cap
+ * discipline and creates a capability-escalation surface for consumers holding non-root
+ * caps."* That sentence has two halves and this port now satisfies one of them.
  *
- * The two assertions below are defence-in-depth against the one way that could be
- * false — a context from a DIFFERENT handler's dispatch being passed in, which
- * would carry a capability scoped to somebody else's pattern.
+ * **CLAUSE 2 — the capability IS checked, against a target the caller must name.** §3.4
+ * routes materialization through `system/content:get` (namespace-cap-scoped) or
+ * `local/files:read` (tree-path-cap-scoped); both are scoped to a PATH, so the wrapper
+ * cannot check anything without one, and the old signature had nowhere to put it.
+ * `target` is that path, and the check is the peer's own §6.3 predicate
+ * (`Permissions.checkPathPermission`, keystone `typescript/src/capability/permissions.ts:180`
+ * @ `a8423d2b`) — the same call the handler's §6.4 step 2 makes (`handler.ts`), so the two
+ * cannot drift into two readings of one clause. Before this, the wrapper asked only for a
+ * context naming this pattern and carrying SOME capability, both caller-supplied, and never
+ * compared that capability to anything.
+ *
+ * **CLAUSE 1 IS NOT SATISFIED HERE AND THIS COMMENT DOES NOT CLAIM IT IS.** `HandlerContext`
+ * is exported with a public constructor and this repo's own `test/handler.test.ts` builds
+ * one, so holding a context is not the statement *the dispatcher authorized you* that it is
+ * on `rust` (where the fields are `pub(crate)` and `Peer::route` is the only construction
+ * site). Routed to keystone as `K-24`; recorded in `EXTENSION.toml
+ * [substrate.capability_wrapper]` with `typescript_blocked_on = "clause 1 only"`.
+ *
+ * **What that residue costs, stated rather than implied:** a consumer who builds a context
+ * can put any capability in it, so this check binds an HONEST caller to its grant and does
+ * not bind a forging one. That is a real difference from `rust` and it is clause 1's, not
+ * this function's — but the check is still worth having, because the escalation surface
+ * §3.4 names is *a consumer holding a non-root cap*, and one of those now cannot read
+ * outside its grant by going through the SDK instead of the wire.
+ *
+ * Refuses by throwing, which is this port's existing convention here and for
+ * `createDescriptor`; `rust` returns `Err(("capability_denied", _))` because a panicking
+ * library constructor is a different contract there. A procedure difference (D17), recorded
+ * where the two ports' shapes are compared.
  */
-export function reassembleUnderCapability(ctx: HandlerContext, blobHash: Uint8Array): ReassembleResult {
+export function reassembleUnderCapability(
+  ctx: HandlerContext,
+  target: string,
+  blobHash: Uint8Array,
+): ReassembleResult {
+  // The context is caller-constructible here, but it is still not necessarily OURS: a body
+  // installed at another pattern holds one too, and §3.4's grant discipline is per handler.
+  // On the dispatch path the pattern is set from the resolved handler, never by the caller.
   if (ctx.pattern !== CONTENT_PATTERN) {
     throw new Error(
       `CONTENT §3.4: reassembly requires a ${CONTENT_PATTERN} handler context; got '${ctx.pattern}'`,
     );
   }
-  if (ctx.callerCapability === null) {
+  // FAIL CLOSED on an absent capability. On the dispatch path a request with no caller
+  // capability is refused `403 capability_denied` before a context exists, so here `null`
+  // is not "a call without a token" — it is a state the peer says cannot exist, and turning
+  // an impossible state into an unchecked one is how the escalation surface gets built.
+  const capability = ctx.callerCapability;
+  if (capability === null) {
     throw new Error("CONTENT §3.4: reassembly requires a cap-checked dispatch; context carries no caller capability");
+  }
+  if (
+    !Permissions.checkPathPermission(
+      ctx.operation,
+      target,
+      capability,
+      CONTENT_PATTERN,
+      ctx.peer.localPeerId,
+    )
+  ) {
+    throw new Error(
+      `CONTENT §3.4: capability does not cover ${ctx.operation} on '${target}' (§6.3 path scope)`,
+    );
   }
   return reassembleContent(ctx.peer.contentStore, blobHash);
 }

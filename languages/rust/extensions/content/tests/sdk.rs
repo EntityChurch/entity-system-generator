@@ -10,6 +10,7 @@ use entity_content::{
     create_blob_fixed, create_descriptor, descriptor_matches_anchor, descriptor_path,
     ensure_closure, hash_hex_with_format, store_blob, ClosureVerdict, DESCRIPTOR,
 };
+use entity_core_protocol::peer::handler::HandlerContext;
 use entity_core_protocol::peer::model::Entity;
 use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::value::{Key, Value};
@@ -154,23 +155,37 @@ fn the_descriptor_path_is_dual_level_and_both_levels_carry_the_format_byte() {
 // ── §3.4 — the positive half of the export-surface check ─────────────────────
 
 #[test]
-fn the_only_public_route_to_bytes_demands_an_unforgeable_authority() {
+fn the_only_public_route_to_bytes_demands_the_dispatchers_context_and_a_target() {
     // POSITIVE CONTROL for `src/bin/deep_import.rs`, which must FAIL to compile. If
     // this file did not compile, that failure would be indistinguishable from the
     // fixture's and the §3.4 claim would rest on a broken build (D15).
     //
-    // `DispatchAuthority` is a tuple struct with a private field and a `pub(crate)`
-    // constructor, so a consumer cannot mint one. What that proves is narrow and is
-    // written narrowly in `sdk.rs`: you came through this crate's handler. It does NOT
-    // prove the dispatcher authorized you -- on this peer the dispatcher cannot reach
-    // this crate at all.
+    // RE-ANCHORED 2026-09-16. This assertion used to name `&DispatchAuthority` — a
+    // crate-private token that was unforgeable and proved the wrong proposition: *you
+    // came through this crate's handler*, whose `handle_op` is also callable in-process.
+    // It now names `&HandlerContext`, which only the peer's dispatcher can construct
+    // (`Peer::route`, the one construction site in the peer tree) and only after §5.2's
+    // `check_permission` ALLOWs.
+    //
+    // **The `&str` in the middle is the half that was missing entirely.** §3.4 routes
+    // materialization through cap-scoped surfaces — namespace-scoped `system/content:get`
+    // or tree-path-scoped `local/files:read` — and both are scoped to a PATH. The old
+    // signature had nowhere to put one, so the wrapper could not have checked a
+    // capability against anything even if it had tried to.
+    //
+    // **And `&Store` is GONE from the signature, which is a strengthening rather than a
+    // tidy-up.** A caller who could pass any store could hand this function one the
+    // dispatcher never authorized anything against, making the check — had one existed —
+    // a check about the wrong subject. The store now comes from the context.
     //
     // The assertion is on the SIGNATURE, which is what the boundary is made of. Naming
     // the function without calling it is the whole test: it compiles only if the public
-    // surface is what we claim.
+    // surface is what we claim. The DECISION behind it is measured in both directions in
+    // `src/sdk.rs`'s `authorization_tests`, which is a unit module because this file —
+    // being a third party, correctly — cannot construct a context to drive it with.
     let f: fn(
-        &entity_content::DispatchAuthority,
-        &Store,
+        &HandlerContext<'_>,
+        &str,
         &[u8],
     ) -> Result<Vec<u8>, (&'static str, Vec<u8>)> = entity_content::reassemble_under_capability;
     let _ = f;

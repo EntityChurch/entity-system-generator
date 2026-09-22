@@ -52,3 +52,11 @@ compile-fail-fixture = []
 name = "deep_import"
 path = "src/bin/deep_import.rs"
 required-features = ["compile-fail-fixture"]
+
+# §3.4 clause 1's fixture. A SECOND binary rather than two claims in one, because `rustc`
+# stops at the first phase with something to say: with both in `deep_import`, name
+# resolution refused the file and the field-privacy error was never reached.
+[[bin]]
+name = "forge_context"
+path = "src/bin/forge_context.rs"
+required-features = ["compile-fail-fixture"]

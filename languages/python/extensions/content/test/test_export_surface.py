@@ -42,35 +42,70 @@ def test_reassemble_content_is_not_reachable_through_the_package():
     assert "_internal" not in entity_content.__all__
 
 
-def test_the_only_route_requires_a_dispatch_context():
-    """Arity is the structural half: the first parameter is the context a consumer cannot
-    obtain without having been dispatched to."""
+def test_the_only_route_takes_a_context_and_a_target():
+    """The signature is the structural half of the check.
+
+    `target` was not a parameter until 2026-09-16 and its absence was the whole tell: **a
+    capability check needs something to check the capability AGAINST**, and §3.4 scopes
+    materialization to a PATH, so a wrapper with nowhere to put one could not have been
+    checking anything. Losing `target` again would silently turn the check back into the
+    two caller-supplied assertions it used to be.
+    """
     import inspect
 
     params = list(inspect.signature(entity_content.reassemble_under_capability).parameters)
-    assert params[0] == "ctx", "reassemble_under_capability(ctx, ...) — the ctx IS the check"
+    assert params[0] == "ctx", "reassemble_under_capability(ctx, ...) — the ctx IS the anchor"
+    assert params[1] == "target", "the target is what the grant is checked against (§3.4 clause 2)"
     assert "blob_hash" in params
+
+
+# The three cases below are duck-typed ON PURPOSE and stay that way: they measure the gates
+# that fire BEFORE any capability is read, so they must keep working for a caller holding
+# nothing that resembles a dispatch. The capability decision itself needs a real context and
+# a real grant, and lives in `test_sdk.py`.
+
+TARGET = "/p/system/content/x"
+
+
+def test_the_wrapper_refuses_a_context_from_another_handlers_dispatch():
+    class Foreign:
+        handler_pattern = "local/files"
+        caller_cap = object()
+        has_cap = True
+
+    with pytest.raises(PermissionError, match="requires a system/content handler context"):
+        entity_content.reassemble_under_capability(
+            Foreign(), TARGET, b"\x00" * 33, store=object(), local_peer="p"
+        )
 
 
 def test_the_wrapper_refuses_a_context_carrying_no_caller_capability():
     class Uncapped:
+        handler_pattern = entity_content.CONTENT_PATTERN
         caller_cap = None
         has_cap = False
 
     with pytest.raises(PermissionError, match="no caller capability"):
-        entity_content.reassemble_under_capability(Uncapped(), b"\x00" * 33, store=object())
+        entity_content.reassemble_under_capability(
+            Uncapped(), TARGET, b"\x00" * 33, store=object(), local_peer="p"
+        )
 
 
-def test_the_wrapper_refuses_a_capped_context_with_no_captured_store():
-    """python's DispatchCtx carries no peer (measured), so the store must be passed. A
-    caller that forgot gets a refusal rather than a module-level singleton."""
+def test_the_wrapper_refuses_a_capped_context_with_no_captured_store_or_peer():
+    """python's DispatchCtx carries no peer (measured), so BOTH the store and the local peer
+    id must be passed. A caller that forgot either gets a refusal rather than a module-level
+    singleton — and `local_peer` joined `store` here in 2026-09-16, because the §6.3
+    predicate canonicalizes the target and the grant's scopes in that frame."""
 
     class Capped:
+        handler_pattern = entity_content.CONTENT_PATTERN
         caller_cap = object()
         has_cap = True
 
     with pytest.raises(ValueError, match="carries no peer"):
-        entity_content.reassemble_under_capability(Capped(), b"\x00" * 33)
+        entity_content.reassemble_under_capability(Capped(), TARGET, b"\x00" * 33, store=object())
+    with pytest.raises(ValueError, match="carries no peer"):
+        entity_content.reassemble_under_capability(Capped(), TARGET, b"\x00" * 33, local_peer="p")
 
 
 def test_the_boundary_is_convention_and_this_language_does_not_enforce_it():

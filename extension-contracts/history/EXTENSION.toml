@@ -256,7 +256,43 @@ note       = "§7.5 is the security clause: rollback may only restore an entity 
 
 # ── [assumptions] — where the spec did not decide, with the value we emitted ─────────────
 [assumptions]
-event_vocabulary = { value = "modified -> updated", cite = "§2.1 event table vs core §6.10", note = "THE SPEC AND THE PEER DISAGREE ON A STRING. HISTORY §2.1's event table is created/updated/deleted/accessed; the core emit pathway's TreeChangeEvent eventType is created/modified/deleted (all three peers, measured). `updated` and `modified` are the same event under two names. We map at the consumer boundary and record §2.1's spelling in the transition, because §2.1 is what the transition entity's schema says and the oracle's `chain_latest_event_updated` check reads it. Routed to arch as a naming-alignment note, NOT as a blocker." }
+transition_capability_selection = { value = "handler_grant ?? caller_capability ?? identity.handler_grant_hash -- A SELECTION §2.1 FORBIDS US TO MAKE, made because the peer does not supply the answer", cite = "§2.1 'Execution context authorization' + §5.1 W6", note = """
+**THE ONLY ENTRY IN THIS BLOCK WHERE THE SPEC DOES NOT LEAVE US A CHOICE — IT NAMES OUR ACTION AS
+THE ERROR.** Every other assumption here is a place the spec did not decide. This one is a place it
+decided against us:
+
+  §2.1 — "The `execution_context.capability` carries whichever capability authorized the specific
+  tree write, per ENTITY-CORE-PROTOCOL §6.8 write authorization. The history extension records this
+  value WITHOUT INTERPRETATION -- IT DOES NOT SELECT BETWEEN CALLER CAPABILITY AND HANDLER GRANT.
+  The handler that performed the write is responsible for providing the correct authorizing
+  capability in its execution context."
+
+Keystone's emit context carries `caller_capability` and `handler_grant` and no `capability`, so
+there is no value to record without interpretation and a recorder that writes a transition at all
+must pick one. We pick, we declare it here, and we routed the gap as `K-25`.
+
+**WHY THIS VALUE AND NOT THE OTHER ONE.** Flipping to `caller_capability ?? handler_grant` passes
+`w6_caller_cap_absent` on all three ports today -- 32/34 -> 33/34 -- and is the SAME violation of
+the SAME sentence. It would trade a wrong answer on the common case for a wrong answer on the rare
+one, with the conformance score as the only thing that improved, and it would erase the signal that
+this is unresolved. **Buying a check with a second arbitrary selection is the failure `make
+regression` exists to catch, done on purpose.** So the value is left as it is until the peer
+supplies the field.
+
+**WHAT IT COSTS, STATED RATHER THAN DISCOVERED LATER.** `w6_caller_cap_absent` FAILs on all three
+ports (`HIST-R4`). And by §2.1's reading rule -- "caller_capability present -> handler-authorized
+write in external chain" -- every caller-authorized write we record currently claims to be a
+handler-authorized write inside an externally-triggered chain. That is a semantic defect in the
+data, not only a score, and it is the same shape as `H8`.
+
+**HOW IT IS DERIVED CORRECTLY, for whoever consumes `K-25`.** `check_path_permission(operation,
+WRITE PATH, caller_cap_token, handler_pattern, local_peer)`: covers -> caller-authorized, use the
+caller's; does not cover or absent -> handler-authorized or autonomous, use the grant. That is
+`entity-core-go`'s `selectCapability` (`core/handler/handler.go` @ `3064094`), and the predicate is
+keystone's own `H9`. We cannot run it here: the emit context gives us the caller capability's HASH
+and the predicate needs the TOKEN.
+""" }
+event_vocabulary ={ value = "modified -> updated", cite = "§2.1 event table vs core §6.10", note = "THE SPEC AND THE PEER DISAGREE ON A STRING. HISTORY §2.1's event table is created/updated/deleted/accessed; the core emit pathway's TreeChangeEvent eventType is created/modified/deleted (all three peers, measured). `updated` and `modified` are the same event under two names. We map at the consumer boundary and record §2.1's spelling in the transition, because §2.1 is what the transition entity's schema says and the oracle's `chain_latest_event_updated` check reads it. Routed to arch as a naming-alignment note, NOT as a blocker." }
 default_events   = { value = ["created", "updated", "deleted"], cite = "§2.2 'Default events' + §5.1", note = "accessed is opt-in; see [substrate.accessed_event]" }
 max_walk         = { value = "query: 1000 transitions per call (DEFAULT_MAX_WALK); is_in_history: uncapped", cite = "§2.3 limit (default 50, unbounded above) + §4.3.1 walk + §4.3.2 is_in_history", note = """
 A LOCAL BOUND THE SPEC DOES NOT HAVE, DECLARED HERE BECAUSE ALL THREE PORTS CITED THIS ENTRY AND IT DID NOT EXIST
@@ -1063,9 +1099,35 @@ gap    = """The only check in this category that COMPARES rather than asserts pr
 only one measuring the negative half of the row — §5.1: when `caller_capability` would equal \
 `capability` (a caller-authorized write) it is OMITTED. The positive half — a handler-authorized \
 write inside an externally-triggered chain, where the two differ and `caller_capability` MUST be \
-recorded — is driven by nothing. **This check is FAILING on `typescript` and `python` as of \
-2026-09-07T17:41 and the failure is ours**, introduced by the §9.1 execution-context work earlier \
-the same day; see docs/status/HANDOFF-2026-09-07-c-*."""
+recorded — is driven by nothing. \
+\
+**FAILING ON ALL THREE PORTS, AND THE DIAGNOSIS CHANGED ON 2026-09-16.** This row read *"the \
+failure is ours, introduced by the §9.1 execution-context work"* from 2026-09-07 to 2026-09-16, \
+naming only `typescript` and `python`. Both halves of that were wrong. It fails on `rust` too \
+(measured, `composed-history-1.json`, all three reports, same shape), and **the cause is a peer \
+gap that §2.1 names in terms**: \
+\
+  §2.1 — *"The history extension records this value without interpretation — IT DOES NOT SELECT \
+  BETWEEN CALLER CAPABILITY AND HANDLER GRANT. The handler that performed the write is responsible \
+  for providing the correct authorizing capability in its execution context."* \
+\
+Keystone's emit context carries `caller_capability` and `handler_grant` and NOT §2.1's \
+`capability`, dropped as *"redundant with callerCapability / handlerGrant"*. It is not redundant: \
+both are present on a normal dispatch and nothing says which one authorized the write. So our \
+`build_context` selects — `handler_grant ?? caller_capability ?? identity.handler_grant_hash`, one \
+decision copied to three ports — and selecting is precisely what §2.1 forbids the extension to do. \
+The three recorders' §5.1 omission logic is CORRECT and compares by value; it never fires because \
+its two operands can never be equal. \
+\
+**Routed as `K-25`, and deliberately NOT worked around.** Flipping the preference to \
+`caller_capability ?? handler_grant` would pass this check on all three ports and is the same \
+violation of the same sentence — trading a wrong answer on the common case for a wrong answer on \
+the rare one, with the score as the only thing that improved. Deriving it properly means running \
+`check_path_permission` over the WRITE PATH (which is what `entity-core-go`'s peer does, \
+`selectCapability`, `core/handler/handler.go` @ `3064094`) and we cannot: the emit context carries \
+the caller capability's HASH, not the token the predicate needs, and keystone's own \
+`check_path_permission` docstring says the predicate was made public so an extension author would \
+NOT re-transcribe core §5.2 inside an extension. See `[assumptions].transition_capability_selection`."""
 
 [[conformance.requirement]]
 id     = "HIST-R5"

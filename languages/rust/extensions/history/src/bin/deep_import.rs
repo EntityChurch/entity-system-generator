@@ -1,5 +1,7 @@
 //! **THIS BINARY MUST FAIL TO COMPILE. The failure is the boundary measurement.**
 //!
+//! CLAIMS: E0603
+//!
 //! Behind `required-features = ["compile-fail-fixture"]`, so a normal build never
 //! touches it. `languages/rust/test` builds it once, requires the failure to be
 //! `error[E0603]` *specifically*, and runs the cell's integration tests as the positive

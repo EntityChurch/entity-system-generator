@@ -27,9 +27,17 @@ parity.** It is the same asymmetry D13 already records for this peer's own
 claim that reads the same in both languages would be wrong in one of them.
 
 §3.4 permits re-implementing the algorithm "for cases that operate inside the trusted
-handler-context boundary", which is where this is called from: ``sdk.reassemble_under_capability``,
-which takes a ``DispatchCtx`` the dispatcher builds only after ``check_permission``
-returned ALLOW.
+handler-context boundary", which is where this is called from:
+``sdk.reassemble_under_capability``.
+
+**This paragraph used to end "which takes a ``DispatchCtx`` the dispatcher builds only
+after ``check_permission`` returned ALLOW", and that was false on this port.**
+``DispatchCtx`` is a plain dataclass and any consumer can build one. The claim was
+``rust``'s, written here. What the wrapper actually enforces since 2026-09-16 is §3.4's
+clause 2 — the caller's capability is checked against a ``target`` path with the peer's own
+``check_path_permission`` — and clause 1, the unforgeable anchor, is a keystone surface
+question routed as ``K-24``. A prose claim is an undeclared assertion and it is the one
+claim in a file that nothing executes (AP-47); this one is now the weaker, true version.
 """
 
 from __future__ import annotations

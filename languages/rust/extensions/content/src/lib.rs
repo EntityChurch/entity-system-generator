@@ -51,7 +51,6 @@ use entity_core_protocol::peer::Peer;
 pub use sdk::{
     at_peer, bind_at_peer, create_descriptor, descriptor_matches_anchor, descriptor_path,
     ensure_closure, hash_hex_with_format, reassemble_under_capability, ClosureVerdict,
-    DispatchAuthority,
 };
 pub use types::{
     content_type_defs, content_type_entities, publish_content_types, ALL_TYPES, BLOB, CHUNK,

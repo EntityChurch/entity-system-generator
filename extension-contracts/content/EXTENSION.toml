@@ -348,9 +348,46 @@ capability-escalation surface for consumers holding non-root caps."
 So the module ships the algorithm as MODULE-PRIVATE. It is not exported from the module's public
 entry point in ANY language; the only public route is the SDK's `reassemble_under_capability`
 wrapper, which no handler calls today (see [substrate.capability_wrapper] for what that wrapper does
-and does not check). The export check is a test on the language's export surface, not a code
-review: see languages/typescript/extensions/content/test,
+and does not check on each port). The export check is a test on the language's export surface, not a
+code review: see languages/typescript/extensions/content/test,
 languages/python/extensions/content/test and languages/rust/extensions/content/tests.
+
+**`reached_by = []` IS AN ABSENCE OF MEASUREMENT, NOT A MEASUREMENT OF ZERO, and on this clause the
+distinction is the whole story (D23).** No conformance check reaches this wrapper on any port and
+none can: the oracle is a wire client and the wrapper is an in-process SDK function with no caller in
+this tree. So an empty `reached_by` here will stay empty however wrong the wrapper is, and the
+2026-09-16 work is the proof twice over — a MUST with a security shape was unsatisfied on BOTH of its
+clauses on ALL THREE ports, it was corrected on all three, and not one conformance check moved in
+either direction on any of them.
+
+**`measured_by`, below, is what the row owes instead** (LEDGER W-24 — the rule is that a block with
+an empty `reached_by` names what DOES measure it, or says plainly that nothing does). This is the
+worked example for the other six blocks in that state.
+"""
+measured_by = """
+NOT a conformance path. Everything here is a unit-level or compiler-level instrument, named per port
+and per clause, because the two clauses are reachable by different instruments on different ports.
+
+`rust`   clause 1 — `src/bin/forge_context.rs`, by rustc, claiming `E0451`; the diagnostic names all
+                    NINE `HandlerContext` fields private, so that LIST is the re-measurement subject.
+         clause 2 — `src/sdk.rs` `authorization_tests`, 6 cases over a `pub(crate) authorizes()`
+                    split out precisely BECAUSE the wrapper is uncallable from a test. 5 refusals +
+                    1 positive control. Control, subject stubbed to `return true`: 1 passed, 5 failed.
+`typescript` clause 1 — NOTHING MEASURES IT, and nothing can: the claim is false. `HandlerContext`
+                    has a public constructor. Stated, not hidden; routed as `K-24`.
+             clause 2 — `test/sdk.test.ts`, 5 cases over REAL `HandlerContext`s and real
+                    `CapabilityToken`s, plus 3 duck-typed cases in `test/export-surface.test.ts` for
+                    the gates that fire before any capability is read. Control, subject deleted:
+                    tests 37, pass 34, fail 3 — the three grant refusals red, positive control green.
+`python`  clause 1 — NOTHING MEASURES IT, and nothing can; `DispatchCtx` is a plain dataclass.
+                    Routed as `K-24`. `test_export_surface.py`'s last test asserts the deep import
+                    WORKS, which is this port saying so rather than claiming parity.
+          clause 2 — `test/test_sdk.py`, 5 cases over real `DispatchCtx`es and real grant tokens,
+                    plus 3 duck-typed in `test_export_surface.py`. Control, subject deleted:
+                    3 failed, 42 passed — the same split.
+
+The export boundary itself (clause 1's OTHER half, "not a public substrate primitive") is measured
+separately and on all three: see `[substrate.export_boundary]`.
 """
 
 # ── [assumptions] — open questions resolved to a value, greppable ───────────────────────
@@ -424,35 +461,119 @@ note = "The same clause, three boundaries, three strengths: a manifest, a promis
 
 [substrate.capability_wrapper]
 must = "§3.4 clause 2 -- reassembly is reachable only behind an EXPLICIT CAPABILITY-CHECKING wrapper, because direct substrate access bypasses the dispatcher cap discipline"
-typescript = "CALLER-CONSTRUCTIBLE CONTEXT, NO CAPABILITY CHECK"
-                                     # CORRECTED 2026-09-12 (cross-port review). This read
-                                     # "DISPATCHER-ANCHORED". `HandlerContext` is exported with a
-                                     # public constructor -- our own test/handler.test.ts builds
-                                     # one -- and the wrapper checks only `ctx.pattern` and that
-                                     # `callerCapability` is non-null, both caller-supplied. It
-                                     # never checks the capability against the blob or namespace.
-python     = "CALLER-CONSTRUCTIBLE CONTEXT, NO CAPABILITY CHECK"
-                                     # CORRECTED 2026-09-12. `DispatchCtx` is a plain dataclass;
-                                     # any object with `caller_cap`/`has_cap` passes, `store` is a
-                                     # free argument, the handler pattern is never checked.
-rust       = "CRATE-ANCHORED ONLY -- AND NOW THE ONLY ONE THAT IS UNFORGEABLE"
-                                     # `DispatchAuthority` (private field, pub(crate) ctor) proves
-                                     # "you came through this crate's handler", not "the dispatcher
-                                     # authorized you". Until keystone's H1 (2026-09-12) there was
-                                     # no dispatcher-built value to demand. THERE IS NOW:
-                                     # `HandlerContext` has pub(crate) fields and one construction
-                                     # site, `Peer::route`, after `check_permission`. Re-anchoring:
-                                     # take `&HandlerContext`, require `ctx.pattern() ==
-                                     # CONTENT_PATTERN`, call `check_path_permission` against
-                                     # `ctx.caller_capability()`. OPEN -- see the handoff.
+typescript = "CALLER-CONSTRUCTIBLE CONTEXT, CAPABILITY-CHECKED -- CLAUSE 2 ONLY, 2026-09-16"
+                                     # CLAUSE 2 LANDED. `reassembleUnderCapability(ctx, target,
+                                     # blobHash)` runs the peer's own `Permissions.checkPathPermission`
+                                     # against `ctx.callerCapability`, `ctx.operation` and a `target`
+                                     # the caller must name -- the same call the handler's §6.4 step 2
+                                     # makes, so the two cannot drift into two readings of one clause.
+                                     # CLAUSE 1 STILL FAILS AND THE VERDICT SAYS SO FIRST:
+                                     # `HandlerContext` is exported with a public constructor -- our
+                                     # own test/handler.test.ts builds one -- so holding one is not
+                                     # the statement "the dispatcher authorized you". Routed as K-24.
+                                     # MEASURED, and it is the inverse of `rust`'s arrangement: the
+                                     # wrapper itself is directly callable from a test here, so there
+                                     # was no reason to split the decision out. 5 cases in
+                                     # `test/sdk.test.ts` over REAL `HandlerContext`s and real
+                                     # `CapabilityToken`s (wrong path / wrong op / wrong handler scope
+                                     # / another handler's context, plus a positive control), and 3
+                                     # duck-typed cases in `test/export-surface.test.ts` for the gates
+                                     # that fire before any capability is read.
+                                     # CONTROL, subject removed (the checkPathPermission branch
+                                     # deleted): tests 37, pass 34, fail 3 -- the three grant refusals
+                                     # red, the positive control and the pattern gate GREEN.
+                                     # WAS, until 2026-09-16: "NO CAPABILITY CHECK" -- the wrapper
+                                     # asked only for a context naming this pattern and carrying SOME
+                                     # capability, both caller-supplied, and compared it to nothing.
+python     = "CALLER-CONSTRUCTIBLE CONTEXT, CAPABILITY-CHECKED -- CLAUSE 2 ONLY, 2026-09-16"
+                                     # Same design, same day. `reassemble_under_capability(ctx, target,
+                                     # blob_hash, *, store, local_peer)` runs `check_path_permission`
+                                     # against `ctx.caller_cap`, the EXECUTE's operation and `target`;
+                                     # `handler_pattern` is now checked too, which it never was.
+                                     # CLAUSE 1 STILL FAILS: `DispatchCtx` is a plain dataclass, any
+                                     # object with the right attributes passes. Routed as K-24.
+                                     # AND ONE RESIDUE THIS PORT HAS THAT `typescript` DOES NOT:
+                                     # `local_peer` is a free argument, because `DispatchCtx` carries
+                                     # no peer (measured, probe-seam.py), so it joins `store` as
+                                     # registration-time capture. It is the frame the predicate
+                                     # canonicalizes both the target and the grant's scopes in, so a
+                                     # caller passing a different one asks a different question. That
+                                     # residue is bounded by clause 1 and is the same size as it -- a
+                                     # caller who can build the context can already put any capability
+                                     # in it -- so it closes with K-24 and not before.
+                                     # MEASURED: 5 cases in `test/test_sdk.py` over real `DispatchCtx`es
+                                     # and real grant tokens, 3 duck-typed in `test_export_surface.py`.
+                                     # CONTROL, subject removed: 3 failed, 42 passed -- the same three
+                                     # grant refusals red, positive control and pattern gate GREEN.
+rust       = "DISPATCHER-ANCHORED AND CAPABILITY-CHECKED -- BOTH CLAUSES, 2026-09-16"
+                                     # RE-ANCHORED. `reassemble_under_capability` takes
+                                     # `&HandlerContext`, requires `pattern == system/content`, and
+                                     # runs the peer's own `check_path_permission` against
+                                     # `caller_capability()` and a `target` the caller must name;
+                                     # `&Store` is GONE from the signature and read off the context.
+                                     # `DispatchAuthority` is deleted -- it was unforgeable and
+                                     # proved "you came through this crate's handler", which
+                                     # `handle_op` also satisfies in-process.
+                                     # ANCHOR, by rustc: src/bin/forge_context.rs claims E0451 and
+                                     # gets it, naming all NINE fields of `HandlerContext` private
+                                     # in one diagnostic -- `peer`, `envelope`, `execute`,
+                                     # `pattern`, `suffix`, `caller_capability`, `handler_grant`,
+                                     # `conn`, `depth`. A field opening up changes that LIST without
+                                     # changing the code, so the list is the re-measurement subject.
+                                     # CHECK, by execution: 6 unit tests over `sdk::authorizes`,
+                                     # five refusals (wrong path / wrong op / wrong handler scope /
+                                     # absent capability / another handler's context) and one
+                                     # positive control, against hand-built grant tokens.
+                                     # NOT measured on the wire and it cannot be: nothing in this
+                                     # tree calls the wrapper and the oracle is a wire client, so
+                                     # the conformance numbers did NOT move -- re-run and compared,
+                                     # which is a different claim from showing that they did.
+typescript_blocked_on = "clause 1 only"
+python_blocked_on     = "clause 1 only"
+                                     # ADDED 2026-09-16, and it corrects what this block implied.
+                                     # `LEDGER W-1` read "rust: nothing. ts/python: an unforgeable
+                                     # context is a keystone surface", which reads as both ports
+                                     # being blocked outright. Only the ANCHOR is. `H9`'s predicate
+                                     # is exported on all three peers -- `check_path_permission`
+                                     # (python `peer/capability.py:709`), `checkPathPermission`
+                                     # (typescript `capability/permissions.ts:180`), both @ keystone
+                                     # `a8423d2b` -- so clause 2, which is the half §3.4 actually
+                                     # MUSTs, is implementable on those ports today. DONE the same
+                                     # day, on both, and these keys are now the whole of what is
+                                     # open: the ANCHOR, and nothing else.
 note = """
+**CLAUSE 2 NOW HOLDS ON ALL THREE PORTS (2026-09-16). CLAUSE 1 HOLDS ON `rust` ONLY, and the other
+two are blocked on `K-24` and on nothing else.**
+
+**THE TWO CLAUSES ARE MEASURED BY DIFFERENT INSTRUMENTS ON DIFFERENT PORTS, AND THE PATTERN IS AN
+INVERSION RATHER THAN A GAP.** On `rust` the wrapper cannot be called from a test at all -- a
+consumer cannot construct a `HandlerContext`, which IS clause 1 -- so the DECISION had to be split
+out as a `pub(crate) authorizes()` to be measured, and the anchor is measured by `rustc`. On
+`typescript` and `python` the context is caller-constructible -- which IS clause 1's failure -- so
+the wrapper itself is directly reachable and clause 2 is measured end to end, no split needed.
+**The port that is weaker on clause 1 is the port on which clause 2 is testable through the real
+entry point**, and neither is a choice any port made. A single "how is this measured" column would
+have had to pick one and be wrong about the other two.
+
 **This row's verdict inverted on 2026-09-12, and the old note's framing was wrong.** It said the two
 §3.4 clauses invert between substrates (typescript/python strongest on the anchor, rust weakest) and
 "both rows are right". The review found the typescript and python contexts are constructible by any
-caller, so on the ANCHOR clause rust's crate-private token is the only unforgeable one of three, and
-on the CHECK clause no port checks the capability at all. The fix is one design (demand a
-dispatcher-built context AND check the capability against the target) applied three times; rust is
-the only peer where the first half is available today.
+caller, so on the ANCHOR clause rust's crate-private token was the only unforgeable one of three, and
+on the CHECK clause no port checked the capability at all.
+
+**What the rust port taught, and it is a correction to our own ledger rather than a substrate fact.**
+The fix is one design applied three times — demand a dispatcher-built context AND check the
+capability against a named target — and the two halves have DIFFERENT blockers. The anchor needs an
+unforgeable context, which is a keystone surface and is present only here. The check needs a
+path-scope predicate, and `H9` shipped one on all three peers; we had recorded that (`AP-34` is this
+seat reading its own tracker's H9 row too late) and then wrote a ledger row that reads as though both
+halves were blocked. **A blocker on one clause was carried as a blocker on the requirement.**
+
+**The old signature could not have checked a capability even if it had tried.** It took
+`(&DispatchAuthority, &Store, &[u8])` — no path, and §3.4 routes materialization through
+`system/content:get` (namespace-cap-scoped) or `local/files:read` (tree-path-cap-scoped), both scoped
+to a PATH. There was nowhere to put the subject. That is worth keeping: the missing check was
+visible in the TYPE, and nothing in this tree reads a signature for what it cannot express.
 """
 
 # ── [substrate.faces] — the row the third port added, and the one that reframes the tier ──
@@ -564,9 +685,12 @@ reason = "the budget's PROVENANCE carried in a type (CONTENT Am. 1). Since keyst
 ports  = ["rust"]
 reason = "public only because FrameBudget's unit test needs it. Candidate for demotion to private; recorded rather than left as an accident."
 
-[sdk_surface.substrate."type:dispatch_authority"]
-ports  = ["rust"]
-reason = "§3.4 clause 2. The other two ports demand the peer's dispatch context, which the dispatcher builds after `check_permission` ALLOWs. This port anchored the wrapper to an unforgeable crate-local token because no such value existed; since keystone H1 a `HandlerContext` does, and re-anchoring `reassemble_under_capability` to it is OPEN — the token is still materially weaker, recorded in [substrate.capability_wrapper]."
+# `type:dispatch_authority` WAS DECLARED HERE AND IS GONE (2026-09-16), with the type it named.
+# Its reason ended "re-anchoring `reassemble_under_capability` to it is OPEN"; that is now done, the
+# wrapper takes the peer's `&HandlerContext`, and there is no rust-only name left to excuse. The
+# block is deleted rather than emptied: a substrate declaration for a name no port exports is a
+# claim about a surface that does not exist, and it is the first thing a future reader would consult.
+# What replaced it is not a name at all — the anchor is the PEER's type, which no port re-exports.
 
 # Class 3 — DRIFT. Measured, unresolved, and NOT blessed. `--strict-drift` turns every one
 # of these into an error; the flag is off today so the gate is honest on the day it was

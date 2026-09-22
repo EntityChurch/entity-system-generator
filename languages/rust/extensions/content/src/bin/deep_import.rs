@@ -1,5 +1,14 @@
 //! **THIS BINARY MUST FAIL TO COMPILE. The failure is the §3.4 measurement.**
 //!
+//! CLAIMS: E0603
+//!
+//! **This fixture carries §3.4's clause-2 claim only: the algorithm is not reachable.**
+//! Clause 1 — the wrapper's anchor cannot be manufactured — is `forge_context.rs` beside
+//! this file, and the split is not tidiness. Both claims lived here for one build, and
+//! `rustc` refused the file at NAME RESOLUTION, so the second claim's error was never
+//! reached and the driver reported it missing. A compile-fail fixture measures ONE
+//! refusal, because the compiler stops at the first phase that has something to say.
+//!
 //! Behind `required-features = ["compile-fail-fixture"]`, so a normal build never
 //! touches it. `languages/rust/test` builds it once, requires the failure, and runs
 //! `tests/export_surface.rs` as the positive control in the same invocation.
