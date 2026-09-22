@@ -6,6 +6,34 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**The outbox is machine-routable, and it had not been. `unaddressed 11 → 0`.** Cross-repo
+delivery here is: commit a document to your own tree and the other party reads it. The shape that
+makes that mechanical is pinned in `AGENTS-STANDARD.md` §*Routing packets* — a three-field
+addressee block opening the document — and its enforcement point is the receiving seat's
+instrument. **Both existed; nothing here had ever run one against us.** Eleven of our
+twenty-two packets named their recipient only in the H1 and in prose, so they were filed as
+UNADDRESSED, which is UNKNOWN and is never *"not ours."* All twenty-two now carry the block; not
+one word of any finding was changed. The backfill moved one packet from UNKNOWN onto the
+receiving seat's actual worklist, so **the owed count went up, correctly** — a number that gets
+worse when a defect is fixed is the number that was lying.
+
+**And there is now one tracker per counterpart**, on `entity-system-architecture`'s cleanup
+standard of the same day: `docs/status/TRACKER-<counterpart-repo>.md`, four sections, stable ask
+ids that are never renumbered. Four of them — arch, keystone, core-go, meta. **The consequence is
+larger than a file format: arch reconciles against the tracker, not against the directory**, so
+the completeness obligation moved off the filesystem and onto a document somebody has to remember
+to edit. Gated, because that is the most forgettable kind of obligation there is: every packet
+must be cited in the tracker of every repo it is addressed to, by **full stem**. That check
+failed on its first run against our own four trackers, which had used shorthand.
+
+Gated at `tools/check-routing.py` / `make routing`: block shape, field content, filename-agrees-
+with-field, and id uniqueness. Citation form is **counted and never failed** — a bare
+`ROUTING-<date>-<letter>` cannot be resolved by a reader, and the sharp case is cross-repo, where
+our own documents cited another seat's id on a day this tree also numbered. Those are fixed; the
+rest is a census, because a prose sweep over committed record should be a decision rather than a
+discovery. **D16's seventh instance and the end of its arc**: the first six were *nothing watches
+this*, and this one is *something watches this, in a tree we never run*.
+
 **Re-pinned to `EXTENSION-HISTORY` v1.10, two versions in one step, and the reason it was two is
 the finding.** v1.9 and v1.10 both landed 2026-09-08 and **nothing in this tree could notice.**
 Every pin mechanism we have — the snapshot manifest's digests, the `[extension].snapshot` key,

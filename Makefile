@@ -366,7 +366,7 @@ expectation-control:
 diff-arms-control:
 	./tools/diff-arms.py --self-test
 
-check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations glue req-coverage toolchain
+check: build test conformance regression expectation plan-check sdk-parity structure drivers error-codes citations routing glue req-coverage toolchain
 	./tools/scale-report.py --check
 
 # Every (target, composition), then the cross-target gates LAST because they need every
@@ -470,6 +470,17 @@ glue-control:
 # both to be caught. An instrument observed only passing is not an instrument.
 citations-control:
 	./tools/check-citations.py --self-test
+
+# ── the outbox gate ─────────────────────────────────────────────────────────────
+# D16's sixth instance, and a new shape of it: the only instrument that reads our outbox
+# lives in ANOTHER repo (arch's `spec inbound`), and nothing here had ever run it against
+# us. It could not route 11 of our 22 packets. An enforcement point you never execute is
+# a wish with a citation attached.
+routing:
+	./tools/check-routing.py
+
+routing-control:
+	./tools/check-routing.py --self-test
 
 # ── the host-seam probes ────────────────────────────────────────────────────────
 # D13: a capability claim cites an executed probe, or it reads `unknown`.
