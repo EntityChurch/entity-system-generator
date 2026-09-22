@@ -954,7 +954,7 @@ contacting the peer. They measure core-go's own in-memory store against §4.3's 
 which is worth measuring and is a statement about the oracle. The report says `self_checks: 0`; \
 `DeclareSelf` exists in the runner for exactly this and these are declared with `Declare`. Four \
 of thirteen `content` checks are in this class. Routed — see \
-docs/status/ROUTING-2026-09-07-c-core-go-what-the-requirement-map-found.md."""
+docs/outbox/ROUTING-2026-09-07-c-core-go-what-the-requirement-map-found.md."""
 
 [[conformance.requirement]]
 id     = "C-R13"

@@ -69,13 +69,13 @@ use entity_core_protocol::value::{Key, Value};
 
 use super::subgraph::grant_covers;
 use crate::types::{
-    APPLY, ARITHMETIC, BUILTINS_PREFIX, CLOSURE, CODE_BUDGET_EXHAUSTED, CODE_CASCADE_LIMIT,
-    CODE_CAST_OUT_OF_RANGE, CODE_COUNT_OUT_OF_RANGE, CODE_DEPTH_EXCEEDED, CODE_DIVISION_BY_ZERO,
-    CODE_INDEX_OUT_OF_RANGE, CODE_INVALID_EXPRESSION, CODE_MISSING_ARGUMENT, CODE_NOT_FOUND,
-    CODE_PERMISSION_DENIED, CODE_SCOPE_UNREACHABLE, CODE_TYPE_MISMATCH, CODE_UNKNOWN_TYPE, COMPARE,
-    CONSTRUCT, ERROR, FIELD, GROUP, IF, INDEX, LAMBDA, LENGTH, LET, LITERAL, LOGIC, LOOKUP_HASH,
-    LOOKUP_SCOPE, LOOKUP_TREE, NUMERIC_CAST, RESULT, SCOPE, is_compute_expression,
-    is_compute_type,
+    is_compute_expression, is_compute_type, APPLY, ARITHMETIC, BUILTINS_PREFIX, CLOSURE,
+    CODE_BUDGET_EXHAUSTED, CODE_CASCADE_LIMIT, CODE_CAST_OUT_OF_RANGE, CODE_COUNT_OUT_OF_RANGE,
+    CODE_DEPTH_EXCEEDED, CODE_DIVISION_BY_ZERO, CODE_INDEX_OUT_OF_RANGE, CODE_INVALID_EXPRESSION,
+    CODE_MISSING_ARGUMENT, CODE_NOT_FOUND, CODE_PERMISSION_DENIED, CODE_SCOPE_UNREACHABLE,
+    CODE_TYPE_MISMATCH, CODE_UNKNOWN_TYPE, COMPARE, CONSTRUCT, ERROR, FIELD, GROUP, IF, INDEX,
+    LAMBDA, LENGTH, LET, LITERAL, LOGIC, LOOKUP_HASH, LOOKUP_SCOPE, LOOKUP_TREE, NUMERIC_CAST,
+    RESULT, SCOPE,
 };
 
 /// The §1.2 `system/hash` wire width: one format byte plus a 32-byte digest.
@@ -444,7 +444,12 @@ fn materialized_hash(value: &Val, ctx: &EvalContext) -> Vec<u8> {
 ///
 /// The three `depth` mutations are where §4.1 puts them, including the one that is easy to miss:
 /// **the budget-exhaustion path restores the depth frame before returning**.
-pub(crate) fn evaluate(entity: &Entity, scope: &Rc<Scope>, budget: &mut Budget, ctx: &EvalContext) -> Val {
+pub(crate) fn evaluate(
+    entity: &Entity,
+    scope: &Rc<Scope>,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Val {
     if budget.depth <= 0 {
         return err(CODE_DEPTH_EXCEEDED, "Maximum evaluation depth exceeded");
     }
@@ -473,7 +478,12 @@ pub(crate) fn evaluate(entity: &Entity, scope: &Rc<Scope>, budget: &mut Budget, 
     }
 }
 
-fn evaluate_inner(entity: &Entity, scope: &Rc<Scope>, budget: &mut Budget, ctx: &EvalContext) -> Step {
+fn evaluate_inner(
+    entity: &Entity,
+    scope: &Rc<Scope>,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Step {
     match dispatch(entity, scope, budget, ctx) {
         Ok(step) => step,
         Err(malformed) => Step::Done(Val::Error(malformed)),
@@ -717,7 +727,10 @@ fn literal_value(entity: &Entity) -> Val {
     }
     match map_get_text(&entity.data, "value") {
         Some(v) => Val::Data(v.clone()),
-        None => err(CODE_INVALID_EXPRESSION, "compute/literal has no `value` field"),
+        None => err(
+            CODE_INVALID_EXPRESSION,
+            "compute/literal has no `value` field",
+        ),
     }
 }
 
@@ -726,12 +739,20 @@ fn literal_value(entity: &Entity) -> Val {
 /// §4.1's `compute/apply`. **Closure mode and the §3.5 builtins only** — handler mode needs a
 /// re-entrant local dispatch no peer exposes (K-5), and shipping half of it runs WIDER than the
 /// caller asked, because the F2 dual check only ever narrows.
-fn eval_apply(entity: &Entity, scope: &Rc<Scope>, budget: &mut Budget, ctx: &EvalContext) -> Stepped {
+fn eval_apply(
+    entity: &Entity,
+    scope: &Rc<Scope>,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Stepped {
     // §2.1 [MUST] — "either `path` or `fn`, not both and not neither". §4.1's pseudocode tests
     // `path` first and would silently take handler mode; the prose MUST is the rule, so a shape
     // carrying both is refused before either mode is entered (routed: the listing omits it).
     if entity.field("path").is_some() && entity.field("fn").is_some() {
-        return fail(CODE_INVALID_EXPRESSION, "compute/apply MUST have either path or fn, not both");
+        return fail(
+            CODE_INVALID_EXPRESSION,
+            "compute/apply MUST have either path or fn, not both",
+        );
     }
     if let Some(path) = entity.text_field("path") {
         let has_capability = entity.bytes_field("capability").is_some();
@@ -837,7 +858,10 @@ fn eval_apply_handler(
         return fail(CODE_NOT_FOUND, format!("No handler at path: {path}"));
     };
     let Some(spec) = operation_spec(&interface, operation) else {
-        return fail(CODE_INVALID_EXPRESSION, format!("Handler has no operation: {operation}"));
+        return fail(
+            CODE_INVALID_EXPRESSION,
+            format!("Handler has no operation: {operation}"),
+        );
     };
     // §2.1 SI-3 — the declared input_type.
     let (params_type, field_types) = match spec_input_type(spec) {
@@ -870,7 +894,12 @@ fn eval_apply_handler(
         let value = evaluated!(target, scope, budget, ctx);
         resource = match resource_target(&value, ctx) {
             Some(r) => Some(r),
-            None => return fail(CODE_TYPE_MISMATCH, "compute/apply resource must evaluate to a system/protocol/resource-target"),
+            None => {
+                return fail(
+                    CODE_TYPE_MISMATCH,
+                    "compute/apply resource must evaluate to a system/protocol/resource-target",
+                )
+            }
         };
     }
 
@@ -881,18 +910,45 @@ fn eval_apply_handler(
         let value = evaluated!(target, scope, budget, ctx);
         let cap = match materialize(&value, ctx) {
             Val::Entity(e) => e,
-            _ => return fail(CODE_TYPE_MISMATCH, "compute/apply capability field must resolve to an entity"),
+            _ => {
+                return fail(
+                    CODE_TYPE_MISMATCH,
+                    "compute/apply capability field must resolve to an entity",
+                )
+            }
         };
         // FAIL CLOSED: §4.1 always checks `ctx.capability`. The reference skips the ceiling when
         // its context has none; an evaluation with no ceiling to check is refused here instead.
         let Some(ceiling) = ctx.capability else {
             return fail(CODE_PERMISSION_DENIED, "compute/apply capability override with no evaluation capability to dual-check against");
         };
-        if !grant_covers(ctx.store, ctx.included, ceiling, path, Some(operation), resource.clone(), ctx.local_peer) {
-            return fail(CODE_PERMISSION_DENIED, format!("Handler grant does not cover target: {path}.{operation}"));
+        if !grant_covers(
+            ctx.store,
+            ctx.included,
+            ceiling,
+            path,
+            Some(operation),
+            resource.clone(),
+            ctx.local_peer,
+        ) {
+            return fail(
+                CODE_PERMISSION_DENIED,
+                format!("Handler grant does not cover target: {path}.{operation}"),
+            );
         }
-        if !grant_covers(ctx.store, ctx.included, &cap, path, Some(operation), resource.clone(), ctx.local_peer) {
-            return fail(CODE_PERMISSION_DENIED, format!("provided capability does not cover target: {path}.{operation}"));
+        if !grant_covers(
+            ctx.store,
+            ctx.included,
+            &cap,
+            path,
+            Some(operation),
+            resource.clone(),
+            ctx.local_peer,
+        ) {
+            return fail(
+                CODE_PERMISSION_DENIED,
+                format!("provided capability does not cover target: {path}.{operation}"),
+            );
         }
         provided = Some(cap);
     }
@@ -911,9 +967,15 @@ fn eval_apply_handler(
         // §3.2 v3.19c [normative] — a dispatch the capability blocks is `permission_denied` as a
         // VALUE at 200, not a transport error. The peer's local dispatch answers that as `403`.
         if status == 403 {
-            return fail(CODE_PERMISSION_DENIED, format!("dispatch to {path}.{operation} refused: status 403"));
+            return fail(
+                CODE_PERMISSION_DENIED,
+                format!("dispatch to {path}.{operation} refused: status 403"),
+            );
         }
-        return fail(CODE_NOT_FOUND, format!("handler dispatch failed: status {status}"));
+        return fail(
+            CODE_NOT_FOUND,
+            format!("handler dispatch failed: status {status}"),
+        );
     }
     // §2.1 SA-4 — a bare primitive return (any `primitive/*` wrapper) is re-wrapped in
     // `compute/result`; an entity-typed return, including a `compute/result`, passes through.
@@ -922,7 +984,10 @@ fn eval_apply_handler(
             RESULT,
             Value::Map(vec![
                 (Key::Text("value".into()), result.data.clone()),
-                (Key::Text("expression".into()), Value::Bytes(entity.hash.clone())),
+                (
+                    Key::Text("expression".into()),
+                    Value::Bytes(entity.hash.clone()),
+                ),
             ]),
         )));
     }
@@ -939,7 +1004,9 @@ fn resolve_handler_interface(path: &str, ctx: &EvalContext) -> Option<Entity> {
         if let Some(handler) = ctx.store.get_at(prefix) {
             if handler.typ == "system/handler" {
                 let interface = handler.text_field("interface")?;
-                return ctx.store.get_at(&canonicalize_path(interface, ctx.local_peer));
+                return ctx
+                    .store
+                    .get_at(&canonicalize_path(interface, ctx.local_peer));
             }
         }
         match canonical[..end].rfind('/') {
@@ -951,7 +1018,9 @@ fn resolve_handler_interface(path: &str, ctx: &EvalContext) -> Option<Entity> {
 
 /// The interface's `operations[operation]`, or `None` when the handler does not declare it.
 fn operation_spec<'e>(interface: &'e Entity, operation: &str) -> Option<&'e Value> {
-    let Some(Value::Map(ops)) = interface.field("operations") else { return None };
+    let Some(Value::Map(ops)) = interface.field("operations") else {
+        return None;
+    };
     ops.iter().find_map(|(k, v)| match k {
         Key::Text(name) if name == operation => Some(v),
         _ => None,
@@ -975,18 +1044,27 @@ fn input_field_types(type_name: &str, ctx: &EvalContext) -> Option<HashMap<Strin
     if type_name == "primitive/any" {
         return None;
     }
-    let def = ctx.store.get_at(&canonicalize_path(&format!("system/type/{type_name}"), ctx.local_peer))?;
+    let def = ctx.store.get_at(&canonicalize_path(
+        &format!("system/type/{type_name}"),
+        ctx.local_peer,
+    ))?;
     if def.typ != "system/type" {
         return None;
     }
-    let Some(Value::Map(fields)) = def.field("fields") else { return None };
+    let Some(Value::Map(fields)) = def.field("fields") else {
+        return None;
+    };
     let out: HashMap<String, String> = fields
         .iter()
         .filter_map(|(k, v)| match (k, v) {
-            (Key::Text(name), Value::Map(spec)) => spec.iter().find_map(|(sk, sv)| match (sk, sv) {
-                (Key::Text(f), Value::Text(t)) if f == "type_ref" => Some((name.clone(), t.clone())),
-                _ => None,
-            }),
+            (Key::Text(name), Value::Map(spec)) => {
+                spec.iter().find_map(|(sk, sv)| match (sk, sv) {
+                    (Key::Text(f), Value::Text(t)) if f == "type_ref" => {
+                        Some((name.clone(), t.clone()))
+                    }
+                    _ => None,
+                })
+            }
             _ => None,
         })
         .collect();
@@ -1030,7 +1108,13 @@ fn resource_target(value: &Val, ctx: &EvalContext) -> Option<Value> {
         _ => return None,
     };
     match &data {
-        Value::Map(pairs) if pairs.iter().any(|(k, v)| matches!((k, v), (Key::Text(t), Value::Array(_)) if t == "targets")) => Some(data),
+        Value::Map(pairs)
+            if pairs.iter().any(
+                |(k, v)| matches!((k, v), (Key::Text(t), Value::Array(_)) if t == "targets"),
+            ) =>
+        {
+            Some(data)
+        }
         _ => None,
     }
 }
@@ -1038,7 +1122,11 @@ fn resource_target(value: &Val, ctx: &EvalContext) -> Option<Value> {
 /// `compute/apply.args` in ECF canonical map key order — encoded key length, then bytes (§8.2).
 fn canonical_sorted_args(entity: &Entity) -> Vec<(String, Vec<u8>)> {
     let mut args: Vec<(String, Vec<u8>)> = arg_hashes(entity).into_iter().collect();
-    args.sort_by(|(a, _), (b, _)| a.len().cmp(&b.len()).then_with(|| a.as_bytes().cmp(b.as_bytes())));
+    args.sort_by(|(a, _), (b, _)| {
+        a.len()
+            .cmp(&b.len())
+            .then_with(|| a.as_bytes().cmp(b.as_bytes()))
+    });
     args
 }
 
@@ -1131,7 +1219,14 @@ fn eval_builtin(
             let Some(left) = args.get("left") else {
                 return err(CODE_MISSING_ARGUMENT, "builtins/logic requires `left`");
             };
-            match apply_logic(&op, left, args.get("right").map(Vec::as_slice), scope, budget, ctx) {
+            match apply_logic(
+                &op,
+                left,
+                args.get("right").map(Vec::as_slice),
+                scope,
+                budget,
+                ctx,
+            ) {
                 Ok(Step::Done(v)) => v,
                 Ok(Step::Tail(..)) => unreachable!("apply_logic never tail-calls"),
                 Err(e) => Val::Error(e),
@@ -1177,7 +1272,9 @@ fn eval_builtin(
             // accumulator, so `initial` gets no `is_error` guard. Only a halting code stops it.
             match arg_value(args, "initial", scope, budget, ctx) {
                 Val::Error(e) if is_halting_code(&e.code) => Val::Error(e),
-                Val::Error(e) => builtin_fold(&items, &closure, Val::Entity(e.to_entity()), budget, ctx),
+                Val::Error(e) => {
+                    builtin_fold(&items, &closure, Val::Entity(e.to_entity()), budget, ctx)
+                }
                 initial => builtin_fold(&items, &closure, initial, budget, ctx),
             }
         }
@@ -1226,7 +1323,10 @@ fn eval_builtin(
                 return Val::Error(as_compute_error(&idx));
             }
             let Some(raw) = val_int(&idx) else {
-                return err(CODE_TYPE_MISMATCH, "builtins/assoc requires an integer `index`");
+                return err(
+                    CODE_TYPE_MISMATCH,
+                    "builtins/assoc requires an integer `index`",
+                );
             };
             let i = to_signed64(raw);
             if i < 0 || i >= items.len() as i128 {
@@ -1278,7 +1378,10 @@ fn builtin_store(
     ctx: &EvalContext,
 ) -> Val {
     if !args.contains_key("path") || !args.contains_key("value") {
-        return err(CODE_INVALID_EXPRESSION, "builtins/store requires `path` and `value`");
+        return err(
+            CODE_INVALID_EXPRESSION,
+            "builtins/store requires `path` and `value`",
+        );
     }
     // `path` is CONSUMED — it steers where the write goes.
     let raw_path = arg_value(args, "path", scope, budget, ctx);
@@ -1329,10 +1432,15 @@ fn builtin_store(
     // stop. `Entity::make` above always produces a holding hash, so this is unreachable today;
     // it is written because `stored` comes from three branches and only one of them is
     // `Entity::make`.
-    if !ctx.store.bind_with_context(&target, &stored, ctx.exec_context.cloned()) {
+    if !ctx
+        .store
+        .bind_with_context(&target, &stored, ctx.exec_context.cloned())
+    {
         return err(
             CODE_INVALID_EXPRESSION,
-            format!("Store refused the write at {target}: the entity's hash is not its content hash"),
+            format!(
+                "Store refused the write at {target}: the entity's hash is not its content hash"
+            ),
         );
     }
     ctx.mark_encountered(&stored.hash);
@@ -1356,7 +1464,12 @@ fn builtin_map(items: &[Value], closure: &Entity, budget: &mut Budget, ctx: &Eva
     Val::Data(Value::Array(out))
 }
 
-fn builtin_filter(items: &[Value], closure: &Entity, budget: &mut Budget, ctx: &EvalContext) -> Val {
+fn builtin_filter(
+    items: &[Value],
+    closure: &Entity,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Val {
     let mut out = Vec::new();
     for item in items {
         let verdict = apply_closure_to_values(closure, vec![Val::Data(item.clone())], budget, ctx);
@@ -1381,7 +1494,8 @@ fn builtin_fold(
 ) -> Val {
     let mut acc = initial;
     for item in items {
-        let next = apply_closure_to_values(closure, vec![acc, Val::Data(item.clone())], budget, ctx);
+        let next =
+            apply_closure_to_values(closure, vec![acc, Val::Data(item.clone())], budget, ctx);
         acc = match next {
             Val::Error(e) if is_halting_code(&e.code) => return Val::Error(e),
             // The accumulator CONTAINS: passed onward as an ordinary bound value.
@@ -1392,7 +1506,12 @@ fn builtin_fold(
     acc
 }
 
-fn builtin_group_by(items: &[Value], closure: &Entity, budget: &mut Budget, ctx: &EvalContext) -> Val {
+fn builtin_group_by(
+    items: &[Value],
+    closure: &Entity,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Val {
     let mut order: Vec<Vec<u8>> = Vec::new();
     let mut members: HashMap<Vec<u8>, Vec<Value>> = HashMap::new();
     let mut keys: HashMap<Vec<u8>, Val> = HashMap::new();
@@ -1468,7 +1587,12 @@ fn key_identity(key: &Val, ctx: &EvalContext) -> Vec<u8> {
 
 /// Apply a closure to values already in hand. Uses [`evaluate`] rather than a tail call because the
 /// builtin must inspect the result, so the per-element evaluation legitimately consumes a depth frame.
-fn apply_closure_to_values(closure: &Entity, args: Vec<Val>, budget: &mut Budget, ctx: &EvalContext) -> Val {
+fn apply_closure_to_values(
+    closure: &Entity,
+    args: Vec<Val>,
+    budget: &mut Budget,
+    ctx: &EvalContext,
+) -> Val {
     let mut loaded = match load_scope(closure.bytes_field("env"), ctx) {
         Ok(s) => s,
         Err(e) => return Val::Error(e),
@@ -1549,9 +1673,12 @@ fn arg_text(
     if is_error(&v) {
         return Err(as_compute_error(&v));
     }
-    val_text(&v)
-        .map(str::to_string)
-        .ok_or_else(|| ComputeError::new(CODE_TYPE_MISMATCH, format!("builtin arg `{name}` must be text")))
+    val_text(&v).map(str::to_string).ok_or_else(|| {
+        ComputeError::new(
+            CODE_TYPE_MISMATCH,
+            format!("builtin arg `{name}` must be text"),
+        )
+    })
 }
 
 fn arg_array(
@@ -1566,7 +1693,10 @@ fn arg_array(
         return Err(as_compute_error(&v));
     }
     val_array(&v).cloned().ok_or_else(|| {
-        ComputeError::new(CODE_TYPE_MISMATCH, format!("builtin arg `{name}` must be an array"))
+        ComputeError::new(
+            CODE_TYPE_MISMATCH,
+            format!("builtin arg `{name}` must be an array"),
+        )
     })
 }
 
@@ -1585,7 +1715,10 @@ fn arg_closure(
         Val::Entity(e) if e.typ == CLOSURE => Ok(e),
         other => Err(ComputeError::new(
             CODE_TYPE_MISMATCH,
-            format!("builtin arg `{name}` must be a closure, got {}", describe(&other)),
+            format!(
+                "builtin arg `{name}` must be a closure, got {}",
+                describe(&other)
+            ),
         )),
     }
 }
@@ -1760,8 +1893,9 @@ fn load_scope(env_hash: Option<&[u8]>, ctx: &EvalContext) -> Result<Scope, Compu
 // ── resolution ────────────────────────────────────────────────────────────────────────
 
 fn resolve_or_error(hash: &[u8], ctx: &EvalContext, label: &str) -> Result<Entity, ComputeError> {
-    resolve(hash, ctx)
-        .ok_or_else(|| ComputeError::new(CODE_NOT_FOUND, format!("Cannot resolve hash for {label}")))
+    resolve(hash, ctx).ok_or_else(|| {
+        ComputeError::new(CODE_NOT_FOUND, format!("Cannot resolve hash for {label}"))
+    })
 }
 
 /// §4.2 `resolve` — included map, then content store, then the three-tier gate. The tree-scoped
@@ -1776,7 +1910,10 @@ pub(crate) fn resolve(hash: &[u8], ctx: &EvalContext) -> Option<Entity> {
 
 /// §4.2 `validate_compute_resolvable` — the three tiers. Compute is not a content-store oracle.
 fn validate_compute_resolvable(entity: Entity, hash: &[u8], ctx: &EvalContext) -> Option<Entity> {
-    if ctx.has_content_store_access || is_compute_type(&entity.typ) || ctx.authorized_data_hashes.contains(hash) {
+    if ctx.has_content_store_access
+        || is_compute_type(&entity.typ)
+        || ctx.authorized_data_hashes.contains(hash)
+    {
         return Some(entity);
     }
     None
@@ -2091,14 +2228,20 @@ fn navigate_field(target: &Val, name: &str) -> Val {
         Val::Error(_) => {
             return err(
                 CODE_TYPE_MISMATCH,
-                format!("Field access requires an entity or record, got: {}", describe(target)),
+                format!(
+                    "Field access requires an entity or record, got: {}",
+                    describe(target)
+                ),
             )
         }
     };
     if !matches!(container, Value::Map(_)) {
         return err(
             CODE_TYPE_MISMATCH,
-            format!("Field access requires an entity or record, got: {}", describe(target)),
+            format!(
+                "Field access requires an entity or record, got: {}",
+                describe(target)
+            ),
         );
     }
     match map_get_text(container, name) {
@@ -2113,7 +2256,10 @@ fn index_into(arr: &Val, idx: &Val) -> Val {
         return err(CODE_TYPE_MISMATCH, "compute/index requires an array");
     };
     let Some(i) = val_int(idx) else {
-        return err(CODE_TYPE_MISMATCH, "compute/index requires an integer index");
+        return err(
+            CODE_TYPE_MISMATCH,
+            "compute/index requires an integer index",
+        );
     };
     if i < 0 || i >= items.len() as i128 {
         return err(CODE_INDEX_OUT_OF_RANGE, format!("Index out of range: {i}"));
@@ -2138,7 +2284,10 @@ const TWO_POW_63_F: f64 = 9_223_372_036_854_775_808.0;
 /// maps NaN to 0 — a silent wrong answer the language supplies by itself.
 fn numeric_cast(value: &Val, to_type: &str) -> Val {
     if !is_numeric(value) {
-        return err(CODE_TYPE_MISMATCH, "compute/numeric-cast requires a numeric value");
+        return err(
+            CODE_TYPE_MISMATCH,
+            "compute/numeric-cast requires a numeric value",
+        );
     }
     if to_type == "primitive/float" {
         return Val::Data(Value::Float(to_float(value)));

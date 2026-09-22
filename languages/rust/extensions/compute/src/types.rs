@@ -358,28 +358,18 @@ pub fn compute_type_defs() -> Vec<(&'static str, Value)> {
                 vec![("entity_type", type_name()), ("fields", fmap(h()))],
             ),
         ),
-        (
-            INDEX,
-            type_def(INDEX, vec![("array", h()), ("index", h())]),
-        ),
+        (INDEX, type_def(INDEX, vec![("array", h()), ("index", h())])),
         (LENGTH, type_def(LENGTH, vec![("array", h())])),
         (
             NUMERIC_CAST,
-            type_def(
-                NUMERIC_CAST,
-                vec![("value", h()), ("to_type", type_name())],
-            ),
+            type_def(NUMERIC_CAST, vec![("value", h()), ("to_type", type_name())]),
         ),
         // ── §2.3 ──────────────────────────────────────────────────────────────────
         (
             CLOSURE,
             type_def(
                 CLOSURE,
-                vec![
-                    ("params", farray(text())),
-                    ("body", h()),
-                    ("env", opt(h())),
-                ],
+                vec![("params", farray(text())), ("body", h()), ("env", opt(h()))],
             ),
         ),
         (

@@ -192,10 +192,7 @@ fn chunks_cover_the_input_exactly_and_in_order() {
         }
     }
     assert_eq!(rebuilt, data);
-    assert_eq!(
-        blob.blob.uint_field("total_size"),
-        Some(data.len() as u64)
-    );
+    assert_eq!(blob.blob.uint_field("total_size"), Some(data.len() as u64));
 }
 
 #[test]

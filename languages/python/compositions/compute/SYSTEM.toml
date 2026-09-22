@@ -44,39 +44,51 @@ that fired under its lock would HANG here instead of overflowing, and a hang aft
 measurement is indistinguishable from a hang before it (AP-21).
 """
 
-# ── [system.faces] — four, and the fifth is the finding ──────────────────────────────
+# ── [system.faces] — five, and the fifth is the finding twice over ───────────────────
 #
-# **`evaluator = "not-installable"`, MEASURED, and it is `not-installable` rather than
-# `not-installed` on purpose.** D13's face amendment pins that distinction: `not-installed` is a
-# thing we have not built and `not-installable` is a thing the substrate does not host. Here:
+# **`evaluator = "unverifiable"` since 2026-09-17. It read `not-installable` for three days
+# after that stopped being true, and this block is the record of both the value and the lag.**
+#
+# **What it used to say, and why it was right when written.** The seam did not exist on this
+# peer. Measured:
 #
 #   $ grep -rniE "expression_evaluator|set_evaluator|unsupported_expression|entity_native_dispatch" \
 #         protocol-generator/{python,rust,typescript}/src     # entity-core-keystone
 #   24 hits across 5 files; the python and rust hits are `_entity_native_dispatch` and its
 #   `501 unsupported_expression`, with no seam of any spelling in either.
 #
-# `Peer._entity_native_dispatch` (src/entity_core/peer/peer.py) evaluates the built-in
-# `compute/literal` shape in-process and then answers `501 unsupported_expression`, with no
-# consultation step between the two at any visibility.
+# `Peer._entity_native_dispatch` evaluated the built-in `compute/literal` shape in-process and
+# then answered `501 unsupported_expression` with no consultation step at any visibility, so
+# `not-installable` was the correct D13 verdict: a thing the substrate does not host, not a
+# thing we had not built.
 #
-# **IT COSTS THIS PORT NOTHING MEASURABLE, WHICH IS THE OTHER HALF OF THE FINDING.** Exactly one
-# of the 128 `compute` checks reaches the entity-native path
-# (`v314_compute_apply_to_entity_native`), and it already FAILS on `typescript` — where the seam
-# IS installed — for a different reason: `compute/apply` handler mode needs a re-entrant LOCAL
-# dispatch the peer does not expose (keystone K-5). So an absent face and a present face score
-# the same here, which is `rust × HISTORY`'s lesson arriving from the opposite direction: there a
-# working face was UNMEASURABLE, here an absent face is UNMEASURED.
+# **What changed.** Keystone's S3 bring-up landed `Peer.set_expression_evaluator` on this peer.
+# Installing against it moved `entity_native` 3 → 9 of 13 and exposed two defects of ours that
+# had been unreachable — see the re-bless note under `[gate.baseline.entity_native]` below,
+# which is where the measurement lives. **That note went in on 2026-09-14 and this line did
+# not**, so one file said both things for three days.
 #
-# `install_compute` keeps the detection anyway, three-valued and OBSERVED, so the day keystone
-# lands H7 on this peer this line becomes `installed` without a code edit. The detector's other
-# two verdicts are driven by stand-in peers in `test/test_install.py` — a function that has only
-# ever answered `not-installable` is indistinguishable from a broken one (AP-3).
+# **Why `unverifiable` and not `installed`.** `install_compute`'s detector is three-valued and
+# this peer lands in the middle: the setter accepts our evaluator and the peer exposes **no
+# read-back** to confirm it took. `typescript` and `rust` both expose one, so those two read
+# `installed` on evidence this port cannot produce. The state was added to `compose.py`'s
+# `FACE_STATES` in the same change, because the vocabulary did not have a word for *installed
+# and unconfirmable* and the absence of the word is what kept the wrong one in place. It becomes
+# `installed` the day keystone adds `Peer.expression_evaluator`, with no edit to the port —
+# the value is OBSERVED, which is the whole reason the detector returns it rather than reading
+# it from here.
+#
+# **The lesson is D23's, on our own declaration rather than on a peer's.** A face reported
+# absent is a face whose contents are unmeasured — and a face reported absent *after it stopped
+# being absent* is worse, because the report is no longer even honest about the gap. Nothing in
+# this tree re-reads `[system.faces]` against the peer (`make probe` is in neither `check` nor
+# `check-all`), so this value is maintained by hand and went stale the first time it could.
 [system.faces.COMPUTE]
 types         = "installed"
 handler       = "installed"
 emit_consumer = "installed"
 sdk           = "installed"
-evaluator     = "not-installable"
+evaluator     = "unverifiable"
 
 [gate]
 oracle     = "entity-core-go validate-peer"

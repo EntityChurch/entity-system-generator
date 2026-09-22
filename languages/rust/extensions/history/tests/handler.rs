@@ -92,7 +92,10 @@ fn rollback_params(path: &str, target: &[u8]) -> Entity {
         ROLLBACK_PARAMS,
         Value::Map(vec![
             (Key::Text("path".into()), Value::Text(path.into())),
-            (Key::Text("target_hash".into()), Value::Bytes(target.to_vec())),
+            (
+                Key::Text("target_hash".into()),
+                Value::Bytes(target.to_vec()),
+            ),
         ]),
     )
 }
@@ -127,7 +130,11 @@ fn write(store: &Store, rec: &HistoryRecorder, path: &str, value: &str) -> Entit
     rec.on_tree_change(
         store,
         &TreeChangeEvent {
-            event_type: if previous.is_none() { "created" } else { "modified" },
+            event_type: if previous.is_none() {
+                "created"
+            } else {
+                "modified"
+            },
             path: path.to_string(),
             new_hash: Some(ent.hash.clone()),
             previous_hash: previous,
@@ -266,7 +273,11 @@ fn a_history_only_capability_cannot_read_an_arbitrary_path() {
 fn no_caller_capability_is_denied_not_trusted() {
     let (store, _) = seeded();
     let h = HistoryHandler::new();
-    let e = exec("query", query_params(&format!("/{PEER}/app/doc"), vec![]), &["system/history"]);
+    let e = exec(
+        "query",
+        query_params(&format!("/{PEER}/app/doc"), vec![]),
+        &["system/history"],
+    );
     let out = h.handle_op(
         "query",
         &HandlerRequest {
@@ -367,7 +378,11 @@ fn a_short_form_path_is_canonicalized_before_the_lookup() {
     write(&store, &rec, &format!("/{PEER}/app/doc"), "v1");
 
     let h = HistoryHandler::new();
-    let e = exec("query", query_params("app/doc", vec![]), &["system/history"]);
+    let e = exec(
+        "query",
+        query_params("app/doc", vec![]),
+        &["system/history"],
+    );
     let out = h.handle_op(
         "query",
         &HandlerRequest {
@@ -419,7 +434,10 @@ fn transitions_are_inline_data_maps_not_hashes_or_entity_wrappers() {
         field_of(&items[0], "event"),
         Some(Value::Text("created".into()))
     );
-    assert_eq!(field_of(&items[0], "hash"), Some(Value::Bytes(v1.hash.clone())));
+    assert_eq!(
+        field_of(&items[0], "hash"),
+        Some(Value::Bytes(v1.hash.clone()))
+    );
     // NOT an entity wrapper — there is no `type`/`data` nesting.
     assert_eq!(field_of(&items[0], "data"), None);
     assert_eq!(field_of(&items[0], "type"), None);
@@ -505,7 +523,11 @@ fn the_event_filter_skips_and_keeps_walking() {
         },
     );
     let items = transitions_of(&out.result);
-    assert_eq!(items.len(), 1, "the `created` entry is past the `updated` one in the walk");
+    assert_eq!(
+        items.len(),
+        1,
+        "the `created` entry is past the `updated` one in the walk"
+    );
     assert_eq!(
         field_of(&items[0], "event"),
         Some(Value::Text("created".into()))
@@ -570,10 +592,20 @@ fn a_rollback_write_carries_the_dispatch_context_to_the_emit_bus() {
                 *sink.lock().unwrap() = Some(ev.context.clone());
             }
         });
-        let e = exec("rollback", rollback_params(&path, &v1.hash), &["system/history", &path]);
+        let e = exec(
+            "rollback",
+            rollback_params(&path, &v1.hash),
+            &["system/history", &path],
+        );
         let out = HistoryHandler::new().handle_op(
             "rollback",
-            &HandlerRequest { exec: &e, store: &store, local_peer: PEER, caller_capability: Some(&full_token()), context },
+            &HandlerRequest {
+                exec: &e,
+                store: &store,
+                local_peer: PEER,
+                caller_capability: Some(&full_token()),
+                context,
+            },
         );
         assert_eq!(out.status, 200);
         let observed = seen.lock().unwrap().clone();
@@ -594,7 +626,10 @@ fn a_rollback_write_carries_the_dispatch_context_to_the_emit_bus() {
     let carried = run(Some(&dispatch)).expect("the event carries the dispatch context");
     assert_eq!(carried.operation, "rollback");
     assert_eq!(carried.author, Some(vec![0xCA; 33]));
-    assert!(run(None).is_none(), "control: a context-less rollback emits a context-less event");
+    assert!(
+        run(None).is_none(),
+        "control: a context-less rollback emits a context-less event"
+    );
 }
 
 /// `[assumptions].max_walk` — the cap bounds `query` and NOT §4.3.2's `is_in_history`. With a walk
@@ -610,17 +645,40 @@ fn the_walk_cap_bounds_query_and_not_the_rollback_membership_walk() {
     }
     let h = HistoryHandler::with_max_walk(2);
     let cap = full_token();
-    let req = |e| HandlerRequest { exec: e, store: &store, local_peer: PEER, caller_capability: Some(&cap), context: None };
+    let req = |e| HandlerRequest {
+        exec: e,
+        store: &store,
+        local_peer: PEER,
+        caller_capability: Some(&cap),
+        context: None,
+    };
 
-    let q = exec("query", query_params(&path, vec![(Key::Text("limit".into()), Value::UInt(50))]), &["system/history", &path]);
+    let q = exec(
+        "query",
+        query_params(&path, vec![(Key::Text("limit".into()), Value::UInt(50))]),
+        &["system/history", &path],
+    );
     let out = h.handle_op("query", &req(&q));
     assert_eq!(out.status, 200);
-    assert_eq!(transitions_of(&out.result).len(), 2, "control: the cap is in force on query");
+    assert_eq!(
+        transitions_of(&out.result).len(),
+        2,
+        "control: the cap is in force on query"
+    );
     assert_eq!(out.result.field("has_more"), Some(&Value::Bool(true)));
 
-    let r = exec("rollback", rollback_params(&path, &v1.hash), &["system/history", &path]);
+    let r = exec(
+        "rollback",
+        rollback_params(&path, &v1.hash),
+        &["system/history", &path],
+    );
     let out = h.handle_op("rollback", &req(&r));
-    assert_eq!(out.status, 200, "a rollback target deeper than the walk cap is still in history: {}", code_of(&out.result));
+    assert_eq!(
+        out.status,
+        200,
+        "a rollback target deeper than the walk cap is still in history: {}",
+        code_of(&out.result)
+    );
     assert_eq!(store.hash_at(&path), Some(v1.hash.clone()));
 }
 
@@ -719,10 +777,7 @@ fn a_gcd_target_is_500_storage_error_not_a_404() {
                 Value::Text(format!("/{PEER}/app/doc")),
             ),
             (Key::Text("event".into()), Value::Text("created".into())),
-            (
-                Key::Text("hash".into()),
-                Value::Bytes(missing.hash.clone()),
-            ),
+            (Key::Text("hash".into()), Value::Bytes(missing.hash.clone())),
             (Key::Text("author".into()), Value::Bytes(vec![0xAA; 33])),
             (Key::Text("capability".into()), Value::Bytes(vec![0xAA; 33])),
             (
@@ -734,10 +789,7 @@ fn a_gcd_target_is_500_storage_error_not_a_404() {
         ]),
     );
     let path = format!("/{PEER}/app/doc");
-    store.bind(
-        &format!("/{PEER}/system/history/head{path}"),
-        &transition,
-    );
+    store.bind(&format!("/{PEER}/system/history/head{path}"), &transition);
 
     let h = HistoryHandler::new();
     let e = exec(

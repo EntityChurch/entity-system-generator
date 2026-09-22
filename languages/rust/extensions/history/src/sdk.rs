@@ -18,9 +18,9 @@ use entity_core_protocol::peer::store::{ExecContext, Store, TreeChangeEvent};
 use entity_core_protocol::value::{Key, Value};
 
 use crate::internal::recorder::{
-    find_history_config, is_local_history_path, record_transition, ConfigLookup, RecordedTransition,
-    RecorderIdentity, TransitionContext, TreeChange, PROVENANCE_AUTONOMOUS_FALLBACK,
-    PROVENANCE_CONTEXT,
+    find_history_config, is_local_history_path, record_transition, ConfigLookup,
+    RecordedTransition, RecorderIdentity, TransitionContext, TreeChange,
+    PROVENANCE_AUTONOMOUS_FALLBACK, PROVENANCE_CONTEXT,
 };
 use crate::types::{CONFIG, CONFIG_PREFIX};
 
@@ -118,7 +118,6 @@ pub fn carried_from_exec(ctx: &ExecContext) -> Option<CarriedContext> {
         parent_chain_id: ctx.parent_chain_id.clone(),
     })
 }
-
 
 /// SYSTEM-COMPOSITION §1.4's inventory, as the recorder would consume it.
 ///
@@ -318,7 +317,10 @@ pub fn history_config(
     max_depth: Option<u64>,
 ) -> Entity {
     let mut pairs: Vec<(Key, Value)> = vec![
-        (Key::Text("pattern".into()), Value::Text(pattern.to_string())),
+        (
+            Key::Text("pattern".into()),
+            Value::Text(pattern.to_string()),
+        ),
         (Key::Text("enabled".into()), Value::Bool(enabled)),
     ];
     // Insertion order IS the field order of the entity, so this block must stay between

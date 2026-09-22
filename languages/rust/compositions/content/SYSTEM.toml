@@ -80,7 +80,7 @@ profiles   = ["core"]
 ## A pre-registered expectation that is quietly overwritten with the result is not a
 ## prediction, it is a transcript. Both prior compositions matched theirs; this one did
 ## not, and the miss is the more instructive half of the run
-## (`status/CONFORMANCE-2026-09-06.md` §3).
+## (`docs/archive/status/CONFORMANCE-2026-09-06-rust-content.md` §3).
 
 [gate.expectation.type_system]
 measures_us = 6            # CORRECTED after the run. Predicted 3; it is 6.

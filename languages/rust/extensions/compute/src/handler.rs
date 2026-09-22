@@ -18,7 +18,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use entity_core_protocol::peer::handler::{Handler, HandlerContext, HandlerResult, LocalExecute, OperationSpec};
+use entity_core_protocol::peer::handler::{
+    Handler, HandlerContext, HandlerResult, LocalExecute, OperationSpec,
+};
 use entity_core_protocol::peer::model::Entity;
 use entity_core_protocol::peer::store::{ExecContext, Store};
 use entity_core_protocol::peer::wire;
@@ -26,12 +28,14 @@ use entity_core_protocol::value::{Key, Value};
 
 use crate::internal::evaluator::{canonicalize_path, DispatchCall, Dispatcher};
 use crate::internal::reactive::{deterministic_id, ReactiveEngine};
-use crate::internal::subgraph::{audit_subgraph, grant_covers, path_permitted, AuditContext, SubgraphAudit};
+use crate::internal::subgraph::{
+    audit_subgraph, grant_covers, path_permitted, AuditContext, SubgraphAudit,
+};
 use crate::sdk::{ComputeEvaluator, EvaluateOptions, EvaluatorLimits, RequestContext};
 use crate::types::{
-    CODE_AMBIGUOUS_RESOURCE, CODE_INVALID_EXPRESSION, CODE_NOT_FOUND, CODE_PERMISSION_DENIED,
-    COMPUTE_PATTERN, INSTALL_REQUEST, INSTALL_RESULT, PROCESSES_PREFIX, RESULT, SUBGRAPH,
-    is_compute_expression,
+    is_compute_expression, CODE_AMBIGUOUS_RESOURCE, CODE_INVALID_EXPRESSION, CODE_NOT_FOUND,
+    CODE_PERMISSION_DENIED, COMPUTE_PATTERN, INSTALL_REQUEST, INSTALL_RESULT, PROCESSES_PREFIX,
+    RESULT, SUBGRAPH,
 };
 
 /// §3.1 / §9.2's three operations, in ladder order.
@@ -74,7 +78,10 @@ pub struct ComputeOutcome {
 
 impl ComputeOutcome {
     fn ok(result: Entity) -> ComputeOutcome {
-        ComputeOutcome { status: 200, result }
+        ComputeOutcome {
+            status: 200,
+            result,
+        }
     }
 
     fn err(status: u64, code: &str, message: &str) -> ComputeOutcome {
@@ -106,7 +113,12 @@ impl ComputeHandler {
         self.handle_dispatching(operation, req, None)
     }
 
-    fn handle_dispatching(&self, operation: &str, req: &HandlerRequest, dispatch: Option<&Dispatcher<'_>>) -> ComputeOutcome {
+    fn handle_dispatching(
+        &self,
+        operation: &str,
+        req: &HandlerRequest,
+        dispatch: Option<&Dispatcher<'_>>,
+    ) -> ComputeOutcome {
         match operation {
             "eval" => self.eval(req, dispatch),
             "install" => self.install(req),
@@ -136,13 +148,23 @@ impl ComputeHandler {
             return ComputeOutcome::err(404, CODE_NOT_FOUND, "No entity at path");
         };
         if !is_compute_expression(&expression.typ) {
-            return ComputeOutcome::err(400, CODE_INVALID_EXPRESSION, "Entity at path is not a compute expression");
+            return ComputeOutcome::err(
+                400,
+                CODE_INVALID_EXPRESSION,
+                "Entity at path is not a compute expression",
+            );
         }
 
         let local = req.local_peer.to_string();
         let cap = req.caller_capability.cloned();
-        let can_read = |path: &str| cap.as_ref().is_none_or(|c| path_permitted("get", path, c, &local));
-        let can_write = |path: &str| cap.as_ref().is_none_or(|c| path_permitted("put", path, c, &local));
+        let can_read = |path: &str| {
+            cap.as_ref()
+                .is_none_or(|c| path_permitted("get", path, c, &local))
+        };
+        let can_write = |path: &str| {
+            cap.as_ref()
+                .is_none_or(|c| path_permitted("put", path, c, &local))
+        };
 
         let mut evaluator = ComputeEvaluator::new(req.store, req.local_peer, self.limits);
         let outcome = evaluator.evaluate_in_request(
@@ -175,8 +197,14 @@ impl ComputeHandler {
         ComputeOutcome::ok(Entity::make(
             RESULT,
             Value::Map(vec![
-                (Key::Text("value".into()), outcome.value.unwrap_or(Value::Null)),
-                (Key::Text("expression".into()), Value::Bytes(expression.hash.clone())),
+                (
+                    Key::Text("value".into()),
+                    outcome.value.unwrap_or(Value::Null),
+                ),
+                (
+                    Key::Text("expression".into()),
+                    Value::Bytes(expression.hash.clone()),
+                ),
             ]),
         ))
     }
@@ -208,7 +236,11 @@ impl ComputeHandler {
             return ComputeOutcome::err(404, CODE_NOT_FOUND, "No expression at path");
         };
         if !is_compute_expression(&expression.typ) {
-            return ComputeOutcome::err(400, CODE_INVALID_EXPRESSION, "Entity at path is not a compute expression");
+            return ComputeOutcome::err(
+                400,
+                CODE_INVALID_EXPRESSION,
+                "Entity at path is not a compute expression",
+            );
         }
 
         // ── Phase 1 ──
@@ -233,11 +265,23 @@ impl ComputeHandler {
         };
         for path in &audit.read_paths {
             if !path_permitted("get", path, capability, local) {
-                return ComputeOutcome::err(403, CODE_PERMISSION_DENIED, &format!("Caller capability does not cover read: {path}"));
+                return ComputeOutcome::err(
+                    403,
+                    CODE_PERMISSION_DENIED,
+                    &format!("Caller capability does not cover read: {path}"),
+                );
             }
         }
         for t in &audit.handler_targets {
-            if !grant_covers(req.store, req.included, capability, &t.path, t.operation.as_deref(), t.resource.clone(), local) {
+            if !grant_covers(
+                req.store,
+                req.included,
+                capability,
+                &t.path,
+                t.operation.as_deref(),
+                t.resource.clone(),
+                local,
+            ) {
                 return ComputeOutcome::err(
                     403,
                     CODE_PERMISSION_DENIED,
@@ -249,17 +293,27 @@ impl ComputeHandler {
                 );
             }
         }
-        let result_path = match params_entity(req.exec).and_then(|p| p.text_field("result_path").map(str::to_string)) {
+        let result_path = match params_entity(req.exec)
+            .and_then(|p| p.text_field("result_path").map(str::to_string))
+        {
             Some(requested) => canonicalize_path(&requested, local),
             None => format!("{root_path}/result"),
         };
         if !path_permitted("put", &result_path, capability, local) {
-            return ComputeOutcome::err(403, CODE_PERMISSION_DENIED, &format!("Caller capability does not cover result write: {result_path}"));
+            return ComputeOutcome::err(
+                403,
+                CODE_PERMISSION_DENIED,
+                &format!("Caller capability does not cover result write: {result_path}"),
+            );
         }
         for path in &audit.write_paths {
             let canonical = canonicalize_path(path, local);
             if !path_permitted("put", &canonical, capability, local) {
-                return ComputeOutcome::err(403, CODE_PERMISSION_DENIED, &format!("Caller capability does not cover write: {canonical}"));
+                return ComputeOutcome::err(
+                    403,
+                    CODE_PERMISSION_DENIED,
+                    &format!("Caller capability does not cover write: {canonical}"),
+                );
             }
         }
 
@@ -275,17 +329,29 @@ impl ComputeHandler {
             };
             let hint_path = canonicalize_path(hint, local);
             let Some(bound) = req.store.get_at(&hint_path) else {
-                return ComputeOutcome::err(404, CODE_NOT_FOUND, &format!("No entity at hint path: {hint_path}"));
+                return ComputeOutcome::err(
+                    404,
+                    CODE_NOT_FOUND,
+                    &format!("No entity at hint path: {hint_path}"),
+                );
             };
             if bound.hash != entry.hash {
                 return ComputeOutcome::err(
                     400,
                     "hash_mismatch",
-                    &format!("Entity at {hint_path} has hash {}, expression references {}", hex(&bound.hash), hex(&entry.hash)),
+                    &format!(
+                        "Entity at {hint_path} has hash {}, expression references {}",
+                        hex(&bound.hash),
+                        hex(&entry.hash)
+                    ),
                 );
             }
             if !path_permitted("get", &hint_path, capability, local) {
-                return ComputeOutcome::err(403, CODE_PERMISSION_DENIED, &format!("Caller grant does not cover tree GET at: {hint_path}"));
+                return ComputeOutcome::err(
+                    403,
+                    CODE_PERMISSION_DENIED,
+                    &format!("Caller grant does not cover tree GET at: {hint_path}"),
+                );
             }
             authorized.push(Value::Bytes(entry.hash.clone()));
         }
@@ -299,21 +365,40 @@ impl ComputeHandler {
         );
         req.store.put_entity(capability);
         let mut data = vec![
-            (Key::Text("root_expression_path".into()), Value::Text(root_path.clone())),
-            (Key::Text("root_expression".into()), Value::Bytes(expression.hash.clone())),
-            (Key::Text("installation_grant".into()), Value::Bytes(capability.hash.clone())),
-            (Key::Text("result_path".into()), Value::Text(result_path.clone())),
+            (
+                Key::Text("root_expression_path".into()),
+                Value::Text(root_path.clone()),
+            ),
+            (
+                Key::Text("root_expression".into()),
+                Value::Bytes(expression.hash.clone()),
+            ),
+            (
+                Key::Text("installation_grant".into()),
+                Value::Bytes(capability.hash.clone()),
+            ),
+            (
+                Key::Text("result_path".into()),
+                Value::Text(result_path.clone()),
+            ),
             (Key::Text("status".into()), Value::Text("active".into())),
         ];
         if let Some(author) = req.exec.bytes_field("author") {
-            data.push((Key::Text("installed_by".into()), Value::Bytes(author.to_vec())));
+            data.push((
+                Key::Text("installed_by".into()),
+                Value::Bytes(author.to_vec()),
+            ));
         }
         // The SEVENTH field, omitted when empty so the bytes agree with the reference's `omitempty`.
         if !authorized.is_empty() {
-            data.push((Key::Text("authorized_data_hashes".into()), Value::Array(authorized)));
+            data.push((
+                Key::Text("authorized_data_hashes".into()),
+                Value::Array(authorized),
+            ));
         }
         let subgraph = Entity::make(SUBGRAPH, Value::Map(data));
-        req.store.bind_with_context(&subgraph_path, &subgraph, req.context.cloned());
+        req.store
+            .bind_with_context(&subgraph_path, &subgraph, req.context.cloned());
 
         // ── Phase 4 — register, then evaluate once ──
         engine.register(&subgraph_path, &root_path, &audit);
@@ -322,8 +407,14 @@ impl ComputeHandler {
         ComputeOutcome::ok(Entity::make(
             INSTALL_RESULT,
             Value::Map(vec![
-                (Key::Text("subgraph_path".into()), Value::Text(subgraph_path)),
-                (Key::Text("impure_operations".into()), impure_operations(&audit)),
+                (
+                    Key::Text("subgraph_path".into()),
+                    Value::Text(subgraph_path),
+                ),
+                (
+                    Key::Text("impure_operations".into()),
+                    impure_operations(&audit),
+                ),
                 (Key::Text("result_path".into()), Value::Text(result_path)),
             ]),
         ))
@@ -353,7 +444,8 @@ impl ComputeHandler {
             _ => return ComputeOutcome::err(404, CODE_NOT_FOUND, "No installed subgraph at path"),
         }
         engine.unregister(&subgraph_path);
-        req.store.unbind_with_context(&subgraph_path, req.context.cloned());
+        req.store
+            .unbind_with_context(&subgraph_path, req.context.cloned());
         // §3.4 returns the status and nothing else; `system/protocol/status` is a type no registry
         // defines (§9.2 drift), so the body is the empty-ack shape rather than a minted type.
         ComputeOutcome::ok(Entity::make("primitive/any", Value::Map(vec![])))
@@ -438,9 +530,13 @@ fn single_resource_target(exec: &Entity) -> Option<String> {
 
 /// §3.3's `impure_operations` — the audit, verbatim.
 fn impure_operations(audit: &SubgraphAudit) -> Value {
-    let text_array = |items: &[String]| Value::Array(items.iter().map(|s| Value::Text(s.clone())).collect());
+    let text_array =
+        |items: &[String]| Value::Array(items.iter().map(|s| Value::Text(s.clone())).collect());
     Value::Map(vec![
-        (Key::Text("read_paths".into()), text_array(&audit.read_paths)),
+        (
+            Key::Text("read_paths".into()),
+            text_array(&audit.read_paths),
+        ),
         (
             Key::Text("handler_targets".into()),
             Value::Array(
@@ -457,10 +553,19 @@ fn impure_operations(audit: &SubgraphAudit) -> Value {
                     .collect(),
             ),
         ),
-        (Key::Text("write_paths".into()), text_array(&audit.write_paths)),
+        (
+            Key::Text("write_paths".into()),
+            text_array(&audit.write_paths),
+        ),
         (
             Key::Text("data_hashes".into()),
-            Value::Array(audit.data_hashes.iter().map(|d| Value::Bytes(d.hash.clone())).collect()),
+            Value::Array(
+                audit
+                    .data_hashes
+                    .iter()
+                    .map(|d| Value::Bytes(d.hash.clone()))
+                    .collect(),
+            ),
         ),
     ])
 }

@@ -18,8 +18,8 @@ use entity_core_protocol::peer::{CreateOptions, Peer};
 use entity_core_protocol::value::{Key, Value};
 
 use entity_history::{
-    build_context, config_path, history_config, install_history,
-    resolve_config, CarriedContext, HistoryRecorder, RecorderIdentity, HEAD_PREFIX,
+    build_context, config_path, history_config, install_history, resolve_config, CarriedContext,
+    HistoryRecorder, RecorderIdentity, HEAD_PREFIX,
 };
 
 const PEER: &str = "z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH";
@@ -54,7 +54,11 @@ fn write(store: &Store, rec: &HistoryRecorder, path: &str, value: &str) -> Entit
     rec.on_tree_change(
         store,
         &TreeChangeEvent {
-            event_type: if previous.is_none() { "created" } else { "modified" },
+            event_type: if previous.is_none() {
+                "created"
+            } else {
+                "modified"
+            },
             path: path.to_string(),
             new_hash: Some(ent.hash.clone()),
             previous_hash: previous,
@@ -144,14 +148,24 @@ fn a_first_write_records_a_created_transition_with_no_previous() {
     let ent = write(&store, &rec, &path, "v1");
 
     let head = store.hash_at(&head_path(&path)).expect("head pointer set");
-    let t = store.get_by_hash(&head).expect("transition in content store");
+    let t = store
+        .get_by_hash(&head)
+        .expect("transition in content store");
 
     assert_eq!(t.typ, "system/history/transition");
     assert_eq!(t.text_field("path"), Some(path.as_str()));
     assert_eq!(t.text_field("event"), Some("created"));
     assert_eq!(t.bytes_field("hash"), Some(ent.hash.as_slice()));
-    assert_eq!(t.bytes_field("previous_hash"), None, "first write has no previous_hash");
-    assert_eq!(t.bytes_field("previous"), None, "first transition has no previous link");
+    assert_eq!(
+        t.bytes_field("previous_hash"),
+        None,
+        "first write has no previous_hash"
+    );
+    assert_eq!(
+        t.bytes_field("previous"),
+        None,
+        "first transition has no previous link"
+    );
     assert!(t.uint_field("timestamp").unwrap_or(0) > 0);
     assert_eq!(t.text_field("handler"), Some("system/tree"));
     assert_eq!(t.text_field("operation"), Some("put"));
@@ -174,9 +188,16 @@ fn a_second_write_records_updated_and_links_both_chains() {
     let head = store.hash_at(&head_path(&path)).unwrap();
     let latest = store.get_by_hash(&head).unwrap();
 
-    assert_eq!(latest.text_field("event"), Some("updated"), "core says `modified`, §2.1 says `updated`");
+    assert_eq!(
+        latest.text_field("event"),
+        Some("updated"),
+        "core says `modified`, §2.1 says `updated`"
+    );
     assert_eq!(latest.bytes_field("hash"), Some(v2.hash.as_slice()));
-    assert_eq!(latest.bytes_field("previous_hash"), Some(v1.hash.as_slice()));
+    assert_eq!(
+        latest.bytes_field("previous_hash"),
+        Some(v1.hash.as_slice())
+    );
     assert_eq!(
         latest.bytes_field("previous"),
         Some(first_head.as_slice()),
@@ -283,7 +304,11 @@ fn the_recorders_own_head_write_is_guarded() {
         },
     );
     assert_eq!(rec.stats().skipped_self_guard, 1);
-    assert_eq!(rec.stats().recorded, 1, "the guarded event must not add a transition");
+    assert_eq!(
+        rec.stats().recorded,
+        1,
+        "the guarded event must not add a transition"
+    );
 }
 
 /// §3.2 is explicit that config paths are NOT guarded: they "SHOULD be recorded as
@@ -360,8 +385,14 @@ fn every_transition_uses_the_autonomous_fallback_and_says_so() {
 
     let head = store.hash_at(&head_path(&path)).unwrap();
     let t = store.get_by_hash(&head).unwrap();
-    assert_eq!(t.bytes_field("author"), Some(id.local_identity_hash.as_slice()));
-    assert_eq!(t.bytes_field("capability"), Some(id.handler_grant_hash.as_slice()));
+    assert_eq!(
+        t.bytes_field("author"),
+        Some(id.local_identity_hash.as_slice())
+    );
+    assert_eq!(
+        t.bytes_field("capability"),
+        Some(id.handler_grant_hash.as_slice())
+    );
     // And on THIS peer specifically the two are the same bytes, because there is no
     // handler grant to be different. That is weaker than the other two ports' fallback
     // and the composition report says so.
@@ -477,10 +508,15 @@ fn the_real_seam_records_a_transition() {
     let stats = install.recorder.stats();
     assert_eq!(stats.recorded - base.recorded, 1);
     assert_eq!(
-        stats.skipped_self_guard - base.skipped_self_guard, 1,
+        stats.skipped_self_guard - base.skipped_self_guard,
+        1,
         "the head write's own event must come back to the guard exactly once"
     );
-    assert_eq!(stats.observed - base.observed, 2, "1 app write + 1 re-entrant head write");
+    assert_eq!(
+        stats.observed - base.observed,
+        2,
+        "1 app write + 1 re-entrant head write"
+    );
 
     // The negative that separates "the counter tracks events" from "the counter tracks
     // calls": an identical re-bind produces no event at all (§6.10 Store step). Without
@@ -553,7 +589,14 @@ fn control_the_same_path_is_recorded_without_the_exclusion() {
 fn an_excluded_path_does_not_fall_through_to_a_less_specific_config() {
     let store = Store::new();
     configure(&store, "everything", "*", true, None, None);
-    configure(&store, "docs", "docs/*", true, Some(&["docs/secret/*"]), None);
+    configure(
+        &store,
+        "docs",
+        "docs/*",
+        true,
+        Some(&["docs/secret/*"]),
+        None,
+    );
     let rec = HistoryRecorder::new(identity());
 
     let secret = format!("/{PEER}/docs/secret/salaries");

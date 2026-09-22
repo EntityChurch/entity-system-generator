@@ -62,8 +62,14 @@ fn a_leading_star_pattern_becomes_core_5_4s_peer_wildcard_spelling() {
 #[test]
 fn the_normalized_peer_wildcard_actually_matches_another_peers_path() {
     let canonical = canonicalize_pattern("*/project/*", PEER);
-    assert!(pattern_matches(&format!("/{OTHER}/project/readme"), &canonical));
-    assert!(!pattern_matches(&format!("/{OTHER}/other/readme"), &canonical));
+    assert!(pattern_matches(
+        &format!("/{OTHER}/project/readme"),
+        &canonical
+    ));
+    assert!(!pattern_matches(
+        &format!("/{OTHER}/other/readme"),
+        &canonical
+    ));
 
     // And the control: the spelling §2.2's pseudocode would have produced matches
     // NOTHING. Without this arm the test above passes for any implementation that
@@ -169,8 +175,14 @@ fn hist_config_specificity_1_partial_selection_is_insertion_order_independent() 
     let specific = spec("a/b/c/d");
     let general = spec("*/a/b/c/*");
 
-    assert!(pattern_matches(&path, &specific.canonical), "both must match");
-    assert!(pattern_matches(&path, &general.canonical), "both must match");
+    assert!(
+        pattern_matches(&path, &specific.canonical),
+        "both must match"
+    );
+    assert!(
+        pattern_matches(&path, &general.canonical),
+        "both must match"
+    );
 
     let pick = |candidates: Vec<&Specificity>| -> String {
         let mut best = candidates[0];
@@ -257,8 +269,14 @@ fn hist_config_specificity_1_v1_8_key_1_separates() {
     let specific = spec("a/b/*"); // /{PEER}/a/b/* : literals PEER,a,b = 3, depth 4
     let general = spec("a/*"); //    /{PEER}/a/*   : literals PEER,a   = 2, depth 3
 
-    assert!(pattern_matches(&path, &specific.canonical), "both must match");
-    assert!(pattern_matches(&path, &general.canonical), "both must match");
+    assert!(
+        pattern_matches(&path, &specific.canonical),
+        "both must match"
+    );
+    assert!(
+        pattern_matches(&path, &general.canonical),
+        "both must match"
+    );
     assert_eq!(specific.literals, 3);
     assert_eq!(general.literals, 2);
 
@@ -280,8 +298,14 @@ fn hist_config_specificity_2_v1_8_key_2_is_load_bearing() {
 
     assert_eq!(everything.canonical, format!("/{PEER}/*"));
     assert_eq!(peer_wild.canonical, "/*/a/*");
-    assert!(pattern_matches(&path, &everything.canonical), "both must match");
-    assert!(pattern_matches(&path, &peer_wild.canonical), "both must match");
+    assert!(
+        pattern_matches(&path, &everything.canonical),
+        "both must match"
+    );
+    assert!(
+        pattern_matches(&path, &peer_wild.canonical),
+        "both must match"
+    );
 
     // The tie is the point: assert it exists before asserting what breaks it.
     assert_eq!(everything.literals, peer_wild.literals);

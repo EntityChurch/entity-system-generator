@@ -96,7 +96,10 @@ fn optional_is_merged_into_the_inner_spec_and_not_wrapped() {
     assert_eq!(
         media_type,
         &Value::Map(vec![
-            (Key::Text("type_ref".into()), Value::Text("primitive/string".into())),
+            (
+                Key::Text("type_ref".into()),
+                Value::Text("primitive/string".into())
+            ),
             (Key::Text("optional".into()), Value::Bool(true)),
         ])
     );
@@ -128,10 +131,13 @@ fn a_type_with_no_fields_would_carry_no_fields_key() {
     // on the builder's own output for an empty declaration rather than on a type that
     // happens to have none -- which is the difference between testing the rule and
     // testing the data.
-    let none = Entity::make("system/type", Value::Map(vec![(
-        Key::Text("name".into()),
-        Value::Text("system/content/nothing".into()),
-    )]));
+    let none = Entity::make(
+        "system/type",
+        Value::Map(vec![(
+            Key::Text("name".into()),
+            Value::Text("system/content/nothing".into()),
+        )]),
+    );
     assert_eq!(keys_of(&none.data), vec!["name".to_string()]);
     // And the corpus does not accidentally satisfy it: every real type HAS fields, so
     // an omit-empty bug would be invisible in this corpus without the case above.
@@ -185,14 +191,13 @@ fn install_writes_all_seven_at_the_core_type_index() {
     assert_eq!(type_paths.len(), 7);
     for name in ALL_TYPES {
         let path = format!("/PEERID/system/type/{name}");
-        assert!(
-            type_paths.contains(&path),
-            "{path} was not written"
-        );
+        assert!(type_paths.contains(&path), "{path} was not written");
         let bound = store.get_at(&path).expect("bound in the tree");
         assert_eq!(bound.typ, "system/type");
     }
     // NEGATIVE CONTROL: a path we did not write is not bound, so "get_at returned
     // something" is not a property of the store rather than of the install.
-    assert!(store.get_at("/PEERID/system/type/system/content/absent").is_none());
+    assert!(store
+        .get_at("/PEERID/system/type/system/content/absent")
+        .is_none());
 }

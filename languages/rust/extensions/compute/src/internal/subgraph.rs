@@ -22,8 +22,13 @@ use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::peer::wire::{self, ExecuteFields};
 use entity_core_protocol::value::{Key, Value};
 
-use super::evaluator::{builtin_name, canonicalize_path, clean_path, relative_pattern, CONTENT_HASH_LENGTH};
-use crate::types::{APPLY, BUILTINS_PREFIX, CODE_INVALID_EXPRESSION, LITERAL, LOOKUP_HASH, LOOKUP_TREE, is_compute_type};
+use super::evaluator::{
+    builtin_name, canonicalize_path, clean_path, relative_pattern, CONTENT_HASH_LENGTH,
+};
+use crate::types::{
+    is_compute_type, APPLY, BUILTINS_PREFIX, CODE_INVALID_EXPRESSION, LITERAL, LOOKUP_HASH,
+    LOOKUP_TREE,
+};
 
 /// §3.3 Phase 1's `handler_targets` entry. `resource` is `None` when dynamic or absent.
 #[derive(Clone, Debug)]
@@ -87,7 +92,11 @@ const STORE_BUILTIN_SUFFIX: &str = "/store";
 
 /// §3.3 Phase 1 — walk the expression graph from `root` and collect the four categories, or refuse
 /// on a static structural error. `root_path` MUST already be canonical.
-pub fn audit_subgraph(root: &Entity, root_path: &str, ctx: &AuditContext) -> Result<SubgraphAudit, AuditRefusal> {
+pub fn audit_subgraph(
+    root: &Entity,
+    root_path: &str,
+    ctx: &AuditContext,
+) -> Result<SubgraphAudit, AuditRefusal> {
     let mut st = WalkState {
         root_path,
         ctx,
@@ -114,7 +123,11 @@ fn walk_node(entity: &Entity, st: &mut WalkState) -> Result<(), AuditRefusal> {
         // The `hash` points at DATA, not an expression; returning here keeps the generic descent
         // from auditing a data reference as a sub-expression.
         let Some(hash) = entity.bytes_field("hash") else {
-            return Err(refusal(400, CODE_INVALID_EXPRESSION, "compute/lookup/hash requires a hash field"));
+            return Err(refusal(
+                400,
+                CODE_INVALID_EXPRESSION,
+                "compute/lookup/hash requires a hash field",
+            ));
         };
         let resolved_hint = entity.text_field("path").map(|hint| {
             if matches!(entity.field("relative"), Some(Value::Bool(true))) {
@@ -226,7 +239,11 @@ fn audit_apply(entity: &Entity, st: &mut WalkState) -> Result<(), AuditRefusal> 
     if relative_pattern(path) == format!("{BUILTINS_PREFIX}{STORE_BUILTIN_SUFFIX}") {
         if let Some(Value::Map(args)) = entity.field("args") {
             let path_arg = args.iter().find_map(|(k, v)| match (k, v) {
-                (Key::Text(t), Value::Bytes(b)) if t == "path" && b.len() == CONTENT_HASH_LENGTH => Some(b),
+                (Key::Text(t), Value::Bytes(b))
+                    if t == "path" && b.len() == CONTENT_HASH_LENGTH =>
+                {
+                    Some(b)
+                }
                 _ => None,
             });
             if let Some(h) = path_arg {
@@ -252,23 +269,37 @@ fn check_embedded_capability(entity: &Entity, st: &WalkState) -> Result<(), Audi
 
     let value = match cap_ref.field("value") {
         Some(Value::Bytes(b)) if b.len() == CONTENT_HASH_LENGTH => b.clone(),
-        _ => return Err(unreachable_chain("Static compute/apply.capability does not name a capability entity")),
+        _ => {
+            return Err(unreachable_chain(
+                "Static compute/apply.capability does not name a capability entity",
+            ))
+        }
     };
     let Some(cap_entity) = lookup_entity(&value, st.ctx) else {
-        return Err(unreachable_chain("Static compute/apply.capability authority chain not fully resolvable"));
+        return Err(unreachable_chain(
+            "Static compute/apply.capability authority chain not fully resolvable",
+        ));
     };
     let Some(author) = st.ctx.author.as_deref() else {
-        return Err(refusal(403, "embedded_cap_unauthorized", "Install has no author identity to check the chain against"));
+        return Err(refusal(
+            403,
+            "embedded_cap_unauthorized",
+            "Install has no author identity to check the chain against",
+        ));
     };
 
     // §5.5's chain bound, from the peer's own public constant.
     let mut current = Some(cap_entity);
     for _ in 0..=MAX_CHAIN_DEPTH {
         let Some(cap) = current else {
-            return Err(unreachable_chain("Static compute/apply.capability authority chain not fully resolvable"));
+            return Err(unreachable_chain(
+                "Static compute/apply.capability authority chain not fully resolvable",
+            ));
         };
         if cap.typ != "system/capability/token" {
-            return Err(unreachable_chain("Static compute/apply.capability chain contains a non-capability entity"));
+            return Err(unreachable_chain(
+                "Static compute/apply.capability chain contains a non-capability entity",
+            ));
         }
         if cap.bytes_field("granter") == Some(author) {
             return Ok(()); // IN-CHAIN as a granter.
@@ -278,7 +309,11 @@ fn check_embedded_capability(entity: &Entity, st: &WalkState) -> Result<(), Audi
         };
         current = lookup_entity(parent, st.ctx);
     }
-    Err(refusal(403, "embedded_cap_unauthorized", "Installer identity not in static compute/apply.capability chain"))
+    Err(refusal(
+        403,
+        "embedded_cap_unauthorized",
+        "Installer identity not in static compute/apply.capability chain",
+    ))
 }
 
 // ── Phase 2 — the capability checks ─────────────────────────────────────────────────
@@ -324,14 +359,23 @@ pub fn grant_covers(
     let exec = carrier(handler_pattern, operation.unwrap_or(""), resource);
     let envelope = Envelope::with_included(exec.clone(), included.values().cloned().collect());
     let granter = capability::granter_frame(&envelope, store, local_peer, capability_token);
-    capability::check_permission(local_peer, &granter, &exec, capability_token, handler_pattern) == Verdict::Allow
+    capability::check_permission(
+        local_peer,
+        &granter,
+        &exec,
+        capability_token,
+        handler_pattern,
+    ) == Verdict::Allow
 }
 
 // ── resolution ──────────────────────────────────────────────────────────────────────
 
 /// The audit's resolver: `included`, then the content store. Deliberately NOT §4.2's tiers.
 fn lookup_entity(hash: &[u8], ctx: &AuditContext) -> Option<Entity> {
-    ctx.included.get(hash).cloned().or_else(|| ctx.store.get_by_hash(hash))
+    ctx.included
+        .get(hash)
+        .cloned()
+        .or_else(|| ctx.store.get_by_hash(hash))
 }
 
 fn resolve_literal(hash: Option<&[u8]>, ctx: &AuditContext) -> Option<Entity> {

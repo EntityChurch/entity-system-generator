@@ -120,7 +120,15 @@ fn transition_has_exactly_section_2_1s_fourteen_fields() {
 #[test]
 fn author_and_capability_are_required_caller_capability_is_not() {
     let def = def_of(TRANSITION);
-    for required in ["path", "event", "author", "capability", "handler", "operation", "timestamp"] {
+    for required in [
+        "path",
+        "event",
+        "author",
+        "capability",
+        "handler",
+        "operation",
+        "timestamp",
+    ] {
         let spec = field_spec(&def, required).expect(required);
         assert!(!is_optional(spec), "{required} must not be optional (§2.1)");
     }
@@ -211,16 +219,16 @@ fn publishing_binds_exactly_the_six_oracle_paths() {
     for name in ALL_TYPES {
         // The exact paths `validate-peer -category history` fetches.
         let path = format!("/PEER/system/type/{name}");
-        assert!(
-            type_paths.contains(&path),
-            "missing published path {path}"
-        );
+        assert!(type_paths.contains(&path), "missing published path {path}");
         let bound = store.get_at(&path).expect("bound");
         assert_eq!(bound.text_field("name"), Some(name));
     }
     // I1: nothing outside `system/type/` was written.
     for p in &type_paths {
-        assert!(p.starts_with("/PEER/system/type/"), "{p} escapes the namespace");
+        assert!(
+            p.starts_with("/PEER/system/type/"),
+            "{p} escapes the namespace"
+        );
     }
 }
 
@@ -235,14 +243,8 @@ fn publishing_binds_exactly_the_six_oracle_paths() {
 fn publishing_twice_is_byte_identical() {
     let store = Store::new();
     let first = publish_history_types(&store, "PEER");
-    let hashes_a: Vec<Vec<u8>> = first
-        .iter()
-        .map(|p| store.hash_at(p).unwrap())
-        .collect();
+    let hashes_a: Vec<Vec<u8>> = first.iter().map(|p| store.hash_at(p).unwrap()).collect();
     let second = publish_history_types(&store, "PEER");
-    let hashes_b: Vec<Vec<u8>> = second
-        .iter()
-        .map(|p| store.hash_at(p).unwrap())
-        .collect();
+    let hashes_b: Vec<Vec<u8>> = second.iter().map(|p| store.hash_at(p).unwrap()).collect();
     assert_eq!(hashes_a, hashes_b);
 }

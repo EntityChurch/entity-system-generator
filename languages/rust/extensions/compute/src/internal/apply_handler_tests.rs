@@ -28,7 +28,12 @@ use crate::types::{
 const PEER: &str = "z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH";
 
 fn map(pairs: Vec<(&str, Value)>) -> Value {
-    Value::Map(pairs.into_iter().map(|(k, v)| (Key::Text(k.to_string()), v)).collect())
+    Value::Map(
+        pairs
+            .into_iter()
+            .map(|(k, v)| (Key::Text(k.to_string()), v))
+            .collect(),
+    )
 }
 
 fn text(s: &str) -> Value {
@@ -45,7 +50,12 @@ fn literal(store: &Store, value: Value) -> Vec<u8> {
 }
 
 fn token(handlers: &[&str]) -> Entity {
-    let scope = |items: &[&str]| map(vec![("include", Value::Array(items.iter().map(|s| text(s)).collect()))]);
+    let scope = |items: &[&str]| {
+        map(vec![(
+            "include",
+            Value::Array(items.iter().map(|s| text(s)).collect()),
+        )])
+    };
     Entity::make(
         "system/capability/token",
         map(vec![(
@@ -66,7 +76,10 @@ fn store_with_handler() -> Store {
     let store = Store::new();
     store.bind(
         &format!("/{PEER}/app/h"),
-        &Entity::make("system/handler", map(vec![("interface", text("system/handler/app/h"))])),
+        &Entity::make(
+            "system/handler",
+            map(vec![("interface", text("system/handler/app/h"))]),
+        ),
     );
     store.bind(
         &format!("/{PEER}/system/handler/app/h"),
@@ -76,7 +89,10 @@ fn store_with_handler() -> Store {
                 ("pattern", text("app/h")),
                 (
                     "operations",
-                    map(vec![("run", map(vec![("input_type", text("app/in"))])), ("bare", map(vec![]))]),
+                    map(vec![
+                        ("run", map(vec![("input_type", text("app/in"))])),
+                        ("bare", map(vec![])),
+                    ]),
                 ),
             ]),
         ),
@@ -108,23 +124,41 @@ struct Recorder {
 
 impl Recorder {
     fn replying(status: u64, result: Entity) -> Recorder {
-        Recorder { calls: AtomicUsize::new(0), last: Mutex::new(None), reply: (status, result) }
+        Recorder {
+            calls: AtomicUsize::new(0),
+            last: Mutex::new(None),
+            reply: (status, result),
+        }
     }
 
     fn dispatch(&self, call: DispatchCall) -> (u64, Entity) {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        *self.last.lock().unwrap() = Some((call.path, call.operation, call.resource, call.params, call.capability));
+        *self.last.lock().unwrap() = Some((
+            call.path,
+            call.operation,
+            call.resource,
+            call.params,
+            call.capability,
+        ));
         self.reply.clone()
     }
 }
 
-fn run(store: &Store, apply: &Entity, capability: Option<&Entity>, rec: Option<&Recorder>) -> EvalOutcome {
+fn run(
+    store: &Store,
+    apply: &Entity,
+    capability: Option<&Entity>,
+    rec: Option<&Recorder>,
+) -> EvalOutcome {
     let closure = |call: DispatchCall| rec.expect("dispatcher present").dispatch(call);
     let mut ev = ComputeEvaluator::new(store, PEER, DEFAULT_LIMITS);
     ev.evaluate_in_request(
         apply,
         &format!("/{PEER}/app/expr"),
-        EvaluateOptions { content_store_access: true, ..Default::default() },
+        EvaluateOptions {
+            content_store_access: true,
+            ..Default::default()
+        },
         RequestContext {
             capability,
             dispatch: if rec.is_some() { Some(&closure) } else { None },
@@ -142,7 +176,11 @@ fn code(o: &EvalOutcome) -> String {
     match (&o.error, &o.entity) {
         (Some(e), _) => e.code.clone(),
         (None, Some(e)) if e.typ == ERROR => e.text_field("code").unwrap_or("").to_string(),
-        _ => panic!("expected an error, got value={:?} entity={:?}", o.value, o.entity.as_ref().map(|e| &e.typ)),
+        _ => panic!(
+            "expected an error, got value={:?} entity={:?}",
+            o.value,
+            o.entity.as_ref().map(|e| &e.typ)
+        ),
     }
 }
 
@@ -157,26 +195,50 @@ fn params_are_built_from_the_declared_input_type_and_encoded_per_field() {
     let store = store_with_handler();
     let target = Entity::make("app/thing", map(vec![("x", text("y"))]));
     let target_hash = put(&store, target.clone());
-    let by_hash = put(&store, Entity::make(LOOKUP_HASH, map(vec![("hash", Value::Bytes(target_hash.clone()))])));
+    let by_hash = put(
+        &store,
+        Entity::make(
+            LOOKUP_HASH,
+            map(vec![("hash", Value::Bytes(target_hash.clone()))]),
+        ),
+    );
     let n = literal(&store, Value::UInt(7));
     let expr = apply(
         &store,
         vec![
             ("path", text("app/h")),
             ("operation", text("run")),
-            ("args", Value::Map(vec![(Key::Text("ref".into()), Value::Bytes(by_hash)), (Key::Text("n".into()), Value::Bytes(n))])),
+            (
+                "args",
+                Value::Map(vec![
+                    (Key::Text("ref".into()), Value::Bytes(by_hash)),
+                    (Key::Text("n".into()), Value::Bytes(n)),
+                ]),
+            ),
         ],
     );
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
     let out = run(&store, &expr, None, Some(&rec));
-    assert_eq!(out.entity.as_ref().map(|e| e.typ.as_str()), Some("app/out"), "an entity return passes through");
+    assert_eq!(
+        out.entity.as_ref().map(|e| e.typ.as_str()),
+        Some("app/out"),
+        "an entity return passes through"
+    );
 
     let (path, op, resource, params, cap) = rec.last.lock().unwrap().take().expect("dispatched");
     assert_eq!((path.as_str(), op.as_str()), ("app/h", "run"));
     assert!(resource.is_none() && cap.is_none());
     assert_eq!(params.typ, "app/in");
-    assert_eq!(params.bytes_field("ref"), Some(target_hash.as_slice()), "a system/hash field carries the hash");
-    assert_eq!(params.uint_field("n"), Some(7), "a primitive/any field is inlined");
+    assert_eq!(
+        params.bytes_field("ref"),
+        Some(target_hash.as_slice()),
+        "a system/hash field carries the hash"
+    );
+    assert_eq!(
+        params.uint_field("n"),
+        Some(7),
+        "a primitive/any field is inlined"
+    );
 }
 
 /// The NEGATIVE of the test above: a primitive at a `system/hash` position is `type_mismatch`,
@@ -187,10 +249,20 @@ fn a_primitive_at_a_hash_field_is_type_mismatch_and_not_dispatched() {
     let n = literal(&store, Value::UInt(7));
     let expr = apply(
         &store,
-        vec![("path", text("app/h")), ("operation", text("run")), ("args", Value::Map(vec![(Key::Text("ref".into()), Value::Bytes(n))]))],
+        vec![
+            ("path", text("app/h")),
+            ("operation", text("run")),
+            (
+                "args",
+                Value::Map(vec![(Key::Text("ref".into()), Value::Bytes(n))]),
+            ),
+        ],
     );
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
-    assert_eq!(code(&run(&store, &expr, None, Some(&rec))), CODE_TYPE_MISMATCH);
+    assert_eq!(
+        code(&run(&store, &expr, None, Some(&rec))),
+        CODE_TYPE_MISMATCH
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -199,7 +271,10 @@ fn a_primitive_at_a_hash_field_is_type_mismatch_and_not_dispatched() {
 #[test]
 fn a_bare_primitive_return_is_rewrapped_and_a_result_is_not() {
     let store = store_with_handler();
-    let expr = apply(&store, vec![("path", text("app/h")), ("operation", text("run"))]);
+    let expr = apply(
+        &store,
+        vec![("path", text("app/h")), ("operation", text("run"))],
+    );
 
     let rec = Recorder::replying(200, Entity::make("primitive/any", Value::UInt(42)));
     let out = run(&store, &expr, None, Some(&rec));
@@ -219,17 +294,44 @@ fn a_bare_primitive_return_is_rewrapped_and_a_result_is_not() {
 #[test]
 fn a_failed_dispatch_maps_to_its_compute_error_permission_denied_or_not_found() {
     let store = store_with_handler();
-    let expr = apply(&store, vec![("path", text("app/h")), ("operation", text("bare"))]);
+    let expr = apply(
+        &store,
+        vec![("path", text("app/h")), ("operation", text("bare"))],
+    );
 
-    let rec = Recorder::replying(403, Entity::make("system/protocol/error", map(vec![("code", text("capability_denied"))])));
-    assert_eq!(code(&run(&store, &expr, None, Some(&rec))), CODE_PERMISSION_DENIED);
-    assert_eq!(rec.last.lock().unwrap().as_ref().unwrap().3.typ, "primitive/any");
+    let rec = Recorder::replying(
+        403,
+        Entity::make(
+            "system/protocol/error",
+            map(vec![("code", text("capability_denied"))]),
+        ),
+    );
+    assert_eq!(
+        code(&run(&store, &expr, None, Some(&rec))),
+        CODE_PERMISSION_DENIED
+    );
+    assert_eq!(
+        rec.last.lock().unwrap().as_ref().unwrap().3.typ,
+        "primitive/any"
+    );
 
-    let rec = Recorder::replying(500, Entity::make("system/protocol/error", map(vec![("code", text("internal_error"))])));
+    let rec = Recorder::replying(
+        500,
+        Entity::make(
+            "system/protocol/error",
+            map(vec![("code", text("internal_error"))]),
+        ),
+    );
     assert_eq!(code(&run(&store, &expr, None, Some(&rec))), CODE_NOT_FOUND);
 
-    let rec = Recorder::replying(400, Entity::make(ERROR, map(vec![("code", text("division_by_zero"))])));
-    assert_eq!(code(&run(&store, &expr, None, Some(&rec))), "division_by_zero");
+    let rec = Recorder::replying(
+        400,
+        Entity::make(ERROR, map(vec![("code", text("division_by_zero"))])),
+    );
+    assert_eq!(
+        code(&run(&store, &expr, None, Some(&rec))),
+        "division_by_zero"
+    );
 }
 
 /// §4.1 — `resolve_handler` and the operation lookup come BEFORE the args: an unresolvable arg does
@@ -241,24 +343,60 @@ fn the_handler_and_operation_are_resolved_before_any_arg_and_by_longest_prefix()
     let broken_arg = Value::Map(vec![(Key::Text("n".into()), Value::Bytes(vec![0; 33]))]);
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
 
-    let nowhere = apply(&store, vec![("path", text("app/nowhere")), ("operation", text("run")), ("args", broken_arg.clone())]);
-    assert_eq!(code(&run(&store, &nowhere, None, Some(&rec))), CODE_NOT_FOUND);
-    let undeclared = apply(&store, vec![("path", text("app/h")), ("operation", text("nope")), ("args", broken_arg)]);
-    assert_eq!(code(&run(&store, &undeclared, None, Some(&rec))), CODE_INVALID_EXPRESSION);
+    let nowhere = apply(
+        &store,
+        vec![
+            ("path", text("app/nowhere")),
+            ("operation", text("run")),
+            ("args", broken_arg.clone()),
+        ],
+    );
+    assert_eq!(
+        code(&run(&store, &nowhere, None, Some(&rec))),
+        CODE_NOT_FOUND
+    );
+    let undeclared = apply(
+        &store,
+        vec![
+            ("path", text("app/h")),
+            ("operation", text("nope")),
+            ("args", broken_arg),
+        ],
+    );
+    assert_eq!(
+        code(&run(&store, &undeclared, None, Some(&rec))),
+        CODE_INVALID_EXPRESSION
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 
-    let sub = apply(&store, vec![("path", text("app/h/deeper")), ("operation", text("run"))]);
+    let sub = apply(
+        &store,
+        vec![("path", text("app/h/deeper")), ("operation", text("run"))],
+    );
     run(&store, &sub, None, Some(&rec));
-    assert_eq!(rec.last.lock().unwrap().as_ref().expect("dispatched").3.typ, "app/in");
+    assert_eq!(
+        rec.last.lock().unwrap().as_ref().expect("dispatched").3.typ,
+        "app/in"
+    );
 }
 
 /// §2.1 [MUST] — `path` and `fn` together is invalid, and handler mode is not entered.
 #[test]
 fn path_and_fn_together_is_invalid_and_not_dispatched() {
     let store = store_with_handler();
-    let expr = apply(&store, vec![("path", text("app/h")), ("operation", text("run")), ("fn", Value::Bytes(vec![0; 33]))]);
+    let expr = apply(
+        &store,
+        vec![
+            ("path", text("app/h")),
+            ("operation", text("run")),
+            ("fn", Value::Bytes(vec![0; 33])),
+        ],
+    );
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
-    assert_eq!(code(&run(&store, &expr, None, Some(&rec))), CODE_INVALID_EXPRESSION);
+    assert_eq!(
+        code(&run(&store, &expr, None, Some(&rec))),
+        CODE_INVALID_EXPRESSION
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -266,10 +404,17 @@ fn path_and_fn_together_is_invalid_and_not_dispatched() {
 #[test]
 fn with_no_dispatcher_handler_mode_is_invalid_expression_naming_why() {
     let store = store_with_handler();
-    let expr = apply(&store, vec![("path", text("app/h")), ("operation", text("run"))]);
+    let expr = apply(
+        &store,
+        vec![("path", text("app/h")), ("operation", text("run"))],
+    );
     let out = run(&store, &expr, None, None);
     assert_eq!(code(&out), CODE_INVALID_EXPRESSION);
-    assert!(out.error.unwrap().detail.contains("handler dispatch not available"));
+    assert!(out
+        .error
+        .unwrap()
+        .detail
+        .contains("handler dispatch not available"));
 }
 
 /// F2 — the dual check. The provided capability must cover the target, AND so must `ctx.capability`.
@@ -278,11 +423,20 @@ fn with_no_dispatcher_handler_mode_is_invalid_expression_naming_why() {
 #[test]
 fn the_dual_check_denies_on_either_capability_and_dispatches_under_the_provided_one() {
     let store = store_with_handler();
-    let resource = literal(&store, map(vec![("targets", Value::Array(vec![text("app/h/x")]))]));
+    let resource = literal(
+        &store,
+        map(vec![("targets", Value::Array(vec![text("app/h/x")]))]),
+    );
     let wide = token(&["*"]);
     let narrow = token(&["app/elsewhere"]);
     let with_cap = |cap: &Entity| {
-        let cap_lit = put(&store, Entity::make(LOOKUP_HASH, map(vec![("hash", Value::Bytes(put(&store, cap.clone())))])));
+        let cap_lit = put(
+            &store,
+            Entity::make(
+                LOOKUP_HASH,
+                map(vec![("hash", Value::Bytes(put(&store, cap.clone())))]),
+            ),
+        );
         apply(
             &store,
             vec![
@@ -296,17 +450,26 @@ fn the_dual_check_denies_on_either_capability_and_dispatches_under_the_provided_
 
     // provided does not cover
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
-    assert_eq!(code(&run(&store, &with_cap(&narrow), Some(&wide), Some(&rec))), CODE_PERMISSION_DENIED);
+    assert_eq!(
+        code(&run(&store, &with_cap(&narrow), Some(&wide), Some(&rec))),
+        CODE_PERMISSION_DENIED
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 
     // the ceiling does not cover
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
-    assert_eq!(code(&run(&store, &with_cap(&wide), Some(&narrow), Some(&rec))), CODE_PERMISSION_DENIED);
+    assert_eq!(
+        code(&run(&store, &with_cap(&wide), Some(&narrow), Some(&rec))),
+        CODE_PERMISSION_DENIED
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 
     // no ceiling at all — FAIL CLOSED rather than skip the half of the check it cannot make
     let rec = Recorder::replying(200, Entity::make("app/out", map(vec![])));
-    assert_eq!(code(&run(&store, &with_cap(&wide), None, Some(&rec))), CODE_PERMISSION_DENIED);
+    assert_eq!(
+        code(&run(&store, &with_cap(&wide), None, Some(&rec))),
+        CODE_PERMISSION_DENIED
+    );
     assert_eq!(rec.calls.load(Ordering::SeqCst), 0);
 
     // both cover
@@ -315,5 +478,8 @@ fn the_dual_check_denies_on_either_capability_and_dispatches_under_the_provided_
     assert_eq!(out.entity.map(|e| e.typ), Some("app/out".to_string()));
     let (_, _, res, _, cap) = rec.last.lock().unwrap().take().unwrap();
     assert_eq!(cap.map(|c| c.hash), Some(wide.hash.clone()));
-    assert_eq!(res, Some(map(vec![("targets", Value::Array(vec![text("app/h/x")]))])));
+    assert_eq!(
+        res,
+        Some(map(vec![("targets", Value::Array(vec![text("app/h/x")]))]))
+    );
 }

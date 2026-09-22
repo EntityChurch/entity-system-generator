@@ -109,7 +109,10 @@ fn hash_hex_includes_the_leading_format_byte() {
     let e = Entity::make("system/type", Value::Map(vec![]));
     let hex = hash_hex_with_format(&e.hash);
     assert_eq!(hex.len(), 66, "expected 33 bytes of hex, got {}", hex.len());
-    assert!(hex.starts_with("00"), "format byte 0 (ecfv1-sha256) must lead");
+    assert!(
+        hex.starts_with("00"),
+        "format byte 0 (ecfv1-sha256) must lead"
+    );
 }
 
 // ── §2.4 / §5.3 descriptors ──────────────────────────────────────────────────
@@ -127,14 +130,23 @@ fn a_descriptor_with_neither_media_type_nor_type_ref_is_refused() {
 #[test]
 fn the_five_three_integrity_check_rejects_a_mismatched_anchor() {
     let blob = create_blob_fixed(b"payload", 4);
-    let d = create_descriptor(&blob.blob.hash, Some("application/octet-stream"), None, None).unwrap();
+    let d = create_descriptor(
+        &blob.blob.hash,
+        Some("application/octet-stream"),
+        None,
+        None,
+    )
+    .unwrap();
     assert!(descriptor_matches_anchor(&d, &blob.blob.hash));
     // NEGATIVE CONTROL: the same function must reject a different anchor, or "it
     // matched" says nothing.
     assert!(!descriptor_matches_anchor(&d, &[9u8; 33]));
     // And a non-descriptor entity is rejected on type before content.
     let not_a_descriptor = Entity::make("system/type", Value::Map(vec![]));
-    assert!(!descriptor_matches_anchor(&not_a_descriptor, &blob.blob.hash));
+    assert!(!descriptor_matches_anchor(
+        &not_a_descriptor,
+        &blob.blob.hash
+    ));
 }
 
 #[test]
@@ -183,10 +195,7 @@ fn the_only_public_route_to_bytes_demands_the_dispatchers_context_and_a_target()
     // surface is what we claim. The DECISION behind it is measured in both directions in
     // `src/sdk.rs`'s `authorization_tests`, which is a unit module because this file —
     // being a third party, correctly — cannot construct a context to drive it with.
-    let f: fn(
-        &HandlerContext<'_>,
-        &str,
-        &[u8],
-    ) -> Result<Vec<u8>, (&'static str, Vec<u8>)> = entity_content::reassemble_under_capability;
+    let f: fn(&HandlerContext<'_>, &str, &[u8]) -> Result<Vec<u8>, (&'static str, Vec<u8>)> =
+        entity_content::reassemble_under_capability;
     let _ = f;
 }

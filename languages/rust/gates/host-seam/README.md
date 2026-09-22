@@ -28,7 +28,7 @@ still reporting four-of-four after `register_handler` went public, because the f
 turned into `E0061` (wrong argument count). A count survives a change of cause; a code does not.
 An unclaimed error code is refused too — then the fixture failed for a reason it does not name.
 
-## Result — keystone `dev` `029d1c7`, 2026-09-12
+## Result — `entity-core-keystone` read 2026-09-12, with H1 landed on the rust peer
 
 ```
 == 2. access_absent ==
@@ -54,7 +54,7 @@ request field into a registration nonce; C returns the peer to `404` with the co
 `200` belonged to the install and to nothing else on the dispatch path. The binary exits non-zero if
 any face the contracts claim installed measures NO.
 
-## The pre-H1 record — keystone `8156792` + working tree, 2026-09-06
+## The pre-H1 record — `entity-core-keystone` read 2026-09-06, before H1 reached the rust peer
 
 ```
 access_absent: E0603 struct `Outcome` is private · E0624 register_handler is private ·

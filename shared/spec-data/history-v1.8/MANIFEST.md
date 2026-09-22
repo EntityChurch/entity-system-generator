@@ -29,7 +29,7 @@ make the pin a graph rather than a set.
 
 **`GUIDE-EXTENSION-DEVELOPMENT.md` MOVED** — `4bbe1521…` → `a3ebc723…`. It is the declared authority
 for `path_required`'s status (Appendix A defers to it by name), so the digest change is load-bearing
-here in a way it was not at v1.7. See `docs/status/HANDOFF-2026-09-08-*` §2 for what the diff
+here in a way it was not at v1.7. See `docs/archive/status/HANDOFF-2026-09-08-*` §2 for what the diff
 contains and what it does and does not change for us.
 
 ---

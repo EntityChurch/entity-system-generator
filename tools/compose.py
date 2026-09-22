@@ -263,8 +263,24 @@ FACES = {"types", "handler", "emit_consumer", "sdk", "evaluator"}
 
 #: `not-installable` is the load-bearing one. It is NOT `not-installed`: the difference is
 #: between a choice and a substrate fact, and only the first is revisitable.
+#:
+#: **`unverifiable` ADDED 2026-09-17, and the vocabulary was short a state the INSTALLER had
+#: been producing for three days.** `install_compute`'s detector is three-valued and its middle
+#: value is *the setter accepted our evaluator and this peer exposes no read-back to confirm it
+#: took* -- which is what keystone's `python` peer does. There was no term for that here, so the
+#: composition kept saying `not-installable`, which had been true before the seam landed and was
+#: the most confident wrong answer available: it reads as a substrate LIMIT while the face is in
+#: fact installed and merely unconfirmed.
+#:
+#: It is the `not-installed` / `not-installable` distinction one level along, and it earns a
+#: value for the same reason that pair did: **`installed` and `installed-but-unconfirmable` are
+#: two different facts wearing one word**, and only the second says *do not read a green here as
+#: evidence the peer consulted anything*. D13's whole subject is that a seam claim names what it
+#: is a claim ABOUT; a state that overstates confirmation is the same category error as one that
+#: overstates the face.
 FACE_STATES = {
     "installed",
+    "unverifiable",
     "not-installed",
     "not-installable",
     "available-unused",

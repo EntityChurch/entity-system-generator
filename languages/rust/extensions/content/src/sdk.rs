@@ -158,10 +158,8 @@ pub fn create_descriptor(
     if media_type.is_none() && type_ref.is_none() {
         return Err("CONTENT §2.4 presence rule: a descriptor MUST carry media_type or type_ref");
     }
-    let mut pairs: Vec<(Key, Value)> = vec![(
-        Key::Text("content".into()),
-        Value::Bytes(content.to_vec()),
-    )];
+    let mut pairs: Vec<(Key, Value)> =
+        vec![(Key::Text("content".into()), Value::Bytes(content.to_vec()))];
     if let Some(m) = media_type {
         pairs.push((Key::Text("media_type".into()), Value::Text(m.to_string())));
     }
@@ -189,8 +187,7 @@ pub fn descriptor_path(publisher_peer_id: &str, blob_hash: &[u8], descriptor: &E
 /// Two-level defence — the path embeds `B_hex`, the body carries `hash(B)`, and both
 /// must agree.
 pub fn descriptor_matches_anchor(descriptor: &Entity, blob_hash: &[u8]) -> bool {
-    descriptor.typ == DESCRIPTOR
-        && descriptor.bytes_field("content") == Some(blob_hash)
+    descriptor.typ == DESCRIPTOR && descriptor.bytes_field("content") == Some(blob_hash)
 }
 
 // ── Reassembly — the §3.4 capability-checking wrapper ────────────────────────

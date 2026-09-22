@@ -181,7 +181,13 @@ impl ContentHandler {
             // With no caller capability — an in-process call no wire request can make — there is no grant
             // to check, as for COMPUTE's eval.
             if let Some(cap) = req.caller_capability {
-                if !capability::check_path_permission(op, target, cap, CONTENT_PATTERN, req.local_peer) {
+                if !capability::check_path_permission(
+                    op,
+                    target,
+                    cap,
+                    CONTENT_PATTERN,
+                    req.local_peer,
+                ) {
                     return ContentOutcome::err(
                         403,
                         "capability_denied",
@@ -312,7 +318,11 @@ impl ContentHandler {
         let has_entity = matches!(entity_val, Some(Value::Map(_)));
 
         if has_envelope && has_entity {
-            return ContentOutcome::err(400, "ambiguous_input", "Specify envelope or entity, not both");
+            return ContentOutcome::err(
+                400,
+                "ambiguous_input",
+                "Specify envelope or entity, not both",
+            );
         }
         if !has_envelope && !has_entity {
             return ContentOutcome::err(400, "missing_input", "Specify envelope or entity");
@@ -333,7 +343,10 @@ impl ContentHandler {
                 Entity::make(
                     INGEST_RESULT,
                     Value::Map(vec![
-                        (Key::Text("root_hash".into()), Value::Bytes(entity.hash.clone())),
+                        (
+                            Key::Text("root_hash".into()),
+                            Value::Bytes(entity.hash.clone()),
+                        ),
                         (Key::Text("ingested_count".into()), Value::UInt(1)),
                     ]),
                 ),
@@ -424,7 +437,10 @@ impl ContentHandler {
                 INGEST_RESULT,
                 Value::Map(vec![
                     (Key::Text("root".into()), root.to_cbor()),
-                    (Key::Text("root_hash".into()), Value::Bytes(root.hash.clone())),
+                    (
+                        Key::Text("root_hash".into()),
+                        Value::Bytes(root.hash.clone()),
+                    ),
                     (Key::Text("ingested_count".into()), Value::UInt(count)),
                 ]),
             ),

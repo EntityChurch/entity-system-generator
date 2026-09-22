@@ -41,6 +41,23 @@ edition = "2021"             # the peer's edition. Ours matches it deliberately:
                              # and neither should differ between a peer and a module
                              # compiled into the same binary.
 
+# ── the Tier-1 `fmt` / `lint` commands for this target ([ADR-0019], D17) ────────
+#
+# `rustfmt` DIRECTLY rather than `cargo fmt`, and that is not a style preference: `cargo
+# fmt` shells `cargo metadata`, which loads the whole workspace, which loads the peer crate
+# by relative path -- so it fails on a tree where the sibling checkout is not mounted, and
+# fails for a reason that has nothing to do with formatting. `rustfmt` reads the files.
+#
+# The edition is passed rather than defaulted, and it is THE SAME FACT four lines above.
+# One copy would be better; two copies in one file is what the format permits today and the
+# skew it guards against (name resolution, closure capture) is why it is spelled out.
+#
+# `typescript` and `python` declare neither key: their toolchain images carry no formatter
+# (no prettier, no ruff, no black) and nothing is fetched at build time -- `--network=none`
+# everywhere. `make fmt` PRINTS that rather than skipping them silently.
+fmt  = "rustfmt --edition 2021 $(find languages/rust/extensions languages/rust/gates -name '*.rs' -not -path '*/output/*')"
+lint = "rustfmt --edition 2021 --check $(find languages/rust/extensions languages/rust/gates -name '*.rs' -not -path '*/output/*')"
+
 [deps]
 # We add NOTHING beyond what the peer already pulls. The extension's only import is the
 # peer -- plus `sha2`, which is NOT an addition: the §3.6.1 gear table needs SHA-256,
@@ -145,5 +162,5 @@ entry_point = "src/lib.rs"
 [peer_drift]
 certified = "93f6f65fdc30"
 since     = "2026-09-14"
-routed    = "docs/status/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
+routed    = "docs/outbox/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
 reason    = "keystone's 45-language sweep moved peer capability source after certification; absorbed by operator ruling rather than routed as a re-certification ask"

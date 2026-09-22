@@ -49,8 +49,8 @@ use super::evaluator::canonicalize_path;
 use super::subgraph::{audit_subgraph, path_permitted, AuditContext, SubgraphAudit};
 use crate::sdk::{ComputeEvaluator, EvaluateOptions, EvaluatorLimits};
 use crate::types::{
-    CODE_CASCADE_LIMIT, CODE_INSTALLATION_GRANT_INVALID, COMPUTE_PATTERN, ERROR, PROCESSES_PREFIX,
-    RECOMMENDED_MAX_CASCADE_DEPTH, RESULT, SUBGRAPH, is_compute_expression,
+    is_compute_expression, CODE_CASCADE_LIMIT, CODE_INSTALLATION_GRANT_INVALID, COMPUTE_PATTERN,
+    ERROR, PROCESSES_PREFIX, RECOMMENDED_MAX_CASCADE_DEPTH, RESULT, SUBGRAPH,
 };
 
 /// The re-entrancy backstop. Twice the cascade limit, so it can only fire where the spec's own
@@ -79,7 +79,10 @@ impl DependencyIndex {
         if !entries.iter().any(|(_, sp)| sp == subgraph_path) {
             entries.push((expression_uri.to_string(), subgraph_path.to_string()));
         }
-        let paths = self.by_subgraph.entry(subgraph_path.to_string()).or_default();
+        let paths = self
+            .by_subgraph
+            .entry(subgraph_path.to_string())
+            .or_default();
         if !paths.iter().any(|p| p == path) {
             paths.push(path.to_string());
         }
@@ -118,7 +121,10 @@ impl ReactiveEngine {
     }
 
     fn with_index<R>(&self, f: impl FnOnce(&mut DependencyIndex) -> R) -> R {
-        let mut guard = self.index.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut guard = self
+            .index
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         f(&mut guard)
     }
 
@@ -160,7 +166,14 @@ impl ReactiveEngine {
                 self.freeze(&peer, subgraph_path, CODE_CASCADE_LIMIT, context);
                 continue;
             }
-            self.re_evaluate(&peer, expression_uri, subgraph_path, &subgraph, context, depth);
+            self.re_evaluate(
+                &peer,
+                expression_uri,
+                subgraph_path,
+                &subgraph,
+                context,
+                depth,
+            );
         }
         REENTRY.with(|r| r.set(r.get() - 1));
     }
@@ -206,7 +219,11 @@ impl ReactiveEngine {
             let Some(root_path) = subgraph.text_field("root_expression_path") else {
                 continue;
             };
-            let Some(expression) = peer.store.get_at(root_path).filter(|e| is_compute_expression(&e.typ)) else {
+            let Some(expression) = peer
+                .store
+                .get_at(root_path)
+                .filter(|e| is_compute_expression(&e.typ))
+            else {
                 continue;
             };
             let Ok(audit) = audit_subgraph(&expression, root_path, &audit_ctx) else {
@@ -233,11 +250,25 @@ impl ReactiveEngine {
 
     /// §3.3's initial evaluation after installation, reachable from the handler so install and
     /// re-install are one path. Returns the result hash written, or `None` when nothing was.
-    pub fn evaluate_now(&self, subgraph_path: &str, context: Option<&ExecContext>) -> Option<Vec<u8>> {
+    pub fn evaluate_now(
+        &self,
+        subgraph_path: &str,
+        context: Option<&ExecContext>,
+    ) -> Option<Vec<u8>> {
         let peer = self.peer.upgrade()?;
-        let subgraph = peer.store.get_at(subgraph_path).filter(|s| s.typ == SUBGRAPH)?;
+        let subgraph = peer
+            .store
+            .get_at(subgraph_path)
+            .filter(|s| s.typ == SUBGRAPH)?;
         let expression_uri = subgraph.text_field("root_expression_path")?.to_string();
-        self.re_evaluate(&peer, &expression_uri, subgraph_path, &subgraph, context, cascade_depth(context))
+        self.re_evaluate(
+            &peer,
+            &expression_uri,
+            subgraph_path,
+            &subgraph,
+            context,
+            cascade_depth(context),
+        )
     }
 
     // ── §7.2 `re_evaluate` ───────────────────────────────────────────────────────────
@@ -265,7 +296,12 @@ impl ReactiveEngine {
         let grant = match grant {
             Some(g) if !is_expired(&g, now_ms()) => g,
             _ => {
-                self.freeze(peer, subgraph_path, CODE_INSTALLATION_GRANT_INVALID, context);
+                self.freeze(
+                    peer,
+                    subgraph_path,
+                    CODE_INSTALLATION_GRANT_INVALID,
+                    context,
+                );
                 return None;
             }
         };
@@ -319,18 +355,37 @@ impl ReactiveEngine {
 
     /// §7.2's freeze: a code-only `compute/error` at the result path, `status: "frozen"` on the
     /// metadata. Recovery is re-installation.
-    fn freeze(&self, peer: &Arc<Peer>, subgraph_path: &str, code: &str, context: Option<&ExecContext>) {
-        let Some(subgraph) = peer.store.get_at(subgraph_path).filter(|s| s.typ == SUBGRAPH) else {
+    fn freeze(
+        &self,
+        peer: &Arc<Peer>,
+        subgraph_path: &str,
+        code: &str,
+        context: Option<&ExecContext>,
+    ) {
+        let Some(subgraph) = peer
+            .store
+            .get_at(subgraph_path)
+            .filter(|s| s.typ == SUBGRAPH)
+        else {
             return;
         };
         if let Some(result_path) = subgraph.text_field("result_path") {
             let error = Entity::make(
                 ERROR,
-                Value::Map(vec![(Key::Text("code".into()), Value::Text(code.to_string()))]),
+                Value::Map(vec![(
+                    Key::Text("code".into()),
+                    Value::Text(code.to_string()),
+                )]),
             );
             self.write(peer, result_path, &error, context, None);
         }
-        self.write(peer, subgraph_path, &with_status(&subgraph, "frozen"), context, None);
+        self.write(
+            peer,
+            subgraph_path,
+            &with_status(&subgraph, "frozen"),
+            context,
+            None,
+        );
     }
 
     fn write(
@@ -341,7 +396,11 @@ impl ReactiveEngine {
         context: Option<&ExecContext>,
         cascade_depth: Option<u64>,
     ) {
-        peer.store.bind_with_context(path, entity, Some(exec_context(peer, context, cascade_depth)));
+        peer.store.bind_with_context(
+            path,
+            entity,
+            Some(exec_context(peer, context, cascade_depth)),
+        );
     }
 }
 
@@ -349,7 +408,11 @@ impl ReactiveEngine {
 /// (SYSTEM-COMPOSITION §3.4). `author` is the local peer (§7.2 evaluates as the local identity);
 /// `caller_capability` is dropped; `handler_grant` is left empty for the cross-port reason
 /// `[substrate.exec_context_handler_grant]` records.
-fn exec_context(peer: &Peer, context: Option<&ExecContext>, cascade_depth: Option<u64>) -> ExecContext {
+fn exec_context(
+    peer: &Peer,
+    context: Option<&ExecContext>,
+    cascade_depth: Option<u64>,
+) -> ExecContext {
     ExecContext {
         request_id: context.map(|c| c.request_id.clone()).unwrap_or_default(),
         handler_pattern: COMPUTE_PATTERN.to_string(),
@@ -392,7 +455,8 @@ fn reactive_budget(grant: &Entity, limits: EvaluatorLimits) -> EvaluatorLimits {
         return out;
     };
     for entry in grants {
-        let Some(compute) = map_get(entry, "constraints").and_then(|c| map_get(c, COMPUTE_PATTERN)) else {
+        let Some(compute) = map_get(entry, "constraints").and_then(|c| map_get(c, COMPUTE_PATTERN))
+        else {
             continue;
         };
         if let Some(Value::UInt(ops)) = map_get(compute, "max_compute_operations") {
@@ -425,7 +489,10 @@ fn result_entity(value: Value, expression: &Entity) -> Entity {
         RESULT,
         Value::Map(vec![
             (Key::Text("value".into()), value),
-            (Key::Text("expression".into()), Value::Bytes(expression.hash.clone())),
+            (
+                Key::Text("expression".into()),
+                Value::Bytes(expression.hash.clone()),
+            ),
         ]),
     )
 }

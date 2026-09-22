@@ -155,7 +155,19 @@ CORPUS = [
 #: on a date — so a path the tree has since moved is a RECORD, not a defect. Counted and
 #: reported, never failed. Rewriting them to keep a gate green would be the thing the
 #: golden rules forbid outright.
-SNAPSHOT_DIRS = ("docs/status",)
+#:
+#: `docs/outbox` joined 2026-09-17 for exactly the same reason, and it is the same class
+#: rather than a second one: a routing packet is a DATED DOCUMENT SENT TO ANOTHER SEAT. It
+#: is immutable the moment it is committed — the recipient has read it, cites it by full
+#: stem, and may have acted on it. Editing a sent packet so a gate in OUR tree stays green
+#: would rewrite a record another repo is reading, which is `AGENTS-STANDARD`'s golden rule
+#: outright. 42 packets, eleven of them naming paths the 2026-09-06 restructure moved.
+#:
+#: `docs/archive` joined the same day and for the strongest version of the argument: a
+#: document is archived BECAUSE it stopped being current. Requiring an archived handoff's
+#: paths to resolve against today's tree is requiring the record to be edited to match a
+#: tree it never described, which is the failure the class exists to refuse.
+SNAPSHOT_DIRS = ("docs/status", "docs/outbox", "docs/archive")
 
 #: Where a sibling repo lives, for the cross-repo class. Read-only to us by charter, so a
 #: citation into one is reported and never failed: it resolves on their cycle.

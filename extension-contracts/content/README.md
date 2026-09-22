@@ -96,9 +96,9 @@ up.
 
 | language | composition | unit tests | handler installable | conformance |
 |---|---|---|---|---|
-| `typescript` | `ts-content` | 31 | yes | `languages/typescript/compositions/content/status/CONFORMANCE-2026-09-05.md` |
-| `python` | `py-content` | 38 | yes | `languages/python/compositions/content/status/CONFORMANCE-2026-09-06.md` |
-| `rust` | `rs-content` | 40 + a compile that must fail | yes, since keystone H1 (2026-09-12) | `languages/rust/compositions/content/status/CONFORMANCE-2026-09-06.md` (pre-H1) |
+| `typescript` | `ts-content` | 31 | yes | `docs/archive/status/CONFORMANCE-2026-09-05-typescript-content.md` |
+| `python` | `py-content` | 38 | yes | `docs/archive/status/CONFORMANCE-2026-09-06-python-content.md` |
+| `rust` | `rs-content` | 40 + a compile that must fail | yes, since keystone H1 (2026-09-12) | `docs/archive/status/CONFORMANCE-2026-09-06-rust-content.md` (pre-H1) |
 
 **No port is a translation of another.** All three are transcriptions of the same pinned snapshot,
 deliberately: a translation of our own first port would agree with it by construction and tell us

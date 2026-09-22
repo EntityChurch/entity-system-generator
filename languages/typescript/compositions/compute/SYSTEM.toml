@@ -329,7 +329,7 @@ disagree with a peer that did not — which §4.2 makes a cross-impl determinism
 [[gate.straddle]]
 check  = "concurrency.t1_1_concurrent_demux"
 why    = "50 ms floor; the ts baseline sits at it, so a ~3 ms composed cost flips the verdict. Same composition on python (9 ms baseline): same cost, both arms PASS. Measured here 2026-09-10 moving WITHIN the composed arm across two rounds of one run, which is the same fact from the other side. The oracle's own message calls the signal informational and not a §6.11 violation."
-routed = "docs/status/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
+routed = "docs/outbox/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
 
 # ── [gate.baseline.*] — D21's REFERENCE IN TIME, RE-BLESSED 2026-09-10 at ROUNDS=2 ───
 #

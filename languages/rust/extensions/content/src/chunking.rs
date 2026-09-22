@@ -165,8 +165,14 @@ fn blob_entity(total_size: usize, chunk_size: usize, chunking: u64, chunks: &[En
     Entity::make(
         BLOB,
         Value::Map(vec![
-            (Key::Text("total_size".into()), Value::UInt(total_size as u64)),
-            (Key::Text("chunk_size".into()), Value::UInt(chunk_size as u64)),
+            (
+                Key::Text("total_size".into()),
+                Value::UInt(total_size as u64),
+            ),
+            (
+                Key::Text("chunk_size".into()),
+                Value::UInt(chunk_size as u64),
+            ),
             (Key::Text("chunking".into()), Value::UInt(chunking)),
             (
                 Key::Text("chunks".into()),

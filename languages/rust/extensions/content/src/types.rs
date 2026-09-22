@@ -106,7 +106,8 @@ fn farray(elem: Value) -> Value {
 /// Render a `system/type` data map. Omit-empty: a type with no fields carries no
 /// `fields` key at all.
 fn type_def(name: &str, fields: Vec<(&str, Value)>) -> Value {
-    let mut pairs: Vec<(Key, Value)> = vec![(Key::Text("name".into()), Value::Text(name.to_string()))];
+    let mut pairs: Vec<(Key, Value)> =
+        vec![(Key::Text("name".into()), Value::Text(name.to_string()))];
     if !fields.is_empty() {
         pairs.push((
             Key::Text("fields".into()),

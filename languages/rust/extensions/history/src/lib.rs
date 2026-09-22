@@ -107,7 +107,10 @@ impl HistoryInstallation {
 ///
 /// SYSTEM-COMPOSITION §2.2 puts history at position 4. `register_tree_consumer` pushes onto a `Vec`
 /// with no position argument, so the order is the wiring program's call order.
-pub fn install_history(peer: &Arc<Peer>, max_walk: Option<u64>) -> Result<HistoryInstallation, RegisterError> {
+pub fn install_history(
+    peer: &Arc<Peer>,
+    max_walk: Option<u64>,
+) -> Result<HistoryInstallation, RegisterError> {
     let handler = match max_walk {
         Some(n) => HistoryHandler::with_max_walk(n),
         None => HistoryHandler::new(),
@@ -115,7 +118,8 @@ pub fn install_history(peer: &Arc<Peer>, max_walk: Option<u64>) -> Result<Histor
     let handler: Arc<dyn Handler> = Arc::new(handler);
     // The certified surface (`install.handler`), detached: the handle unregisters on drop.
     let spec = HandlerSpec::new(handler.pattern(), handler.name()).operations(handler.operations());
-    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?.detach();
+    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?
+        .detach();
 
     let local = peer.local_peer.clone();
     let type_paths = publish_history_types(&peer.store, &local);
@@ -124,23 +128,28 @@ pub fn install_history(peer: &Arc<Peer>, max_walk: Option<u64>) -> Result<Histor
     // than assumed. The fallback is this port's pre-H1 answer and is reported, not hidden.
     let grant = peer
         .store
-        .get_at(&format!("/{local}/system/capability/grants/{HISTORY_PATTERN}"))
+        .get_at(&format!(
+            "/{local}/system/capability/grants/{HISTORY_PATTERN}"
+        ))
         .filter(|e| e.typ == "system/capability/token");
     let handler_grant_available = grant.is_some();
     let identity = RecorderIdentity {
         local_identity_hash: peer.identity.identity_hash.clone(),
-        handler_grant_hash: grant.map(|g| g.hash).unwrap_or_else(|| peer.identity.identity_hash.clone()),
+        handler_grant_hash: grant
+            .map(|g| g.hash)
+            .unwrap_or_else(|| peer.identity.identity_hash.clone()),
         local_peer: local.clone(),
     };
     let recorder = Arc::new(HistoryRecorder::new(identity));
 
     let weak: Weak<Peer> = Arc::downgrade(peer);
     let consumer = recorder.clone();
-    peer.store.register_tree_consumer(move |ev: &TreeChangeEvent| {
-        // A dropped peer means the process is tearing down; there is nothing to record into.
-        let Some(peer) = weak.upgrade() else { return };
-        consumer.on_tree_change(&peer.store, ev);
-    });
+    peer.store
+        .register_tree_consumer(move |ev: &TreeChangeEvent| {
+            // A dropped peer means the process is tearing down; there is nothing to record into.
+            let Some(peer) = weak.upgrade() else { return };
+            consumer.on_tree_change(&peer.store, ev);
+        });
 
     Ok(HistoryInstallation {
         pattern: HISTORY_PATTERN.to_string(),

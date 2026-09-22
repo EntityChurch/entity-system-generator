@@ -83,7 +83,7 @@ profiles   = ["core"]
 [[gate.straddle]]
 check  = "concurrency.t1_1_concurrent_demux"
 why    = "50 ms floor; ts baseline 49.2 ms bare / 52.8 ms composed. Same composition on python: 9.0 / 10.9 ms, both PASS. The oracle's own message calls the signal informational and not a §6.11 violation."
-routed = "docs/status/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
+routed = "docs/outbox/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
 
 [gate.expectation]
 # Pre-registered BEFORE the run, per the cycle-1 discipline. `rs-content` got its

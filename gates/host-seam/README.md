@@ -34,15 +34,15 @@ runs on every composition that targets a peer whose host state is `unknown`.
 7. Probe whether the body can reach the connection's configured frame budget
    (`EXTENSION-CONTENT` §6.2 / §4.2 MUST).
 
-## Result, keystone `4821b09` → `fdc2420`
+## Result, `entity-core-keystone` read 2026-09-03 → 2026-09-04 (H6 landing)
 
 ```
 §11.6.1 writes:  handler_entity yes · interface_entity yes · grant yes · types NO
 Control A (installed):    200, witness=cycle-1:seam-witness-7f3a
 Control B (not installed): 404, not_found
 H1 MEASURED PASS · negative control discriminates · H2 yes · tree+contentStore yes
-CONTENT §6.2 frame budget reachable:  NO  at 4821b09
-                                     YES  at fdc2420   ← H6; this probe was NOT modified
+CONTENT §6.2 frame budget reachable:  NO  before H6 (read 2026-09-03)
+                                     YES  after  H6 (read 2026-09-04)   ← this probe was NOT modified
 ```
 
 **That last row is the useful one.** `frame_budget_reachable` is the field that raised H6 as a
@@ -65,7 +65,7 @@ evaluator was never asked"* are different failures — installs a live handler a
 as its own positive control. Scenario 3 installs an evaluator through the **H7 seam** and checks both
 halves of its contract: that a richer body reaches it, and that the `compute/literal` floor does not.
 
-### Result — first at keystone `46d599b`, then at `fdc2420` after the fix
+### Result — `entity-core-keystone` read 2026-09-03 (before the H7 seam), then 2026-09-04 (after it)
 
 ```
 Scenario 1 — nothing installed
@@ -77,16 +77,16 @@ C. body = compute/arithmetic{add,2,3}            501  unsupported_expression
 D. that handler called directly                  200  witness returned
    evaluator invoked BY DISPATCH:  (none — never asked)
 
-Scenario 3 — an evaluator installed THROUGH the H7 seam        [46d599b: absent]
+Scenario 3 — an evaluator installed THROUGH the H7 seam    [before H7: absent]
 E. body = compute/arithmetic{add,2,3}            200  value=5      ← computed from the tree
 F. body = compute/literal{42}   (the floor)      200  value=42
    evaluator invoked by dispatch:  evaluate:compute/arithmetic    ← and NOT for F
 ```
 
-**At `46d599b` this measured H7 absent** — the entity-native evaluator was not delegable, so model 3
-meant `compute/literal` and nothing else. Routed (`docs/status/ROUTING-2026-09-03-b-*`).
+**Before the H7 seam landed this measured H7 absent** — the entity-native evaluator was not delegable, so model 3
+meant `compute/literal` and nothing else. Routed (`docs/outbox/ROUTING-2026-09-03-b-*`).
 
-**At `fdc2420` H7 is SATISFIED, by execution.** `Peer.setExpressionEvaluator` is consulted after the
+**With the seam in place H7 is SATISFIED, by execution.** `Peer.setExpressionEvaluator` is consulted after the
 built-in literal path and before the `501`. E's witness is **the computed sum `5`, read out of the
 expression graph in the tree** — no constant-returning body and no `compute/literal` can produce it.
 F is the safety property: the floor answers first and the evaluator is **never consulted for it**,

@@ -48,7 +48,7 @@ profiles   = ["core"]
 #     install, so the distinction was invisible and cost nothing. `rs-content` is where
 #     it stops being invisible: there the types face installs, the handler face cannot,
 #     and exactly the 3 pass while exactly the 5 do not. Measured, not re-read --
-#     languages/rust/compositions/content/status/CONFORMANCE-2026-09-06.md §3.1.
+#     docs/archive/status/CONFORMANCE-2026-09-06-rust-content.md §3.1.
 #   4 measure the oracle's own library   inline_include_at_threshold and
 #                           inline_include_above_threshold call exerciseInlineInclude, which
 #                           builds an in-memory store and never contacts the peer;
@@ -103,7 +103,7 @@ skip_cause         = "needs a local/files root to seed >16 MiB of content; not i
 [[gate.straddle]]
 check  = "concurrency.t1_1_concurrent_demux"
 why    = "50 ms floor; ts baseline sits at it, so a ~3 ms composed cost flips the verdict. Same composition on python (9 ms baseline): same cost, both arms PASS. The oracle's own message calls the signal informational and not a §6.11 violation."
-routed = "docs/status/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
+routed = "docs/outbox/ROUTING-2026-09-07-f-core-go-a-fixed-floor-makes-a-check-verdict-a-function-of-machine-speed.md"
 
 # RE-BLESSED 2026-09-09 — THE ORACLE MOVED, NOT THE COMPOSITION. `entity-core-go`'s core
 # profile grew by 20 check ENTRIES (756 -> 776, keyed `category.name`): 19 newly-named in

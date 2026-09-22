@@ -114,7 +114,11 @@ pub struct ComputeEvaluator<'a> {
 }
 
 impl<'a> ComputeEvaluator<'a> {
-    pub fn new(store: &'a Store, local_peer: &'a str, limits: EvaluatorLimits) -> ComputeEvaluator<'a> {
+    pub fn new(
+        store: &'a Store,
+        local_peer: &'a str,
+        limits: EvaluatorLimits,
+    ) -> ComputeEvaluator<'a> {
         ComputeEvaluator {
             store,
             local_peer,
@@ -138,7 +142,12 @@ impl<'a> ComputeEvaluator<'a> {
         subgraph_root: &str,
         options: EvaluateOptions<'_>,
     ) -> EvalOutcome {
-        self.evaluate_in_request(expression, subgraph_root, options, RequestContext::default())
+        self.evaluate_in_request(
+            expression,
+            subgraph_root,
+            options,
+            RequestContext::default(),
+        )
     }
 
     /// [`Self::evaluate_at`] from inside a dispatched request: §4.1's `ctx.capability`, its
@@ -168,7 +177,12 @@ impl<'a> ComputeEvaluator<'a> {
         let store = self.store;
         let local_peer = self.local_peer;
         let content_store_access = options.content_store_access;
-        let RequestContext { capability, dispatch, bindings, exec_context } = request;
+        let RequestContext {
+            capability,
+            dispatch,
+            bindings,
+            exec_context,
+        } = request;
 
         let (outcome, dependencies) = std::thread::scope(|s| {
             std::thread::Builder::new()

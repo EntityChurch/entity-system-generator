@@ -417,7 +417,8 @@ impl HistoryHandler {
         // It did not in any of our three ports until 2026-09-12 (cross-port review): every rollback was
         // recorded as the peer's own `system/tree:put`, and the oracle's `rollback_new_transition`
         // checks only `event` and `hash`, so nothing could see it.
-        req.store.bind_with_context(&path, &entity, req.context.cloned());
+        req.store
+            .bind_with_context(&path, &entity, req.context.cloned());
 
         HistoryOutcome::ok(Entity::make(
             ROLLBACK_RESULT,
@@ -440,15 +441,12 @@ impl HistoryHandler {
     /// `has_more` to continue with; applied here it turned a real rollback target deeper than
     /// `max_walk` transitions into a false `404 not_in_history`, which breaks §4.3.2's MUST. The chain
     /// is content-addressed and cannot cycle. (`[assumptions].max_walk`; 2026-09-12 cross-port review.)
-    pub fn is_in_history(
-        &self,
-        req: &HandlerRequest<'_>,
-        path: &str,
-        target_hash: &[u8],
-    ) -> bool {
+    pub fn is_in_history(&self, req: &HandlerRequest<'_>, path: &str, target_hash: &[u8]) -> bool {
         let mut current = req.store.hash_at(&self.head_path(req.local_peer, path));
         loop {
-            let Some(h) = current.clone() else { return false };
+            let Some(h) = current.clone() else {
+                return false;
+            };
             let Some(transition) = req.store.get_by_hash(&h) else {
                 return false;
             };

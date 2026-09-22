@@ -6,7 +6,9 @@
 
 use std::sync::Arc;
 
-use entity_compute::{ComputeEvaluator, EvalOutcome, EvaluateOptions, EvaluatorLimits, DEFAULT_LIMITS, LITERAL};
+use entity_compute::{
+    ComputeEvaluator, EvalOutcome, EvaluateOptions, EvaluatorLimits, DEFAULT_LIMITS, LITERAL,
+};
 use entity_core_protocol::peer::model::Entity;
 use entity_core_protocol::peer::store::Store;
 use entity_core_protocol::peer::{CreateOptions, Peer};
@@ -20,7 +22,12 @@ pub fn root() -> String {
 
 /// A map value from `(&str, Value)` pairs.
 pub fn map(pairs: Vec<(&str, Value)>) -> Value {
-    Value::Map(pairs.into_iter().map(|(k, v)| (Key::Text(k.to_string()), v)).collect())
+    Value::Map(
+        pairs
+            .into_iter()
+            .map(|(k, v)| (Key::Text(k.to_string()), v))
+            .collect(),
+    )
 }
 
 pub fn text(s: &str) -> Value {
@@ -57,24 +64,37 @@ pub fn run(store: &Store, expr: &Entity) -> EvalOutcome {
     run_with(store, expr, DEFAULT_LIMITS, EvaluateOptions::default())
 }
 
-pub fn run_with(store: &Store, expr: &Entity, limits: EvaluatorLimits, options: EvaluateOptions) -> EvalOutcome {
+pub fn run_with(
+    store: &Store,
+    expr: &Entity,
+    limits: EvaluatorLimits,
+    options: EvaluateOptions,
+) -> EvalOutcome {
     ComputeEvaluator::new(store, PEER, limits).evaluate_at(expr, &root(), options)
 }
 
 /// Assert success with a data value, reporting the CODE on failure.
 pub fn value_of(outcome: &EvalOutcome) -> Value {
     if let Some(e) = &outcome.error {
-        panic!("expected a value, got compute/error {} ({})", e.code, e.detail);
+        panic!(
+            "expected a value, got compute/error {} ({})",
+            e.code, e.detail
+        );
     }
-    outcome
-        .value
-        .clone()
-        .unwrap_or_else(|| panic!("expected a data value, got entity {:?}", outcome.entity.as_ref().map(|e| &e.typ)))
+    outcome.value.clone().unwrap_or_else(|| {
+        panic!(
+            "expected a data value, got entity {:?}",
+            outcome.entity.as_ref().map(|e| &e.typ)
+        )
+    })
 }
 
 pub fn entity_of(outcome: &EvalOutcome) -> Entity {
     if let Some(e) = &outcome.error {
-        panic!("expected an entity, got compute/error {} ({})", e.code, e.detail);
+        panic!(
+            "expected an entity, got compute/error {} ({})",
+            e.code, e.detail
+        );
     }
     outcome.entity.clone().expect("expected an entity result")
 }
@@ -82,7 +102,11 @@ pub fn entity_of(outcome: &EvalOutcome) -> Entity {
 pub fn code_of(outcome: &EvalOutcome) -> String {
     match &outcome.error {
         Some(e) => e.code.clone(),
-        None => panic!("expected an error, got {:?} / {:?}", outcome.value, outcome.entity.as_ref().map(|e| &e.typ)),
+        None => panic!(
+            "expected an error, got {:?} / {:?}",
+            outcome.value,
+            outcome.entity.as_ref().map(|e| &e.typ)
+        ),
     }
 }
 
@@ -103,7 +127,12 @@ pub fn abs(p: &Peer, rel: &str) -> String {
 /// `check_permission` reads only the `grants` array, so for the handler's per-path checks a token
 /// with the right grant shape is the thing under test and a signature would add nothing.
 pub fn token(granter: &[u8], handlers: &[&str], resources: &[&str], operations: &[&str]) -> Entity {
-    let scope = |items: &[&str]| map(vec![("include", Value::Array(items.iter().map(|s| text(s)).collect()))]);
+    let scope = |items: &[&str]| {
+        map(vec![(
+            "include",
+            Value::Array(items.iter().map(|s| text(s)).collect()),
+        )])
+    };
     entity(
         "system/capability/token",
         vec![

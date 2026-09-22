@@ -37,8 +37,8 @@ pub mod types;
 mod internal;
 
 pub use chunking::{
-    cdc_boundaries, cdc_params, create_blob, create_blob_cdc, create_blob_fixed, gear_table, store_blob,
-    Blob, CdcParams,
+    cdc_boundaries, cdc_params, create_blob, create_blob_cdc, create_blob_fixed, gear_table,
+    store_blob, Blob, CdcParams,
 };
 pub use handler::{
     ContentHandler, ContentOutcome, FrameBudget, HandlerRequest, FRAME_RESERVE_BYTES, OPERATIONS,
@@ -77,14 +77,18 @@ pub struct ContentInstallation {
 /// Takes `&Arc<Peer>` (it took `&Peer`): the certified surface, `Peer::register_handler`, installs
 /// through the `Arc` so its handle can unregister. The handle is detached — installed for the peer's
 /// life, as before.
-pub fn install_content(peer: &Arc<Peer>, namespace: Option<&str>) -> Result<ContentInstallation, RegisterError> {
+pub fn install_content(
+    peer: &Arc<Peer>,
+    namespace: Option<&str>,
+) -> Result<ContentInstallation, RegisterError> {
     let handler = match namespace {
         Some(ns) => ContentHandler::with_namespace(ns),
         None => ContentHandler::new(),
     };
     let handler: Arc<dyn Handler> = Arc::new(handler);
     let spec = HandlerSpec::new(handler.pattern(), handler.name()).operations(handler.operations());
-    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?.detach();
+    peer.register_handler(spec, move |ctx: &HandlerContext<'_>| handler.handle(ctx))?
+        .detach();
     let local = &peer.local_peer;
     Ok(ContentInstallation {
         pattern: CONTENT_PATTERN.to_string(),

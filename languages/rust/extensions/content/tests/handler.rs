@@ -109,7 +109,12 @@ fn a_target_the_capability_does_not_cover_is_403_even_inside_the_namespace() {
     let store = Store::new();
     let h = ContentHandler::new();
     let grant = |resources: &str| {
-        let scope = |s: &str| Value::Map(vec![(Key::Text("include".into()), Value::Array(vec![Value::Text(s.into())]))]);
+        let scope = |s: &str| {
+            Value::Map(vec![(
+                Key::Text("include".into()),
+                Value::Array(vec![Value::Text(s.into())]),
+            )])
+        };
         Entity::make(
             "system/capability/token",
             Value::Map(vec![(
@@ -122,16 +127,27 @@ fn a_target_the_capability_does_not_cover_is_403_even_inside_the_namespace() {
             )]),
         )
     };
-    let e = exec("get", get_params(&[]), Some(targets(&["system/content/private/x"])));
+    let e = exec(
+        "get",
+        get_params(&[]),
+        Some(targets(&["system/content/private/x"])),
+    );
     let narrow = grant("system/content/public/*");
     let mut r = req(&e, &store);
     r.caller_capability = Some(&narrow);
     let out = h.handle_op("get", &r);
-    assert_eq!((out.status, code_of(&out.result).as_str()), (403, "capability_denied"));
+    assert_eq!(
+        (out.status, code_of(&out.result).as_str()),
+        (403, "capability_denied")
+    );
 
     let wide = grant("system/content/*");
     r.caller_capability = Some(&wide);
-    assert_eq!(h.handle_op("get", &r).status, 200, "control: a covering grant proceeds");
+    assert_eq!(
+        h.handle_op("get", &r).status,
+        200,
+        "control: a covering grant proceeds"
+    );
 }
 
 /// §6.2 — the budget pays for the `found`/`missing` entries too, one per requested hash. A budget
@@ -142,7 +158,10 @@ fn a_target_the_capability_does_not_cover_is_403_even_inside_the_namespace() {
 fn the_budget_is_charged_for_every_hash_list_entry_not_only_packed_entities() {
     let store = Store::new();
     let h = ContentHandler::new();
-    let e = Entity::make("test/blob", Value::Map(vec![(Key::Text("p".into()), Value::Bytes(vec![7; 200]))]));
+    let e = Entity::make(
+        "test/blob",
+        Value::Map(vec![(Key::Text("p".into()), Value::Bytes(vec![7; 200]))]),
+    );
     store.put_entity(&e);
     let wire = entity_core_protocol::cbor::encode(&e.to_cbor()).len();
     let budget = entity_content::FRAME_RESERVE_BYTES + 35 + wire + e.hash.len();
@@ -154,9 +173,17 @@ fn the_budget_is_charged_for_every_hash_list_entry_not_only_packed_entities() {
         assert_eq!(out.status, 200);
         out.included.len()
     };
-    assert_eq!(run(&[e.hash.clone()]), 1, "control: a budget that exactly fits packs the entity");
+    assert_eq!(
+        run(&[e.hash.clone()]),
+        1,
+        "control: a budget that exactly fits packs the entity"
+    );
     let absent = vec![0u8; 33];
-    assert_eq!(run(&[e.hash.clone(), absent]), 0, "the absent hash's `missing` entry is part of the response");
+    assert_eq!(
+        run(&[e.hash.clone(), absent]),
+        0,
+        "the absent hash's `missing` entry is part of the response"
+    );
 }
 
 #[test]
@@ -275,9 +302,16 @@ fn the_frame_budget_bounds_the_batch_and_the_rest_go_to_missing_in_order() {
 #[test]
 fn from_peer_reads_the_configured_budget_by_value() {
     use entity_core_protocol::peer::{CreateOptions, Peer, PeerConfig};
-    let opts = || CreateOptions { seed: [0x11; 32], open_grants: true, conformance: false };
+    let opts = || CreateOptions {
+        seed: [0x11; 32],
+        open_grants: true,
+        conformance: false,
+    };
     let configured = Peer::create_with(opts(), PeerConfig::default().max_frame_bytes(3_145_749));
-    assert_eq!(FrameBudget::from_peer(&configured), FrameBudget::Enforced(3_145_749));
+    assert_eq!(
+        FrameBudget::from_peer(&configured),
+        FrameBudget::Enforced(3_145_749)
+    );
     let default = Peer::create(opts());
     assert_eq!(
         FrameBudget::from_peer(&default),
@@ -296,7 +330,10 @@ fn ingest_entity_mode_stores_one_and_omits_root() {
     let h = ContentHandler::new();
     let payload = Entity::make(
         "system/content/chunk",
-        Value::Map(vec![(Key::Text("payload".into()), Value::Bytes(b"hi".to_vec()))]),
+        Value::Map(vec![(
+            Key::Text("payload".into()),
+            Value::Bytes(b"hi".to_vec()),
+        )]),
     );
     let params = Entity::make(
         "system/content/ingest-request",
@@ -308,7 +345,10 @@ fn ingest_entity_mode_stores_one_and_omits_root() {
     assert_eq!(out.status, 200);
     assert_eq!(out.result.typ, INGEST_RESULT);
     assert_eq!(out.result.uint_field("ingested_count"), Some(1));
-    assert_eq!(out.result.bytes_field("root_hash"), Some(payload.hash.as_slice()));
+    assert_eq!(
+        out.result.bytes_field("root_hash"),
+        Some(payload.hash.as_slice())
+    );
     assert!(
         out.result.field("root").is_none(),
         "root MUST be absent in entity mode"
@@ -322,7 +362,10 @@ fn ingest_envelope_mode_inlines_root_and_counts_included() {
     let h = ContentHandler::new();
     let inner = Entity::make(
         "system/content/chunk",
-        Value::Map(vec![(Key::Text("payload".into()), Value::Bytes(b"a".to_vec()))]),
+        Value::Map(vec![(
+            Key::Text("payload".into()),
+            Value::Bytes(b"a".to_vec()),
+        )]),
     );
     let root = Entity::make(
         "system/content/blob",
@@ -367,7 +410,10 @@ fn an_included_key_that_does_not_match_its_entity_is_400_hash_mismatch() {
     let h = ContentHandler::new();
     let inner = Entity::make(
         "system/content/chunk",
-        Value::Map(vec![(Key::Text("payload".into()), Value::Bytes(b"a".to_vec()))]),
+        Value::Map(vec![(
+            Key::Text("payload".into()),
+            Value::Bytes(b"a".to_vec()),
+        )]),
     );
     let root = Entity::make("system/content/blob", Value::Map(vec![]));
     let envelope = Value::Map(vec![

@@ -3,6 +3,10 @@
 # You declare; the release pipeline publishes ([ADR-0031]). Which files reach public
 # master, the gates, and the forge push are not ours. This file is the whole interface.
 #
+# IT IS A KEEP-LIST. `canon-filter` DROPS EVERY ROOT-LEVEL AND `docs/**` MARKDOWN FILE
+# NOT NAMED HERE. Absence is a deletion, not an omission — so a durable document left
+# undeclared is silently withdrawn from every reader outside this ecosystem.
+#
 # Everything declared here is addressed to a reader OUTSIDE this ecosystem. Release
 # tooling, internal paths, who decided what and when do not belong in a declared file.
 # Internal docs under docs/status/ publish nothing and carry no scrub obligation.
@@ -10,6 +14,69 @@
 # `spec pins` is scoped to this keep-list, because this list IS the published surface.
 # Run it before a release cut and after adding any commit citation to a declared doc:
 #   python3 <arch-tools>/spec-tool/cli.py pins --root . --gate
+
+# ── What each directory IS ([ADR-0021]; new 2026-09-17) ───────────────────────
+#
+# The doc rules used to carry one hardcoded idea of where documents live -- "dated docs
+# belong under a path segment named `status`" -- and were wrong about any repo organised
+# differently. These blocks say what a directory is instead of leaving it inferred.
+# Longest path prefix wins, so a nested area can differ from its parent.
+#
+# NOTE, stated rather than discovered later: `[[area]]` is read by `conform-audit`. It is
+# NOT read by `canon-filter`, whose doc-root test is an ANCHORED prefix match -- so a
+# `status/` directory nested inside `languages/<t>/compositions/<c>/` was never a doc root
+# to it and published ungated. That is why the four dated CONFORMANCE snapshots were MOVED
+# to `docs/archive/status/` rather than declared in place (W-28). A declaration does not
+# change what publishes; only the path does.
+
+[[area]]
+path      = "docs/status"
+kind      = "status"      # dated, episodic, ages out. Handoffs, reviews, proposals.
+publishes = false
+
+[[area]]
+path      = "docs/archive"
+kind      = "archive"     # dated BY DESIGN and does not age out -- the record.
+publishes = false
+
+[[area]]
+path      = "docs/outbox"
+kind      = "outbox"      # routing packets we SENT. Never published, and a check enforces it.
+publishes = false
+
+[[area]]
+path      = "docs/agents/memory"
+kind      = "memory"      # durable, indexed, opened by trigger. Publishes.
+publishes = true
+
+[[area]]
+path      = "docs/adr"
+kind      = "docs"        # our own ADRs. Durable, and deliberately undeclared -- see the
+publishes = false         # NOT-declared note at the foot of this file.
+
+# ── Living docs: durable, edited in place, inside an otherwise-dated area ──────
+#
+# `internal = true` is the case that had no honest answer before. A tracker is durable AND
+# must never publish; the only escape used to be "declare it canonical", which PUBLISHES
+# it -- so keeping a tracker, which the routing standard requires, was nagged, and the only
+# way to silence the nag was to leak seat-to-seat material.
+
+[[living]]
+glob     = "docs/status/TRACKER-*.md"
+internal = true
+
+[[living]]
+path     = "docs/status/LEDGER-generator-open-work.md"
+internal = true           # our open-work ledger: W-1..W-31, rewritten in place every session.
+
+[[living]]
+path     = "docs/status/LOG-the-rolling-engineering-narrative.md"
+internal = true           # the narrative split out of docs/STATUS.md on 2026-09-17. 1,451
+                          # lines written for the next session, not for a public reader.
+
+[[living]]
+path     = "docs/status/README.md"
+internal = true           # states in the directory itself that nothing here publishes.
 
 [project]
 name   = "Entity System Generator"
@@ -28,7 +95,7 @@ measured by the complementary half of the same conformance oracle.
 [[doc]]
 path  = "README.md"
 title = "Entity System Generator"
-blurb = "What this repo is — the second generator, why it is separate from keystone, and what it produces."
+blurb = "What this repo is — the second generator, why it is separate from keystone, what it produces, and how to build it."
 group = "Overview"
 
 # The rolling canonical log. Declared, so a public reader gets it. It is one file and it
@@ -39,11 +106,281 @@ title = "Status"
 blurb = "Where the generator actually is — what is built, what is measured, and what is owed."
 group = "Overview"
 
+[[doc]]
+path  = "CHANGELOG.md"
+title = "Changelog"
+blurb = "Notable changes, by release."
+group = "Overview"
+
+# ── Contributing ──────────────────────────────────────────────────────────────
+[[doc]]
+path  = "CONTRIBUTING.md"
+title = "Contributing"
+blurb = "Ground rules, DCO sign-off, and how to report a bug."
+group = "Contributing"
+
+[[doc]]
+path  = "CODE_OF_CONDUCT.md"
+title = "Code of Conduct"
+blurb = "The standard we run on, and how to report something that crosses it."
+group = "Contributing"
+
+[[doc]]
+path  = "SECURITY.md"
+title = "Security Policy"
+blurb = "How to report a vulnerability privately, and which versions get fixes."
+group = "Contributing"
+
+# ── How we work ───────────────────────────────────────────────────────────────
+#
+# These four are the ecosystem's working method and this repo's own charter. They
+# publish across the fleet ([ADR-0016]: written for any agent, not just one vendor's),
+# and they are what lets someone who pulls this down understand how it is built rather
+# than only what it contains.
+[[doc]]
+path  = "AGENTS.md"
+title = "Agent guidance — this repo"
+blurb = "This repo's specifics: authority, boundaries, tier, the disciplines it has earned, and the gotchas behind them."
+group = "How we work"
+
+[[doc]]
+path  = "AGENTS-STANDARD.md"
+title = "Agent guidance — ecosystem standard"
+blurb = "The conventions every repo in this ecosystem shares, maintained in one place and injected unchanged."
+group = "How we work"
+
+[[doc]]
+path  = "METHODOLOGY.md"
+title = "Methodology"
+blurb = "Disciplines, doctrines and the ratchet — the framework every repo in the ecosystem runs."
+group = "How we work"
+
+[[doc]]
+path  = "CLAUDE.md"
+title = "CLAUDE.md"
+blurb = "The loader that points an agent at the two guidance files above."
+group = "How we work"
+
+[[doc]]
+path  = "docs/ANTI-PATTERNS.md"
+title = "Anti-pattern catalog"
+blurb = "Named failure modes, each with the commit that produced it. The evidence base the disciplines are promoted from."
+group = "How we work"
+
+# ── Memory ────────────────────────────────────────────────────────────────────
+#
+# Split out of `AGENTS.md` on 2026-09-17, which was 108,602 bytes -- 3.5x the 30 KiB every
+# agent pays to load, every session. The text MOVED; it was not rewritten, and the split was
+# verified line-for-line against the original before it was committed.
+#
+# This publishes, deliberately. It is how this repo was built, and a reader who pulls the
+# tree down is better served by the reasoning than by the rules alone. Each file is declared
+# individually rather than as a `[[keep_tree]]`: a memory file is a decision about readers,
+# and a tree declaration would let the next one arrive without anyone making it.
+[[doc]]
+path  = "docs/agents/memory/INDEX.md"
+title = "Memory — index"
+blurb = "Every memory file, one row each, and the trigger that should make you open it. Start here."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/THE-SEAM-AND-THE-FOUR-FACES.md"
+title = "The seam, and the four faces"
+blurb = "What a claim that a peer can host something actually has to be checked against — and what an absent face hides."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/INSTRUMENTS-AND-CONTROLS.md"
+title = "Instruments, controls and refusals"
+blurb = "Nineteen instruments written here, nineteen with a defect, all but two found by running them. How they fail, and what every new one ships with."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/EVIDENCE-AND-CITATIONS.md"
+title = "Evidence, numbers and citations"
+blurb = "Where a number comes from, why a cited path has to resolve, and why a claim about another repo is checked against this one first."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/GATES-AND-WHAT-READS-THEM.md"
+title = "Gates, and what reads them"
+blurb = "Ten instances of one question — what reads this artifact, and which direction does it read in."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/THE-TARGET-MAJOR-TREE.md"
+title = "The target-major tree, and what may name what"
+blurb = "Where a per-target fact lives, why the glue does not enumerate its members, and how to read a diff between two drivers."
+group = "Memory"
+
+[[doc]]
+path  = "docs/agents/memory/SUBSTRATES-AND-PORTS.md"
+title = "Substrates, ports and why the tier is CORE"
+blurb = "What each of the nine compositions did to the substrate model, and the criterion for revisiting the methodology tier."
+group = "Memory"
+
 # ── Design ────────────────────────────────────────────────────────────────────
 [[doc]]
 path  = "docs/DESIGN-THE-GENERATION-MODEL.md"
 title = "The generation model"
-blurb = "How the phase model retargets from generating a peer to generating a handler set — the install seam, the input snapshot, the gate, and the unit of measurement."
+blurb = "How a build runs — the phase model, the install seam, the input snapshot, the gate, and the unit of measurement."
 group = "Design"
 
-# NOTE: nothing under docs/adr/ is ever declared here — ADRs do not publish.
+[[doc]]
+path  = "docs/DESIGN-THE-SYSTEM-STRUCTURE.md"
+title = "The system structure"
+blurb = "How 26 extensions x N languages x M compositions stay separable — the target-major layout and the isolation invariants."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-THE-SDK-LAYER.md"
+title = "The SDK layer"
+blurb = "The layer above the handler — the install models, the four faces of an extension, and what varies by platform."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-THE-COMPOSITION-LOADER.md"
+title = "The composition loader"
+blurb = "What composition emits: the resolve/refuse algorithm and the init program."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-THE-COMPUTE-TRACK.md"
+title = "The compute track"
+blurb = "Whether an extension can be written once as a compute expression and run everywhere — what the specification bounds, and what a probe measured."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md"
+title = "The CBOR interchange layer"
+blurb = "Why every hop travels as canonical ECF rather than JSON, and the three findings that came out of moving it."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-THE-ORACLE-SEAM.md"
+title = "The oracle seam"
+blurb = "How this repo is measured by a suite it does not own, and where that measurement stops."
+group = "Design"
+
+[[doc]]
+path  = "docs/DESIGN-WHERE-THE-LINE-IS.md"
+title = "Where the line is"
+blurb = "Whose requirement is whose — what the spec owns, what the peer generator owns, and what this repo owns."
+group = "Design"
+
+# ── Reference ─────────────────────────────────────────────────────────────────
+[[doc]]
+path  = "docs/KEYSTONE-PEER-HOST-CONTRACT.md"
+title = "The keystone peer host contract"
+blurb = "What a generated peer must offer for an extension to run, embed and extend through one standard interface."
+group = "Reference"
+
+[[doc]]
+path  = "docs/SPEC-AMBIGUITIES.md"
+title = "Spec ambiguities"
+blurb = "Gaps and contradictions found by generating against the extension corpus, and where each was routed."
+group = "Reference"
+
+[[doc]]
+path  = "docs/CENSUS-DISPATCH-SURFACE.md"
+title = "Dispatch surface census"
+blurb = "What the generated peer cohort actually exposes at the dispatch seam, measured rather than read."
+group = "Reference"
+
+[[doc]]
+path  = "gates/README.md"
+title = "The gates"
+blurb = "Every gate in this repo, and the authority its checks derive from."
+group = "Reference"
+
+# ── Prose that lives BESIDE the code it describes ─────────────────────────────
+#
+# THE LAYOUT IS TARGET-MAJOR, so durable prose about a gate or a contract sits in that gate's
+# or that contract's directory rather than under `docs/`. Ten such files, declared 2026-09-17
+# as the other half of W-28.
+#
+# They were publishing already and that was the problem: `canon-filter` only ever considers
+# prose under a doc root or loose at the top level, so a `README.md` under `gates/` was never
+# ELIGIBLE to be dropped -- and `spec pins` is scoped to THIS FILE, so nothing was checking
+# what they said either. Undeclared did not mean withheld; it meant published and ungated,
+# which is the worse of the two. Declaring them puts them inside every gate that reads the
+# declaration, which is the whole point of the keep-list (AP-53).
+[[doc]]
+path  = "gates/host-seam/README.md"
+title = "The host-seam gate"
+blurb = "The probe that measures whether a generated peer can host an extension's handler, and the four layers it has to answer."
+group = "Reference"
+
+[[doc]]
+path  = "gates/sdk-surface/README.md"
+title = "The SDK-surface gate"
+blurb = "How each port's public surface is extracted and compared, and why the extractor is a per-target program rather than a shared function."
+group = "Reference"
+
+[[doc]]
+path  = "gates/seed-policy/README.md"
+title = "The seed-policy gate"
+blurb = "Whether authorization is observable on a peer at all — the posture the conformance numbers are measured in."
+group = "Reference"
+
+[[doc]]
+path  = "gates/eligible/README.md"
+title = "The eligibility gate"
+blurb = "Reading the peer generator's own certification report before building anything on a peer."
+group = "Reference"
+
+[[doc]]
+path  = "languages/rust/gates/host-seam/README.md"
+title = "The host-seam gate — rust arm"
+blurb = "What the compiled arm measures that the dynamic ones cannot, including the compile-fail fixtures and the error codes they claim."
+group = "Reference"
+
+[[doc]]
+path  = "extension-contracts/content/README.md"
+title = "The CONTENT extension contract"
+blurb = "What the content extension is, what it declares, and how its three ports differ."
+group = "Reference"
+
+[[doc]]
+path  = "extension-contracts/history/README.md"
+title = "The HISTORY extension contract"
+blurb = "What the history extension is, what it declares, and how its three ports differ."
+group = "Reference"
+
+[[doc]]
+path  = "extension-contracts/content/arch/AUTHORING-NOTES.md"
+title = "Authoring notes — CONTENT"
+blurb = "The measured cross-language comparison behind the content extension: five axes, three ports, and what the third column did to the other four."
+group = "Reference"
+
+[[doc]]
+path  = "extension-contracts/history/arch/AUTHORING-NOTES.md"
+title = "Authoring notes — HISTORY"
+blurb = "The measured cross-language comparison behind the history extension, and the write/read face split it exposed."
+group = "Reference"
+
+# ── NOT declared, deliberately ────────────────────────────────────────────────
+#
+# `docs/status/**` — dated handoffs, routing packets, trackers, reviews, proposals and
+#   the internal ledger. Working memory and in-progress coordination; [ADR-0031] says
+#   these are never published, and docs/status/README.md states it in the directory.
+#
+# `docs/adr/**` — AGENTS-STANDARD is explicit: do not declare anything under docs/adr/.
+#   ADRs do not publish. Ecosystem ADRs are cited by number and never copied here.
+#
+# `docs/archive/**` — superseded documents kept for the breadcrumb, plus the 28 dated
+#   handoffs, reviews and conformance snapshots that aged out of docs/status/ on
+#   2026-09-17. A reader following an archive index into a withdrawn draft is being sent
+#   backwards. Declared as an [[area]] of kind "archive" so it does not age out.
+#
+# `docs/outbox/**` — the 42 routing packets this repo has SENT, moved out of docs/status/
+#   on 2026-09-17. Routing is internal and publishing the corpus is the expensive mistake
+#   in the whole doc standard; a check (conform-audit R48) enforces that this directory is
+#   never declared, and it keys off the DIRECTORY EXISTING rather than off a declaration,
+#   so declaring nothing does not switch it off.
+#
+# `shared/spec-data/**` — 27 files: the PINNED SPEC SNAPSHOTS we generate against, each
+#   with its MANIFEST. Another repo's normative text, vendored by digest. Not ours to
+#   publish, and `canon-filter` never considers them anyway — they are prose outside a doc
+#   root, which is the class the filter protects. Left undeclared on purpose, and the
+#   reason is written here so the next reader does not "fix" it.

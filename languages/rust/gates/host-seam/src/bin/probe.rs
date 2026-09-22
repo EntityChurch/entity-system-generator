@@ -28,13 +28,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use entity_core_protocol::peer::core::Conn;
+use entity_core_protocol::peer::handler::{
+    ExpressionEvaluator, ExpressionRequest, FnHandler, HandlerContext, HandlerResult, OperationSpec,
+};
 use entity_core_protocol::peer::model::{self, Entity};
 use entity_core_protocol::peer::store::TreeChangeEvent;
 use entity_core_protocol::peer::transport::{self, Io};
 use entity_core_protocol::peer::wire;
-use entity_core_protocol::peer::handler::{
-    ExpressionEvaluator, ExpressionRequest, FnHandler, HandlerContext, HandlerResult, OperationSpec,
-};
 use entity_core_protocol::peer::{CreateOptions, Peer, PeerConfig};
 use entity_core_protocol::value::{Key, Value};
 
@@ -63,7 +63,10 @@ fn witness_handler(invocations: Arc<AtomicUsize>) -> Arc<FnHandler> {
                 .unwrap_or_default();
             HandlerResult::ok(Entity::make(
                 "system/content/content-response",
-                model::map(vec![("witness", model::text(&format!("{REG_NONCE}:{echo}")))]),
+                model::map(vec![(
+                    "witness",
+                    model::text(&format!("{REG_NONCE}:{echo}")),
+                )]),
             ))
         },
     ))
@@ -90,7 +93,11 @@ struct Doubler {
 }
 
 impl ExpressionEvaluator for Doubler {
-    fn evaluate(&self, req: &ExpressionRequest<'_>, ctx: &HandlerContext<'_>) -> Option<HandlerResult> {
+    fn evaluate(
+        &self,
+        req: &ExpressionRequest<'_>,
+        ctx: &HandlerContext<'_>,
+    ) -> Option<HandlerResult> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if req.expression.typ != "probe/double" {
             return None;
@@ -159,7 +166,10 @@ impl Loopback {
             Key::Text("targets".into()),
             Value::Array(vec![Value::Text(format!("{PATTERN}/probe"))]),
         )]);
-        let params = Entity::make("primitive/any", model::map(vec![("echo", model::text(echo))]));
+        let params = Entity::make(
+            "primitive/any",
+            model::map(vec![("echo", model::text(echo))]),
+        );
         let resp = self
             .session
             .execute(&uri, "get", params, Some(resource))
@@ -263,9 +273,14 @@ fn main() {
     let before = invocations.load(Ordering::SeqCst);
     let (status_b, code_b, witness_b) = lb.execute_content("hello");
     let after_dispatch = invocations.load(Ordering::SeqCst);
-    println!("  B. register_handler -> {:<17} {status_b}  {code_b}witness={witness_b}", if registered.is_ok() { "Ok" } else { "Err" });
+    println!(
+        "  B. register_handler -> {:<17} {status_b}  {code_b}witness={witness_b}",
+        if registered.is_ok() { "Ok" } else { "Err" }
+    );
     println!("     invocations: before={before} after dispatch={after_dispatch}");
-    let reached = status_b == 200 && witness_b == format!("{REG_NONCE}:hello") && after_dispatch == before + 1;
+    let reached = status_b == 200
+        && witness_b == format!("{REG_NONCE}:hello")
+        && after_dispatch == before + 1;
 
     // C. Uninstalled — the counter must not move, and the pattern must stop resolving.
     let removed = responder.unregister_handler(PATTERN);
@@ -328,7 +343,10 @@ fn main() {
     //    property §6.10 states.
     p.store.bind(&path, &e1);
     let after_rebind = events.lock().unwrap().len();
-    println!("  F. identical re-bind (no change)          {after_rebind} event(s) total (was {})", fired.len());
+    println!(
+        "  F. identical re-bind (no change)          {after_rebind} event(s) total (was {})",
+        fired.len()
+    );
 
     // G. THE ARM THE SECOND EXTENSION FORCED — a consumer that WRITES to the store
     //    it is being called from.
@@ -397,10 +415,11 @@ fn main() {
             let _ = tx.send(());
         });
     }
-    let completed = rx
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .is_ok();
-    let head_bound = completed && r.store.get_at(&format!("{head_prefix}{app_path}")).is_some();
+    let completed = rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok();
+    let head_bound = completed
+        && r.store
+            .get_at(&format!("{head_prefix}{app_path}"))
+            .is_some();
     println!("  G. consumer WRITES from inside the callback");
     println!(
         "     returned within 5 s:                   {completed}   (false = deadlock or panic)"
@@ -438,9 +457,8 @@ fn main() {
         }
     );
 
-    let emit_ok = fired.len() == 1
-        && fired[0] == format!("{REG_NONCE}:created:{path}")
-        && after_rebind == 1;
+    let emit_ok =
+        fired.len() == 1 && fired[0] == format!("{REG_NONCE}:created:{path}") && after_rebind == 1;
     if !emit_ok {
         vacuous.push("the emit arms did not discriminate — D/F did not separate event from call");
     }
@@ -652,48 +670,111 @@ fn main() {
     let read_budget = |responder: Arc<Peer>, seed: u8| -> Option<u64> {
         responder.install_handler(budget_handler()).ok()?;
         let mut lb = Loopback::connect(responder, peer(seed));
-        let (status, result) = lb.execute(PATTERN, "get", Entity::make("primitive/any", model::map(vec![])), &[PATTERN]);
+        let (status, result) = lb.execute(
+            PATTERN,
+            "get",
+            Entity::make("primitive/any", model::map(vec![])),
+            &[PATTERN],
+        );
         lb.shutdown();
-        (status == 200).then(|| result.uint_field("budget")).flatten()
+        (status == 200)
+            .then(|| result.uint_field("budget"))
+            .flatten()
     };
-    let configured = read_budget(peer_with(0x41, PeerConfig::default().max_frame_bytes(CONFIGURED as usize)), 0x42);
+    let configured = read_budget(
+        peer_with(
+            0x41,
+            PeerConfig::default().max_frame_bytes(CONFIGURED as usize),
+        ),
+        0x42,
+    );
     let defaulted = read_budget(peer(0x43), 0x44);
     println!("  configured {CONFIGURED:>10} -> body reads   {configured:?}");
-    println!("  default    {:>10} -> body reads   {defaulted:?}", wire::MAX_FRAME);
-    let budget_by_value = configured == Some(CONFIGURED) && defaulted == Some(wire::MAX_FRAME as u64);
+    println!(
+        "  default    {:>10} -> body reads   {defaulted:?}",
+        wire::MAX_FRAME
+    );
+    let budget_by_value =
+        configured == Some(CONFIGURED) && defaulted == Some(wire::MAX_FRAME as u64);
     if configured.is_none() || defaulted.is_none() {
         vacuous.push("scenario 3 could not install or reach the budget body — no arm measured");
     }
-    println!("  => budget read BY VALUE: {}\n", if budget_by_value { "YES (both arms)" } else { "NO" });
+    println!(
+        "  => budget read BY VALUE: {}\n",
+        if budget_by_value {
+            "YES (both arms)"
+        } else {
+            "NO"
+        }
+    );
 
     // ── Scenario 5: H7 — the evaluator for entity-native bodies ─────────────────
     println!("Scenario 5 — H7: an installed evaluator for entity-native handler bodies (§6.13(a))");
     let responder = peer(0x51);
     let mut lb = Loopback::connect(responder.clone(), peer(0x52));
     let register = |lb: &mut Loopback, pattern: &str, body_path: &str, body: &Entity| -> u64 {
-        let put = Entity::make("system/tree/put-request", model::map(vec![("entity", body.to_cbor())]));
+        let put = Entity::make(
+            "system/tree/put-request",
+            model::map(vec![("entity", body.to_cbor())]),
+        );
         let (put_status, _) = lb.execute("system/tree", "put", put, &[body_path]);
         let req = Entity::make(
             "system/handler/register-request",
             model::map(vec![(
                 "manifest",
-                model::map(vec![("name", model::text(pattern)), ("expression_path", model::text(body_path))]),
+                model::map(vec![
+                    ("name", model::text(pattern)),
+                    ("expression_path", model::text(body_path)),
+                ]),
             )]),
         );
-        let (reg_status, _) = lb.execute("system/handler", "register", req, &[&format!("system/handler/{pattern}")]);
+        let (reg_status, _) = lb.execute(
+            "system/handler",
+            "register",
+            req,
+            &[&format!("system/handler/{pattern}")],
+        );
         put_status.max(reg_status)
     };
     let setup = [
-        register(&mut lb, "probe/lit", "probe/bodies/lit", &Entity::make("compute/literal", model::map(vec![("value", Value::UInt(50))]))),
-        register(&mut lb, "probe/dbl", "probe/bodies/dbl", &Entity::make("probe/double", model::map(vec![("n", Value::UInt(21))]))),
-        register(&mut lb, "probe/oth", "probe/bodies/oth", &Entity::make("probe/other", model::map(vec![]))),
+        register(
+            &mut lb,
+            "probe/lit",
+            "probe/bodies/lit",
+            &Entity::make(
+                "compute/literal",
+                model::map(vec![("value", Value::UInt(50))]),
+            ),
+        ),
+        register(
+            &mut lb,
+            "probe/dbl",
+            "probe/bodies/dbl",
+            &Entity::make("probe/double", model::map(vec![("n", Value::UInt(21))])),
+        ),
+        register(
+            &mut lb,
+            "probe/oth",
+            "probe/bodies/oth",
+            &Entity::make("probe/other", model::map(vec![])),
+        ),
     ];
     let run = |lb: &mut Loopback, pattern: &str, bump: u64| {
-        lb.execute(pattern, "run", Entity::make("primitive/any", model::map(vec![("bump", Value::UInt(bump))])), &[pattern])
+        lb.execute(
+            pattern,
+            "run",
+            Entity::make(
+                "primitive/any",
+                model::map(vec![("bump", Value::UInt(bump))]),
+            ),
+            &[pattern],
+        )
     };
     let (s_none, _) = run(&mut lb, "probe/dbl", 1);
     let calls = Arc::new(AtomicUsize::new(0));
-    responder.set_expression_evaluator(Some(Arc::new(Doubler { calls: calls.clone() })));
+    responder.set_expression_evaluator(Some(Arc::new(Doubler {
+        calls: calls.clone(),
+    })));
     let (s_lit, lit) = run(&mut lb, "probe/lit", 1);
     let calls_after_literal = calls.load(Ordering::SeqCst);
     let (s_dbl, dbl) = run(&mut lb, "probe/dbl", 1);
@@ -702,7 +783,10 @@ fn main() {
     println!("  setup (put + register, x3)                {setup:?}");
     println!("  K. no evaluator, probe/double             {s_none}");
     println!("  L. evaluator set, compute/literal         {s_lit}  value={:?}  evaluator asked {calls_after_literal}x", lit.field("value"));
-    println!("  M. evaluator set, probe/double bump=1     {s_dbl}  value={:?}", dbl.field("value"));
+    println!(
+        "  M. evaluator set, probe/double bump=1     {s_dbl}  value={:?}",
+        dbl.field("value")
+    );
     println!("  N. evaluator set, probe/other (declined)  {s_oth}");
     if setup.iter().any(|s| *s != 200) {
         vacuous.push("scenario 5 could not register its entity-native handlers — no arm measured");
@@ -713,22 +797,41 @@ fn main() {
         && s_dbl == 200
         && dbl.field("value") == Some(&Value::UInt(43))
         && s_oth == 501;
-    println!("  => Reach (evaluator face): {}\n", if evaluator_reached { "YES" } else { "NO" });
+    println!(
+        "  => Reach (evaluator face): {}\n",
+        if evaluator_reached { "YES" } else { "NO" }
+    );
 
     // ── verdict ──────────────────────────────────────────────────────────────
     println!("\n--- summary ---");
-    println!("handler face:   Reach {reach} (executed: nothing-installed and uninstalled controls)");
+    println!(
+        "handler face:   Reach {reach} (executed: nothing-installed and uninstalled controls)"
+    );
     println!("emit face:      Reach YES (executed, two negatives)");
     println!(
         "emit face, RE-ENTRANT (a consumer that writes): {}",
-        if reentrant_ok { "YES (arm G)" } else { "NO (arm G)" }
+        if reentrant_ok {
+            "YES (arm G)"
+        } else {
+            "NO (arm G)"
+        }
     );
     println!(
         "emit face, FROM THE WIRE (put -> consumer -> get): {}",
-        if wire_emit_ok { "YES (arms H/I)" } else { "NO (arms H/I)" }
+        if wire_emit_ok {
+            "YES (arms H/I)"
+        } else {
+            "NO (arms H/I)"
+        }
     );
-    println!("frame budget:   by value {}", if budget_by_value { "YES" } else { "NO" });
-    println!("evaluator face: Reach {}", if evaluator_reached { "YES" } else { "NO" });
+    println!(
+        "frame budget:   by value {}",
+        if budget_by_value { "YES" } else { "NO" }
+    );
+    println!(
+        "evaluator face: Reach {}",
+        if evaluator_reached { "YES" } else { "NO" }
+    );
     println!("Access / Read / Export: see access_absent + access_control (rustc decides, not this binary)");
 
     // The contracts claim `handler`, `evaluator` and the H6 budget on this peer on the strength of

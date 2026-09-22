@@ -22,10 +22,9 @@ use entity_core_protocol::peer::{CreateOptions, Peer};
 
 use entity_history::{
     build_context, canonicalize_pattern, compare_specificity, config_path, from_core_event_type,
-    history_config, history_entity, history_type_defs, history_type_entities,
-    install_history, pattern_matches, pattern_specificity,
-    publish_history_types, resolve_config, CarriedContext, ConfigLookup, HistoryConfig,
-    HistoryInstallation, HistoryRecorder, RecordedTransition,
+    history_config, history_entity, history_type_defs, history_type_entities, install_history,
+    pattern_matches, pattern_specificity, publish_history_types, resolve_config, CarriedContext,
+    ConfigLookup, HistoryConfig, HistoryInstallation, HistoryRecorder, RecordedTransition,
     RecorderIdentity, RecorderStats, Specificity, TransitionContext, ALL_TYPES, CONFIG,
     CONFIG_PREFIX, DEFAULT_EVENTS, DEFAULT_QUERY_LIMIT, EVENT_ACCESSED, EVENT_CREATED,
     EVENT_DELETED, EVENT_UPDATED, HEAD_PREFIX, HISTORY_PATTERN, QUERY_PARAMS, QUERY_RESULT,
@@ -63,8 +62,7 @@ fn the_public_route_exists_at_the_signatures_the_boundary_claims() {
     // `events` — so this is a POSITIONAL break, and this pin is what named every call
     // site. Kept positional rather than widened to a builder: the arity is the thing
     // being asserted.
-    let _: fn(&str, bool, Option<&[&str]>, Option<&[&str]>, Option<u64>) -> Entity =
-        history_config;
+    let _: fn(&str, bool, Option<&[&str]>, Option<&[&str]>, Option<u64>) -> Entity = history_config;
     let _ = history_type_defs();
     let _ = history_type_entities();
     let _ = history_entity(TRANSITION, entity_core_protocol::value::Value::Map(vec![]));
@@ -81,7 +79,10 @@ fn install_history_installs_every_face_and_the_recorder_sees_none_of_it() {
         open_grants: false,
         conformance: false,
     }));
-    assert!(!peer.has_native_handler(HISTORY_PATTERN), "control: nothing installed yet");
+    assert!(
+        !peer.has_native_handler(HISTORY_PATTERN),
+        "control: nothing installed yet"
+    );
     let install = install_history(&peer, None).expect("install");
     assert!(peer.has_native_handler(HISTORY_PATTERN));
     assert_eq!(install.type_paths.len(), 6);
@@ -91,17 +92,28 @@ fn install_history_installs_every_face_and_the_recorder_sees_none_of_it() {
             .get_at(&format!("/{}/system/type/{name}", peer.local_peer))
             .is_some());
     }
-    assert_eq!(install.recorder.stats().observed, 0, "the recorder observed its own installation");
+    assert_eq!(
+        install.recorder.stats().observed,
+        0,
+        "the recorder observed its own installation"
+    );
 
     peer.store.bind(
         &format!("/{}/app/doc", peer.local_peer),
         &history_entity("x", entity_core_protocol::value::Value::Map(vec![])),
     );
-    assert_eq!(install.recorder.stats().observed, 1, "control: an application write is observed");
+    assert_eq!(
+        install.recorder.stats().observed,
+        1,
+        "control: an application write is observed"
+    );
 
     match install_history(&peer, None) {
         Err(RegisterError::PatternCollision(p)) => assert_eq!(p, HISTORY_PATTERN),
-        other => panic!("a second install must be refused, got {:?}", other.map(|i| i.pattern)),
+        other => panic!(
+            "a second install must be refused, got {:?}",
+            other.map(|i| i.pattern)
+        ),
     }
 }
 
@@ -122,7 +134,10 @@ fn the_installation_reports_the_handler_grant_and_an_unobserved_context() {
     assert!(install.handler_grant_available);
     let grant = peer
         .store
-        .get_at(&format!("/{}/system/capability/grants/{HISTORY_PATTERN}", peer.local_peer))
+        .get_at(&format!(
+            "/{}/system/capability/grants/{HISTORY_PATTERN}",
+            peer.local_peer
+        ))
         .expect("register_handler bound a grant");
     assert_ne!(grant.hash, peer.identity.identity_hash);
 }
@@ -140,7 +155,10 @@ fn the_constant_surface_is_the_specs_values() {
     assert_eq!(ROLLBACK_PARAMS, "system/history/rollback-params");
     assert_eq!(ROLLBACK_RESULT, "system/history/rollback-result");
     assert_eq!(DEFAULT_QUERY_LIMIT, 50, "§2.3 'Default: 50'");
-    assert_eq!(DEFAULT_EVENTS, [EVENT_CREATED, EVENT_UPDATED, EVENT_DELETED]);
+    assert_eq!(
+        DEFAULT_EVENTS,
+        [EVENT_CREATED, EVENT_UPDATED, EVENT_DELETED]
+    );
     assert_eq!(EVENT_ACCESSED, "accessed");
     assert_eq!(ALL_TYPES.len(), 6);
 

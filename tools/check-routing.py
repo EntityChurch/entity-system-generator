@@ -78,6 +78,19 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# THE OUTBOX, not `docs/status/`, as of 2026-09-17 (the 2026-09 doc standard).
+#
+# 42 packets used to sit mixed into `docs/status/` alongside 44 other files, with the
+# recipient encoded in the FILENAME. That is why discovery never worked: finding your own
+# inbound meant grepping a sibling's status directory for your own name, which fails when the
+# sender spelled you differently and NEVER finds a packet where you are only in the `cc:`.
+# `docs/outbox/` holds packets and nothing else, so `ls` is the enumeration, and the reader's
+# side of the protocol is a watermark line per tracker rather than a grep.
+#
+# TRACKERS STAY IN `docs/status/` and that is deliberate: a tracker is what is OPEN BETWEEN
+# TWO SEATS, it is living rather than dated, and it is ours. The outbox is what we SENT.
+OUTBOX = ROOT / "docs" / "outbox"
 STATUS = ROOT / "docs" / "status"
 SELF = "entity-system-generator"
 
@@ -292,7 +305,13 @@ def citation_census(packets: list[Packet]) -> tuple[list[str], list[str]]:
     return bare, glob
 
 
-def run(directory: pathlib.Path, legacy: set, strict: bool, quiet: bool = False) -> int:
+def run(directory: pathlib.Path, legacy: set, strict: bool, quiet: bool = False,
+        trackers: pathlib.Path | None = None) -> int:
+    # THE TWO DIRECTORIES ARE SEPARATE AS OF 2026-09-17 and default to being the same one.
+    # Packets live in `docs/outbox/`; trackers are living docs and stay in `docs/status/`.
+    # `--self-test` plants both in one temp directory, so the default keeps the control
+    # driving the real function rather than a copy of it (D15).
+    trackers = trackers if trackers is not None else directory
     packets = collect(directory)
     if not packets:
         print(
@@ -312,7 +331,7 @@ def run(directory: pathlib.Path, legacy: set, strict: bool, quiet: bool = False)
     if not quiet:
         print(f"corpus: {len(packets)} packet(s) under {directory.relative_to(ROOT) if directory.is_relative_to(ROOT) else directory}")
 
-    bad = check(packets, legacy) + check_trackers(packets, directory)
+    bad = check(packets, legacy) + check_trackers(packets, trackers)
 
     if not quiet:
         for line in peer_report(packets):
@@ -487,7 +506,21 @@ def main() -> int:
     args = ap.parse_args()
     if args.self_test:
         return self_test()
-    return run(STATUS, LEGACY_COLLISIONS, args.strict_citations)
+    # A PACKET LEFT IN `docs/status/` IS A PACKET THIS GATE NO LONGER SCANS, so the move is
+    # checked rather than assumed. Without this, the directory switch would have SILENTLY
+    # narrowed the corpus -- the gate would report OK over 42 packets while a 43rd sat
+    # unscanned in the old location, which is D15's false green in the one instrument whose
+    # whole job is enumerating what we sent.
+    strays = sorted(STATUS.glob("ROUTING-*.md"))
+    if strays:
+        for s in strays:
+            print(
+                f"ROUTING: {s.relative_to(ROOT)} is a packet in the OLD location -- "
+                f"`git mv` it to docs/outbox/ ; nothing scans docs/status/ for packets now",
+                file=sys.stderr,
+            )
+        return 1
+    return run(OUTBOX, LEGACY_COLLISIONS, args.strict_citations, trackers=STATUS)
 
 
 if __name__ == "__main__":

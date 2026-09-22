@@ -1206,7 +1206,7 @@ transition per head-pointer write, whose head-pointer write records another. Our
 assert it in their own unit tests, which is our code checking our code (L18). **AUTHORED \
 2026-09-07** over the wire instead, with both halves in one run: the ordinary path HAS a \
 transition and the head-pointer path has NONE, so a peer that records nothing fails it too. \
-Routed to `entity-core-go` as G-5 — see docs/status/ROUTING-2026-09-07-c-core-go-*."""
+Routed to `entity-core-go` as G-5 — see docs/outbox/ROUTING-2026-09-07-c-core-go-*."""
 
 [[conformance.requirement]]
 id     = "HIST-R9"
@@ -1259,7 +1259,7 @@ note   = """NOTHING MEASURES THIS, and **we do not currently satisfy it.** Appen
 Two landed specs, two spellings, one path. Filed as a GAP rather than as covered because claiming \
 a check measures this row while knowingly emitting outside the set is the false-coverage shape \
 this block exists to prevent. Routed 2026-09-08 — see \
-docs/status/ROUTING-2026-09-08-arch-the-code-set-names-a-403-core-does-not-define.md and \
+docs/outbox/ROUTING-2026-09-08-arch-the-code-set-names-a-403-core-does-not-define.md and \
 `[error_surface].spec_named_not_emitted`. **Not resolved locally**: switching three ports would \
 mint an authorization code core declines to define, in a cohort, on our own authority."""
 

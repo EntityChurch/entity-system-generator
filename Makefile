@@ -8,6 +8,7 @@
 # THE COMPILED half runs in a container; the NEUTRAL half runs on the host and is
 # STDLIB-ONLY. That boundary is the invariant (`docs/adr/0001-*`), not the list above it.
 #
+# <<VERBS -- `make help` prints between these two sentinels. One copy of the list.
 #   make build            compose + build one composition on one target
 #   make test             the extension cells' unit tests
 #   make conformance      validate-peer -category <ext> against the composed peer
@@ -28,7 +29,11 @@
 #   make seed-policy      is authorization OBSERVABLE on this peer at all? (the posture gate)
 #   make ext-checks       the authored extension checks, both arms (Kind C -- never a verdict)
 #   make clean            remove every target's output/
+#   make help             this list (the default goal)
+#   make lint             every read-only host-side gate, plus each target's fmt-check
+#   make fmt              autoformat every target that declares a formatter (WRITES)
 #   make reap             remove any container this repo left behind (label-scoped, safe)
+# VERBS>>
 #
 # THIS REPO CLEANS UP AFTER ITSELF. Every container it starts is labelled and time-bounded
 # (`PODMAN_TIMEOUT`), so a hanging gate cannot strand one. `make reap` is the backstop and
@@ -139,7 +144,7 @@ SYSTEM  = $(TDIR)/compositions/$(COMPOSITION)/SYSTEM.toml
 # reported nothing.
 CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PLAN)'))['gate'].get('categories',['content'])))" 2>/dev/null || echo content)
 
-.PHONY: all build test conformance regression check check-all plan plan-check probe \
+.PHONY: all help lint fmt build test conformance regression check check-all plan plan-check probe \
         parity clean sdk-parity structure drivers error-codes error-codes-control \
         scale scale-control type-parity glue glue-control \
         req-coverage req-coverage-composition req-coverage-control ext-checks ext-checks-control \
@@ -152,6 +157,77 @@ CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PL
         conformance-native probe-native
 
 all: check
+
+# ── Tier-1 verbs: help build test lint fmt check clean ([ADR-0019]) ─────────────
+#
+# `build test check clean` already existed under exactly these names. `help lint fmt` did
+# not, and their absence is an ERROR in the fleet's `conform-audit` (R5). This is a
+# VOCABULARY rule rather than a capability one -- a contributor or agent landing in any
+# repo of this ecosystem types the same seven words and they mean the same thing.
+#
+# `help` is the default goal, so a bare `make` in a cold clone prints the map instead of
+# spending forty minutes in `check`.
+.DEFAULT_GOAL := help
+
+#
+# The verb list is printed FROM THE HEADER COMMENT, between the two sentinels below, so
+# there is one copy of it. A `sed -n '11,31p'` would have been a second copy keyed on a
+# line number -- AP-2 exactly: a fact computed correctly, then duplicated into something
+# that outlives it, with nothing comparing the two. The recipe REFUSES if the sentinels
+# do not bracket any lines, because an empty help screen reads like a repo with no verbs.
+help:
+	@body=$$(awk '/^# <<VERBS/{f=1;next} /^# VERBS>>/{f=0} f' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'); \
+	[ -n "$$body" ] || { echo "help: REFUSING -- the VERBS sentinels bracket no lines in the Makefile header" >&2; exit 3; }; \
+	printf '%s\n' "$$body"
+	@echo ""
+	@echo "  TARGET=$(TARGET)  COMPOSITION=$(COMPOSITION)   (targets: $(TARGETS))"
+
+# ── lint / fmt ──────────────────────────────────────────────────────────────────
+#
+# ADR-0019 draws exactly one line between them: `lint` is READ-ONLY, `fmt` WRITES. So they
+# are the same corpus through different flags, and neither is a subset of the other.
+#
+# `lint`'s neutral half is the nine host-side gates that read only tracked files. Notably
+# ABSENT: `req-coverage` unscoped, `plan-check` and anything under `output/`. Those need a
+# staged build, so putting them here would make `make lint` red on a clean clone for a
+# reason that is not a lint finding -- and a false red costs the instrument (AP-4, D15).
+# That is also why `check` keeps its own list rather than depending on this target: it runs
+# `req-coverage-composition`, scoped to the plan, which is D23's rule and not lint's job.
+#
+# THE FORMATTER IS A PER-TARGET FACT AND LIVES IN THE PROFILE (D17, D20). This Makefile
+# names no target: it iterates `$(TARGETS)` -- a wildcard over the tree -- and reads
+# `[toolchain].fmt` / `[toolchain].lint` out of each `languages/<t>/profile.toml`. A target
+# whose image carries no formatter declares neither and is PRINTED as such, because
+# `skipped` and `formatted` are otherwise the same output, which is the false green D15
+# exists to refuse. If NO target declares one, both verbs REFUSE rather than report success
+# over zero work.
+profile_cmd = python3 -c "import tomllib,sys;print(tomllib.load(open('languages/'+sys.argv[1]+'/profile.toml','rb'))['toolchain'].get(sys.argv[2],''))"
+
+# One runner for both verbs, so the two cannot disagree about how a target is entered.
+# `$(RUN_BOUNDED)` is target-independent; only the image is per target, and it comes from
+# the same profile the command did.
+define run_declared
+	@n=0; for t in $(TARGETS); do \
+		cmd=$$($(profile_cmd) $$t $(1)); \
+		if [ -z "$$cmd" ]; then \
+			echo "$(1): $$t -- no [toolchain].$(1) declared (no formatter in its image)"; \
+			continue; \
+		fi; \
+		n=$$((n+1)); echo "$(1): $$t"; \
+		img=$$($(profile_cmd) $$t image); \
+		$(RUN_BOUNDED) $$img sh -c "$$cmd" || exit 1; \
+	done; \
+	if [ $$n -eq 0 ]; then \
+		echo "$(1): REFUSING -- no target declares [toolchain].$(1); this would have reported success over zero work" >&2; \
+		exit 3; \
+	fi
+endef
+
+lint: structure drivers error-codes citations routing glue spec-lists toolchain sdk-parity
+	$(call run_declared,lint)
+
+fmt:
+	$(call run_declared,fmt)
 
 # ── plan ────────────────────────────────────────────────────────────────────────
 # Resolution is language-neutral, so it runs on the host's python3 (stdlib only,

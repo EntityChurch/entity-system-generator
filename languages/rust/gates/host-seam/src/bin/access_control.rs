@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use entity_core_protocol::peer::capability::check_path_permission;
 use entity_core_protocol::peer::handler::{
-    ExpressionEvaluator, FnHandler, Handler, HandlerContext, HandlerResult, LocalExecute, OperationSpec,
+    ExpressionEvaluator, FnHandler, Handler, HandlerContext, HandlerResult, LocalExecute,
+    OperationSpec,
 };
 use entity_core_protocol::peer::{CreateOptions, Envelope, Peer, PeerConfig};
 
@@ -80,7 +81,9 @@ fn main() {
         "app/control",
         "control",
         vec![OperationSpec::named("run")],
-        |_ctx: &HandlerContext<'_>| HandlerResult::ok(Entity::make("primitive/any", model::map(vec![]))),
+        |_ctx: &HandlerContext<'_>| {
+            HandlerResult::ok(Entity::make("primitive/any", model::map(vec![])))
+        },
     )));
     assert!(installed.is_ok() && peer.has_native_handler("app/control"));
 

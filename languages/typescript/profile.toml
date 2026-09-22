@@ -158,5 +158,5 @@ entry_point = "index.ts"
 [peer_drift]
 certified = "fd31d9cacc90"
 since     = "2026-09-14"
-routed    = "docs/status/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
+routed    = "docs/outbox/ROUTING-2026-09-14-keystone-g5-and-g6-are-done-and-the-evaluator-seam-has-two-shapes-across-your-three-peers.md"
 reason    = "keystone's 45-language sweep moved peer capability source after certification; absorbed by operator ruling rather than routed as a re-certification ask"
