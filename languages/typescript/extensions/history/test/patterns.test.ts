@@ -167,3 +167,57 @@ test("the specificity comparator is a strict total order over the constructible 
     );
   }
 });
+
+// ── v1.8's REQUIRED vectors, as the spec now writes them ────────────────────────
+//
+// v1.8 REWROTE `HIST-CONFIG-SPECIFICITY-1` and ADDED `-2`. The test above implements
+// v1.7's version and its comment explains why v1.7's worked pair could not be built —
+// `a/*/c/*/e` is a mid-path spelling that is not a pattern, so no path matches both.
+// **v1.8 retracts that pair for exactly that reason.** The old test is kept: it asserts
+// real behaviour and it is the record of what we found.
+//
+// Kept assertion-for-assertion in step with
+// `../../../../python/extensions/history/test/test_patterns.py`.
+
+/** §6.2 `find_history_config`'s selection, over an explicit candidate ORDER. */
+function select(candidates: ReturnType<typeof spec>[]) {
+  return candidates.reduce((best, c) => (compareSpecificity(c, best) > 0 ? c : best));
+}
+
+test("HIST-CONFIG-SPECIFICITY-1 (REQUIRED, v1.8): key 1 separates, both insertion orders", () => {
+  // Configure `a/b/*` and `a/*`, write at `a/b/c`. Both match; key 1 is 3 against 2.
+  const path = "/" + PEER + "/a/b/c";
+  const specific = spec("a/b/*"); // /{PEER}/a/b/* : literals PEER,a,b = 3, depth 4
+  const general = spec("a/*"); //    /{PEER}/a/*   : literals PEER,a   = 2, depth 3
+
+  assert.ok(patternMatches(path, specific.canonical));
+  assert.ok(patternMatches(path, general.canonical));
+  assert.equal(specific.literals, 3);
+  assert.equal(general.literals, 2);
+
+  assert.equal(select([specific, general]).canonical, specific.canonical);
+  assert.equal(select([general, specific]).canonical, specific.canonical);
+});
+
+test("HIST-CONFIG-SPECIFICITY-2 (REQUIRED, new in v1.8): key 1 ties and only key 2 separates", () => {
+  // Configure `*` (-> `/{local}/*`, 1 literal, depth 2) and `/*/a/*` (1 literal, depth 3)
+  // and write at `a/b`. This is the pair that fails an implementation comparing literal
+  // counts alone and never consulting depth — the case v1.7's text had no equivalent of.
+  const path = "/" + PEER + "/a/b";
+  const everything = spec("*"); //   /{PEER}/* : literals PEER = 1, depth 2
+  const peerWild = spec("*/a/*"); // /*/a/*    : literals a    = 1, depth 3
+
+  assert.equal(everything.canonical, "/" + PEER + "/*");
+  assert.equal(peerWild.canonical, "/*/a/*");
+  assert.ok(patternMatches(path, everything.canonical));
+  assert.ok(patternMatches(path, peerWild.canonical));
+
+  // The tie is the point: assert it exists before asserting what breaks it.
+  assert.equal(everything.literals, peerWild.literals);
+  assert.equal(everything.literals, 1);
+  assert.equal(everything.depth, 2);
+  assert.equal(peerWild.depth, 3);
+
+  assert.equal(select([everything, peerWild]).canonical, peerWild.canonical);
+  assert.equal(select([peerWild, everything]).canonical, peerWild.canonical);
+});

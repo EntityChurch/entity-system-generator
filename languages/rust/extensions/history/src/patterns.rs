@@ -38,6 +38,17 @@ use entity_core_protocol::peer::capability;
 /// We implement the TABLE, by rewriting `*/rest` → `/*/rest`, which is the spelling
 /// core §5.4 names as correct for exactly this intent. Routed to arch; recorded in
 /// `EXTENSION.toml`.
+///
+/// # CLOSED AT THE v1.8 RE-PIN (2026-09-08)
+///
+/// This was a DECLARED DEVIATION: §2.2's pseudocode returned a leading-`*` pattern
+/// unchanged while its TABLE said it meant "any peer's namespace", and core §5.4 rejects
+/// the unchanged spelling by name. We implemented the table and routed it. v1.8 makes the
+/// pseudocode emit `"/*/" + rest`, corrects the table's example from `*/project/*` to
+/// `/*/project/*`, and adds a §9.1 MUST (H-R15). The bare-`*` case is now tested FIRST in
+/// the spec's own pseudocode for our reason — the first-segment check "would otherwise read
+/// it as a peer wildcard and emit the degenerate `/*/`". **The code is unchanged; only this
+/// doc comment is.**
 pub fn canonicalize_pattern(pattern: &str, local_peer: &str) -> String {
     if pattern.starts_with('/') {
         return pattern.to_string(); // already absolute

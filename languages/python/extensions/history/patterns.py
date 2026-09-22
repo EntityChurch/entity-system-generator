@@ -29,6 +29,16 @@ def canonicalize_pattern(pattern: str, local_peer: str) -> str:
     exact string comparison — where it matches nothing at all.
 
     We implement the table. Declared in ``EXTENSION.toml`` and routed to arch.
+
+    **CLOSED AT THE v1.8 RE-PIN (2026-09-08).** This was a DECLARED DEVIATION: §2.2's
+    pseudocode returned a leading-``*`` pattern unchanged while §2.2's TABLE said it meant
+    "any peer's namespace", and core §5.4 rejects the unchanged spelling by name. We
+    implemented the table and routed the disagreement. v1.8 makes the pseudocode read
+    ``return "/*/" + rest_after_first_segment(pattern)``, corrects the table's example from
+    ``*/project/*`` to ``/*/project/*``, and adds a §9.1 MUST for it (H-R15). The bare-``*``
+    case is likewise now tested FIRST in the spec's own pseudocode, with a comment giving our
+    reason: the first-segment check "would otherwise read it as a peer wildcard and emit the
+    degenerate ``/*/``". **The code below is unchanged; only this comment is.**
     """
     if pattern.startswith("/"):
         return pattern

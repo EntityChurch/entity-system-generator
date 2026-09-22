@@ -1,7 +1,11 @@
 ## EXTENSION.toml — HISTORY
 ##
-## The machine-readable contract, against `shared/spec-data/history-v1.7/EXTENSION-HISTORY.md`
-## (sha256 5980bdc96d4818edbc43dd73a1152292e306f126e62d5e4d007ca48bd5fa850b).
+## The machine-readable contract, against `shared/spec-data/history-v1.8/EXTENSION-HISTORY.md`
+## (sha256 0a6346043cab5abff2a254bbd3e27db9f48100af3df3a28f0d083cb6eaabb919).
+##
+## RE-PINNED v1.7 -> v1.8 on 2026-09-08. See `shared/spec-data/history-v1.8/MANIFEST.md` for the
+## whole delta. Three of the changes are readings WE routed, landing as spec text; one is a
+## contradiction the re-pin exposed and it is routed rather than resolved here.
 ##
 ## [contract] IS DERIVED, NOT TRANSCRIBED, AND EVERY FIELD SAYS FROM WHERE.
 ##
@@ -18,13 +22,14 @@
 ## whole file exists to prevent.
 ##
 ## The header is routed to arch as a filled-in draft (`ROUTING-2026-09-06-c-arch-*`), with the
-## derivation table in `shared/spec-data/history-v1.7/MANIFEST.md` as its proposed content.
+## derivation table in `shared/spec-data/history-v1.8/MANIFEST.md` as its proposed content.
+## STILL OPEN at v1.8: the §3.3 declaration header did not arrive, so `[contract]` stays derived.
 
 [extension]
 name     = "HISTORY"
 spec     = "EXTENSION-HISTORY.md"
-version  = "1.7"
-snapshot = "history-v1.7"
+version  = "1.8"
+snapshot = "history-v1.8"
 grade    = "active"                  # spec header "**Status**: Active". NOTE: this spec has no
                                      # "Conformance grade:" line at all — CONTENT and TYPE are the
                                      # only two that do. `active` is the Status value, and it is a
@@ -157,7 +162,7 @@ default_events   = { value = ["created", "updated", "deleted"], cite = "§2.2 'D
 
 default_limit    = { value = 50, cite = "§2.3 'Maximum transitions to return. Default: 50'" }
 timestamp_source = { value = "wall-clock ms since epoch, from the host", cite = "§2.1 timestamp + §5.1 system_clock_ms()", note = "§2.1's `clock` field is ABSENT in our transitions: it is `optional: true` and explicitly 'Absent when the clock extension is not installed'. CLOCK is not in this composition. The oracle's `transition_clock_structured` check is therefore expected to SKIP or pass vacuously -- recorded so a pass is not read as evidence we implemented it." }
-specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.7 MUST", note = "§6.2 makes this a MUST *and ships its own required conformance vector* HIST-CONFIG-SPECIFICITY-1, which does not exist upstream: no check in the oracle's 27 configures two competing patterns. We implemented the vector as a unit test in BOTH insertion orders, which is what the spec asks for and what makes the test capable of failing -- a scalar-specificity implementation passes one order by luck." }
+specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.8 MUST (H-R13/H-R14)", note = """NO LONGER AN ASSUMPTION -- v1.8 settled it, and settled it the way our own test docstring had already derived. At v1.7 we implemented the tuple, implemented HIST-CONFIG-SPECIFICITY-1 as a unit test in both insertion orders, and recorded in that test that v1.7's worked pair (`a/b/c/d` vs `a/*/c/*/e`) names no path both patterns match -- because a mid-path `*` is not one of core §5.4's three wildcard forms -- and that consequently "scalar and tuple can never disagree on a pair core §5.4 can express". v1.8 RETRACTS that pair for that reason, proves the same non-constructibility by cases over §5.4's three admissible families, and keeps the MUST as forward-looking: "A specification that claimed otherwise would be asking implementers to defend against a case they cannot write a test for." It replaces the vector with `a/b/*` vs `a/*` at `a/b/c` (key 1 separates) and ADDS HIST-CONFIG-SPECIFICITY-2, `*` vs `/*/a/*` at `a/b`, where key 1 ties at 1 and ONLY KEY 2 SEPARATES -- the case v1.7 had no equivalent of. Both are now unit tests in all three ports, both insertion orders, and all three passed on the first run with no code change. Still measured by nothing upstream: see [conformance] H-R13.""" }
 
 # ── [substrate] — MUSTs whose satisfiability differs per peer, measured per peer ─────────
 #
@@ -417,6 +422,41 @@ and simply never matches. Declared here rather than left as a silent hole: the d
 one is the second.
 """
 
+# ── AND A ROW THAT IS NOT A LIMIT ON THE EXTENSION AT ALL ────────────────────────────────
+#
+# §6.2's MUST exists BECAUSE of this row, which is why it belongs here: "an implementation that
+# returns the first match rather than the most specific one passes exactly one order, by luck",
+# and the order it would be lucky about is the peer's, not ours. The extension has no say in it
+# and cannot observe it directly. Measured 2026-09-08 while authoring H-R13's two checks, by
+# reading each peer's own listing implementation and then constructing the two scenarios that
+# invert enumeration on all three at once.
+[substrate.config_enumeration_order]
+must = "§6.2 `find_history_config` iterates `list_entities(system/history/config/)`. The spec leaves that ORDER unspecified and MUSTs the selection be independent of it (H-R13)."
+typescript = "INSERTION ORDER"     # `EntityTree.list` returns a `Map` built by iterating the
+                                   # tree index, which is a `Map` in first-write order. So the
+                                   # config written first is enumerated first, forever, and a
+                                   # config path REBOUND keeps its original position.
+python     = "SORTED BY SEGMENT"   # `store.listing`: `rows.sort(key=lambda r: r.segment)`
+rust       = "SORTED BY SEGMENT"   # `store.listing`: `out.sort_by(|a, b| a.seg.cmp(&b.seg))`
+note = """
+**Three peers, two disciplines, and neither is wrong** — §3.9 specifies a listing's contents and
+not its order, so both are conformant and an extension that depended on either would be the defect.
+
+The consequence is for the CHECKS rather than for the ports. "Both insertion orders", which is what
+§6.2's two REQUIRED vectors demand, is not one lever: write order controls `typescript`, name order
+controls `python` and `rust`, and a check that moved only one of them would exercise a single
+enumeration on two of the three targets while reading as though it had covered both. Each check
+therefore inverts write order and name order TOGETHER — scenario A writes and names the broad config
+first, scenario B the deeper one — so the deeper config is enumerated last in one scenario and first
+in the other on every peer, without the check knowing which discipline it is talking to.
+
+And one order is unreachable, which is a fact about the COMPOSITION rather than about the peer: the
+composition writes `system/history/config/everything` at boot as policy (§6.3), so on an
+insertion-ordered peer no config a check writes can ever precede it. A check's discriminating power
+is bounded by the composition it runs in. Recorded so the next author does not rediscover it as a
+mysterious asymmetry.
+"""
+
 
 # ── [error_surface] — AUTHORED. And the finding is what is NOT in it. ───────────────
 #
@@ -432,9 +472,43 @@ one is the second.
 #
 # Measured: `./tools/check-error-codes.py`
 
+# ── [contract.error_codes] — TRANSCRIBED from Appendix A, which ARRIVED WITH v1.8 ───────
+#
+# At v1.7 this extension had no code set, and `[error_surface]` below read
+# `spec = []  # THERE IS NO CODE SET`. Appendix A is that set. Its framing is CONTENT
+# Appendix A's, word for word: "a more-specific code is conformant only where one is
+# defined for the operation in a spec code set, and this table is that set for this
+# handler. An undefined spelling is non-conformant and falls back to the status's default."
+#
+# Transcribed as the document states it. **Where our ports emit something this table does
+# not contain — OR THE TABLE NAMES SOMETHING NO PORT EMITS — the discrepancy is recorded in
+# [error_surface] below and routed, never reconciled by editing this block.** The second
+# half of that sentence is new, and it is new because the re-pin found one.
+[contract.error_codes]
+"rollback.not_in_history"     = { status = 404, cite = "Appendix A, §4.3.2, §7.5" }
+"query_rollback.access_denied" = { status = 403, cite = "Appendix A, §4.2, §7.1" }
+"any.path_required"           = { status = 400, cite = "Appendix A, deferring to GUIDE-EXTENSION-DEVELOPMENT §171" }
+"any.unexpected_params"       = { status = 400, cite = "Appendix A, ENTITY-CORE-PROTOCOL §3.3" }
+"any.unsupported_operation"   = { status = 501, cite = "Appendix A, ENTITY-CORE-PROTOCOL §3.3" }
+"any.storage_error"           = { status = 500, cite = "Appendix A, ENTITY-CORE-PROTOCOL §3.3" }
+
+# Appendix A's own closing rule, transcribed because it is the one a port gets wrong
+# silently: "The token is the `code`, never a label in the `message`. `message` is optional
+# and human-readable; a discriminator a caller must branch on cannot live there, because a
+# conformant peer may omit the field entirely."
+token_is_the_code_not_the_message = true
+
 [error_surface]
-# Class 1 — SPEC. Defined in this extension's own code set. THERE IS NO CODE SET.
-spec = []
+# Class 1 — SPEC. Defined in this extension's own code set, `[contract.error_codes]` above.
+#
+# `not_in_history` MOVED HERE FROM `unresolved` AT THE v1.8 RE-PIN, and it is the routed
+# question answered. Our v1.7 note read: "What is missing is a TABLE: the spec has no
+# Appendix A, so under core §3.3's default-code force the string is a more-specific 404 that
+# no spec code set defines... It is `unresolved` rather than `spec` because pseudocode is not
+# a code set." v1.8 adds the table, defines the code, and says why in the same terms —
+# §7.5 makes it the refusal that stops `rollback` being an unrestricted write primitive.
+# ROUTING-2026-09-06-c is closed by this row.
+spec = ["not_in_history"]
 
 # Class 2 — CORE. `ENTITY-CORE-PROTOCOL` §3.3's status table, which enumerates its
 # more-specific codes by name.
@@ -449,7 +523,71 @@ spec = []
 core = ["unexpected_params", "capability_denied", "unsupported_operation", "storage_error"]
 
 # Class 3 — UNRESOLVED. Emitted, named by the spec, defined in NO spec code set.
-unresolved = ["path_required", "not_in_history"]
+unresolved = ["path_required"]
+
+# ── Class 4 — SPEC-NAMED AND EMITTED BY NO PORT. NEW AT THE v1.8 RE-PIN ─────────────────
+#
+# The mirror of an undeclared code, and the direction `tools/check-error-codes.py` could not
+# see until this re-pin: the gate walked emit sites and asked whether each was declared, so a
+# code the SPEC names and NO port emits was outside its corpus entirely. That is the failure
+# mode this class exists to hold, and the gate now checks it (D16, fifth instance).
+spec_named_not_emitted = ["access_denied"]
+
+[error_surface.spec_named_detail."access_denied"]
+kind   = "deviation"          # we emit a DIFFERENT code for the condition this row names
+dated  = "2026-09-08"
+why    = """Appendix A's 403 row is `access_denied`; all three ports emit `capability_denied`, \
+which is ENTITY-CORE-PROTOCOL §3.3's 403 default and the code its v7.71 authorization-path \
+discipline names for a request-time DENY. Two landed specs, two spellings, one path. See the \
+long note below."""
+routed = "ROUTING-2026-09-08-arch-the-code-set-names-a-403-core-does-not-define.md"
+spec_sites  = "3 in EXTENSION-HISTORY v1.8 and NOWHERE ELSE IN THE CORPUS — §4.2 and §4.3.2 pseudocode (`return error(403, \"access_denied\")`, both present since v1.7) and Appendix A's 403 row"
+we_emit     = "capability_denied, on all three ports, 6 sites"
+asserted_by = "nothing. `grep -n 'access_denied\\|capability_denied' ../entity-core-go/cmd/internal/validate/history.go` -> 0"
+note = """
+**The re-pin's real finding, and it is two findings wearing one code.**
+
+FIRST, OURS. `access_denied` has been in §4.2's and §4.3.2's pseudocode since v1.7, and all
+three of our ports emit `capability_denied` instead. That deviation was never declared. It
+was invisible because `tools/check-error-codes.py` walks EMIT SITES and asks whether each is
+declared — so a code the spec names and no port emits is not in its corpus at all. One
+direction of a two-directional axis, which is D16's sentence exactly: the thing we own is the
+thing nothing watches. The gate now checks both directions and this class is where the answer
+lives.
+
+SECOND, NOT OURS, AND IT IS WHY THIS IS NOT SIMPLY A BUG TO FIX. v1.8 promotes that
+pseudocode into a code set and adds a §9.1 MUST — "Emit error codes from Appendix A's set; no
+other more-specific spelling" — so the disagreement is now binding. But `access_denied` is
+defined in exactly one document in the corpus, and `ENTITY-CORE-PROTOCOL` §3.3's 403 row plus
+its v7.71 "authorization-path code discipline" govern this path directly:
+
+    403 row     Default `code` = `capability_denied`; more-specific authorization codes:
+                `scope_exceeds_authority`.
+    v7.71       "...`result.data.code` set to the authorization domain's defined code —
+                `capability_denied` by default, or a more-specific DEFINED authorization
+                code (`scope_exceeds_authority`, `unresolvable_grantee`,
+                `capability_revoked`) where one applies... the authorization codes live in
+                their domain homes (§5.2, §6.2, EXTENSION-ROLE §5.5); this paragraph and
+                the §3.3 403 row pointer keep them paired WITHOUT SPAWNING A PARALLEL
+                REGISTRY."
+
+`access_denied` is in none of those enumerations, and a §4.2 dual-capability refusal is a
+request-time authorization DENY, which is exactly what that paragraph governs. So two landed
+specs give two spellings for one status on one path, and `GUIDE-EXTENSION-DEVELOPMENT` §173's
+own test — a forbidden synonym is "a differently-spelled generic" — is the question arch has
+to answer about which one this is.
+
+**NOT RESOLVED LOCALLY, and switching three ports to `access_denied` is the thing we must not
+do.** It would mint an authorization code core's registry paragraph declines to define, on our
+own authority, in three implementations at once — the cohort failure L18 names, with the
+generator as its multiplier. The ports keep emitting `capability_denied`, which is defensible
+under core today and was chosen deliberately; the deviation is now DECLARED rather than
+silent, and the packet asks arch which document wins.
+
+**And the §9.1 MUST that depends on this is filed `ours`/`gap`, not `covered`.** Claiming a
+check measures "emit codes from Appendix A's set" while we knowingly emit outside it would be
+the false-coverage shape `[conformance]` exists to prevent.
+"""
 
 [error_surface.unresolved_detail."path_required"]
 dated  = "2026-09-06"
@@ -464,8 +602,9 @@ both carry a `resource`, so the rule applies here.
 fact rather than a CONTENT quirk.** Same routing packet, now with two call sites.
 """
 
-[error_surface.unresolved_detail."not_in_history"]
-dated  = "2026-09-06"
+[error_surface.resolved_detail."not_in_history"]
+dated    = "2026-09-06"
+resolved = "2026-09-08, EXTENSION-HISTORY v1.8 Appendix A"
 routed = "ROUTING-2026-09-06-c-arch-the-second-extension-and-what-the-emit-face-measured"
 emitted_by = "the rollback path, §4.3.2"
 asserted_by = "entity-core-go `history` category, `rollback_invalid_hash_rejected`"
@@ -484,6 +623,13 @@ distinction is the whole content of CONTENT v3.7's Appendix A.
 being an unrestricted write primitive; a caller has to be able to tell it apart from a
 storage failure, and a code nothing defines is a code an implementation may spell
 differently.
+
+── RESOLVED 2026-09-08. v1.8's Appendix A defines it, at the status we emit, for the
+operation we emit it on, and states the §7.5 argument above in its own words: "before v1.8
+no code set defined it, so a peer following §3.3's closed-set rule to the letter had to fall
+back to the 404 default and lose the distinction the security model depends on." No code
+changes in any port. The record is kept rather than deleted because a re-pin that erases what
+the previous reading WAS leaves nothing to check the new one against.
 """
 
 
@@ -765,6 +911,100 @@ IN-PLACE MUTATION of immutable content-addressed entities — so this row is unm
 unimplementable as written. Our ports implement the reachable reading and say so."""
 
 # ── MAY ─────────────────────────────────────────────────────────────────────────────────
+
+# ── FIVE ROWS ARRIVED WITH v1.8. §9.1 went from 10 requirements to 15. ──────────────────
+#
+# This is the event `[conformance]` exists for (D16, fourth instance): a re-pin that adds
+# binding rows without anyone deciding what measures them. `tools/req-coverage.py` refuses an
+# undeclared or stale row, so these had to be read and assigned before the snapshot could be
+# adopted — which is the gate doing the thing it was built to do, on its first re-pin.
+#
+# NONE of the five is measured by the oracle. `entity-core-go`'s `history` category is 34
+# checks and asserts no error-code string at all (`grep -n 'access_denied\|capability_denied'
+# ../entity-core-go/cmd/internal/validate/history.go` -> 0) and drives no config-selection
+# scenario. That is a statement about the executed corpus `req-coverage` prints, not a
+# complaint: three of the five are new text as of today.
+
+[[conformance.requirement]]
+id     = "H-R11"
+text   = "Refuse a rollback target absent from the chain with `404 not_in_history` (Appendix A, §7.5)"
+oracle = ["rollback_invalid_hash_rejected"]
+gap    = """PARTIAL. The check drives the scenario and asserts the STATUS; it does not read the \
+`code`. So a port emitting `404 handler_not_found` — §3.3's 404 default, which is what a peer \
+following the closed-set rule had to emit before v1.8 defined this code — passes it identically. \
+The half v1.8 added is exactly the half the check does not measure. All three ports emit \
+`not_in_history` and their own unit tests assert the string, which is our code checking our code \
+(L18); over the wire it is unasserted."""
+
+[[conformance.requirement]]
+id     = "H-R12"
+text   = "Emit error codes from Appendix A's set; no other more-specific spelling"
+oracle = []
+note   = """NOTHING MEASURES THIS, and **we do not currently satisfy it.** Appendix A's 403 row is \
+`access_denied`; all three ports emit `capability_denied`, which is `ENTITY-CORE-PROTOCOL` §3.3's \
+403 default and is what core's v7.71 authorization-path discipline names for a request-time DENY. \
+Two landed specs, two spellings, one path. Filed as a GAP rather than as covered because claiming \
+a check measures this row while knowingly emitting outside the set is the false-coverage shape \
+this block exists to prevent. Routed 2026-09-08 — see \
+docs/status/ROUTING-2026-09-08-arch-the-code-set-names-a-403-core-does-not-define.md and \
+`[error_surface].spec_named_not_emitted`. **Not resolved locally**: switching three ports would \
+mint an authorization code core declines to define, in a cohort, on our own authority."""
+
+[[conformance.requirement]]
+id     = "H-R13"
+text   = "Select the most specific matching config, independent of enumeration order (§6.2)"
+oracle = []
+ours   = [
+  "extension-contracts/history/checks/config-specificity-key1.toml",
+  "extension-contracts/history/checks/config-specificity-key2.toml",
+]
+note   = """NOTHING UPSTREAM MEASURES THIS. v1.8 attaches two REQUIRED vectors to it — \
+`HIST-CONFIG-SPECIFICITY-1` (key 1 separates: `a/b/*` over `a/*` at `a/b/c`) and \
+`HIST-CONFIG-SPECIFICITY-2` (key 1 TIES and only key 2 separates: `/*/a/*` over `*` at `a/b`) — \
+each requiring **both insertion orders**, because "an implementation that returns the first match \
+rather than the most specific one passes exactly one order, by luck." No check in the executed \
+corpus configures two overlapping patterns at all. **AUTHORED 2026-09-08**, one check per vector, \
+both admitted on `python` and `typescript` on their first run. Two things about them are worth \
+carrying here rather than only in the check files. \
+**They are the first checks whose subject is the RECORDER rather than the handler**: selection \
+happens in the emit consumer and the outcome is read at §3.1's head pointer with `system/tree`, \
+so nothing in either check touches `system/history:query`. `gates/ext-checks/compare.py` \
+consequently flipped its own `rust` line from *"an arm would measure 0 of 3"* to \
+*"AN ARM WOULD MEASURE 2 of 5 — this target is worth an arm now"*, which is the trigger it was \
+built to produce. \
+And **"both insertion orders" is not one thing across the cohort**: `python` and `rust` enumerate \
+a listing sorted by segment, `typescript` returns the tree index's insertion order. Each check \
+inverts write order and name order together so the deeper config is enumerated last in one \
+scenario and first in the other on every peer, and a third scenario inverts `enabled` so the \
+404s are attributable to the config selected rather than to the pattern never having matched."""
+
+[[conformance.requirement]]
+id     = "H-R14"
+text   = "Compare specificity as the §6.2 tuple, not a collapsed scalar (§6.2)"
+oracle = []
+note   = """Satisfied by construction in all three ports — `pattern_specificity` returns an ordered \
+`(literals, depth, canonical)` and `compare_specificity` walks the keys — and **v1.8 says out loud \
+that no peer can currently exhibit the divergence this MUST forbids.** Its case analysis over \
+§5.4's three admissible pattern families shows a scalar and the tuple agree on every constructible \
+pair, and it keeps the MUST as forward-looking: "A specification that claimed otherwise would be \
+asking implementers to defend against a case they cannot write a test for." v1.7's worked pair \
+(`a/*/c/*/e`) was retracted for using a mid-path spelling that is not a pattern. So this row is \
+UNMEASURABLE BY CONSTRUCTION today and is filed that way rather than as a gap: authoring a check \
+for it would mean authoring one that cannot fail."""
+
+[[conformance.requirement]]
+id     = "H-R15"
+text   = "Canonicalize a leading-`*` config pattern to `/*/` + remainder (§2.2)"
+oracle = []
+note   = """**This row is our own routed reading, landed as spec text.** At v1.7 §2.2's pseudocode \
+returned a leading-`*` pattern unchanged while §2.2's table said it meant "any peer's namespace", \
+and core §5.4 rejects the unchanged spelling by name — so the pattern reached `matches_pattern`, \
+matched none of the three wildcard forms, fell through to exact string comparison and matched \
+nothing. All three ports implement the TABLE (`*/rest` -> `/*/rest`, and bare `*` tested FIRST so \
+it cannot be read as a degenerate peer wildcard), declared as a deviation and routed. v1.8 makes \
+both the pseudocode and the table read that way and corrects §2.2's own example from \
+`*/project/*` to `/*/project/*`. The deviation is closed; no port changes. Unmeasured upstream — \
+a config-selection scenario would reach it, which is H-R13's vector."""
 
 [[conformance.requirement]]
 id     = "H-R10"

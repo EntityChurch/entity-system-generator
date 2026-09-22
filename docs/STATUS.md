@@ -6,6 +6,67 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
+**`EXTENSION-HISTORY` v1.8 landed and we re-pinned to it, and three of the changes are readings
+this repo routed.** All three were shipped as *declared deviations* from v1.7's own pseudocode —
+a bare `*` canonicalizing to the local namespace and tested before the first-segment check;
+`*/rest` corrected to `/*/rest`, the spelling core §5.4 rejects by name, so a peer configuring
+cross-peer history matched nothing and reported no error; and `prune_history` walking and
+reporting while mutating nothing. v1.8's §2.2 pseudocode, §2.2's corrected table and §3.3 are
+those three. Not luck: generating an implementation forces a spec's table and its pseudocode to
+a single value, and these two disagreed.
+
+§6.2 was rewritten in the same direction. A v1.7 unit-test docstring here had derived that a
+scalar and the §6.2 tuple cannot disagree on any pair the core grammar can express, and that
+v1.7's worked pair `a/*/c/*/e` is not a pattern at all; v1.8 retracts that pair for that reason,
+proves the same non-constructibility by cases, rewrites `HIST-CONFIG-SPECIFICITY-1` and adds
+`-2`, where key 1 ties and only key 2 separates. Both are unit tests in all three ports now,
+both insertion orders, and all three passed on the first run with no code change.
+
+**And the re-pin found one going the other way.** Appendix A's 403 row is `access_denied`; all
+three ports emit `capability_denied`, which is the core protocol's own 403 default and what its
+authorization discipline names for a request-time deny. Two landed specs, two spellings, one
+path — routed rather than resolved locally, because switching three ports would mint an
+authorization code core declines to define. It was invisible because the code gate walked
+**emit sites** and asked whether each was declared: a code the spec names and no port emits was
+outside its corpus entirely. The gate now reads both directions.
+
+---
+
+**Latest: §6.2's two REQUIRED conformance vectors are measured, over the wire, and they are the
+first authored checks whose subject is the recorder rather than a handler.** `HIST-CONFIG-
+SPECIFICITY-1` and `-2` are checks the spec wrote for an implementer and nothing upstream runs —
+no check in the oracle's executed corpus configures two overlapping patterns at all. Both are
+now `extension-contracts/history/checks/*.toml`, and both were **ADMITTED on `python` and
+`typescript` on their first run**: `make ext-checks` reads 10 of 10 (check × arm-pair), pass
+composed and fail bare.
+
+Nothing in either check calls a history operation. Configuration is a standard tree `put` (§6.1),
+selection happens inside the emit consumer (§6.2), and the outcome is read at §3.1's head
+pointer — a plain tree binding — with a core `system/tree` get. So the checks measure the
+extension through faces a peer that cannot host a handler body still has, and the gate's own
+coverage line for that target moved from *"an arm would measure 0 of 3"* to **"an arm would
+measure 2 of 5 — this target is worth an arm now."** That line is computed from the composition's
+declared faces rather than written by hand, which is why it could flip on its own.
+
+**Three things the authoring taught, none of them about the ports:**
+
+- **"Both insertion orders" is not one lever.** The three peers do not enumerate a listing the
+  same way — two sort by segment, one returns the tree index's insertion order — and both are
+  conformant, because §3.9 specifies a listing's contents and not its order. A check that moved
+  only write order, or only name order, would exercise a single enumeration on two of the three
+  targets while reading as though it had covered both. Each check inverts the two together.
+  Recorded as a substrate row, because §6.2's MUST exists precisely to make this unobservable.
+- **An emptiness assertion needs an attribution control, not just a positive one.** The central
+  assertion is that a path is *not* recorded, which is also what a peer produces if the pattern
+  never matched. Each check therefore runs the same pattern family and path shape a third time
+  with one bit flipped, and asserts the opposite outcome.
+- **A check that names a type no registry defines behaves exactly like one that names the right
+  type.** One of ours did, from the day it was written, and nothing anywhere could say so.
+  Corrected; every check now declares each wire type it sends with the authority that defines it,
+  and an undeclared one fails.
+
+---
+
 **The first authored extension checks are running, and the rule that admits them is the point.**
 `make ext-checks`, three checks on three MUSTs the oracle reaches with nothing —
 `EXTENSION-CONTENT` §5.2/§6.2 (the resolved entity travels in `included`, not just its hash),

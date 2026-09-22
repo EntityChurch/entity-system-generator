@@ -29,6 +29,11 @@ without dereferencing the content store; in ENTITY mode it is absent, because th
 wrapper to pass. `root_hash` and `ingested_count` are present in both modes.
 """
 
+# The wire types this check sends, and who defines each (`gates/ext-checks/schema.py`).
+[check.types]
+"system/content/ingest-request" = "spec — EXTENSION-CONTENT §6.3"
+"system/content/probe"          = "ours — an arbitrary payload entity; §6.3 structural admission never checks `data` against the type it names"
+
 [[check.step]]
 op = "connect"
 

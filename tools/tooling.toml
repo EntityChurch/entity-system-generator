@@ -1,0 +1,60 @@
+## tools/tooling.toml — the programs and libraries the NEUTRAL half links, declared.
+##
+## Not a target profile. `languages/<t>/profile.toml` describes a substrate we GENERATE FOR;
+## this describes what our own build tooling runs on. The two must not be conflated even where
+## they name the same implementation, and one of them does: the peer whose ECF codec is used
+## here is also a peer under test. Same code, two roles, and only the second is ever the
+## subject of a measurement (`docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md` §6.1).
+##
+## WHY THIS FILE EXISTS AT ALL — two rules meeting, and the answer they force is the right one.
+## `tools/check-glue.py` fails a language-neutral code file that names a target, and it is
+## correct to: a neutral tool that hardcodes which implementation it links is one edit away
+## from being a dispatch over all of them. So the implementation is a VALUE and lives in a
+## declaration (D17), which also puts it where `tools/check-citations.py` can prove the path
+## resolves (D18).
+
+# ── the canonical ECF codec our tooling encodes and decodes with ─────────────────────────
+#
+# WE DO NOT HAND-ROLL A CODEC AND WE DO NOT EMIT JSON. The ecosystem's data language is CBOR
+# in Entity Canonical Form; a peer library is a conformant, cross-impl-byte-verified
+# implementation of it, and using one as a library is what it is for. A JSON hop in our own
+# build would be a second data model with no canonical form, no byte strings, and no map
+# ordering rule -- the three things `content_hash` is computed from.
+#
+# The path is the sibling tree, READ-ONLY, imported and never written.
+[ecf_codec]
+peer    = "../entity-core-keystone/protocol-generator/python/src"
+package = "entity_core"
+api     = "encode / decode -- the peer's documented public surface, re-exported from its own internal modules by its `__init__`"
+
+# WHICH TOOLCHAIN RUNS IT, by target NAME rather than by image. The image itself is declared
+# once, in that target's `profile.toml [toolchain].image`, and the Makefile resolves it there
+# -- a second copy here is AP-9's shape exactly (a fact in two places, the executing copy
+# winning silently).
+#
+# AND THE REASON A CONTAINER IS NEEDED AT ALL IS A FINDING, not an inconvenience.
+# `import entity_core` executes the package `__init__`, which imports `signature`, which
+# imports `cryptography`. **The canonical ECF codec cannot be loaded without the peer's
+# Ed25519 dependency**, so a consumer who wants only the data language must take the crypto
+# stack too -- measured 2026-09-08: `ModuleNotFoundError: No module named 'cryptography'`
+# from a host that has everything else the neutral half needs.
+#
+# That is the opposite of the property this ecosystem says it has -- adopt as much or as
+# little of the system as you want -- and it is the first concrete argument for
+# `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md` §3's separable interchange surface. Routed, not
+# worked around: running in the peer's own toolchain image is correct anyway, because that is
+# where every other part of this build already runs.
+toolchain = "python"
+why     = """This is the implementation our own tooling already runs on, so it adds no toolchain \
+to the host beyond the one the neutral half already needs. It is NOT an authority: the corpus it \
+encodes is decoded by every other arm with an entirely different codec, so an encoding defect \
+surfaces as a cross-arm disagreement rather than as agreement (D15 / L18). That control is the \
+reason this choice is cheap to make and cheap to change."""
+
+# ── the conformance oracle, recorded here because it is the other tool we run ─────────────
+#
+# Declared per composition in `[gate].oracle_bin` because that is where the run needs it; named
+# here so this file is the answer to "what does our build depend on" rather than half of it.
+[oracle]
+name = "entity-core-go validate-peer"
+note = "another team's binary, and it is the oracle BECAUSE it is not the thing under test (AGENTS.md)"

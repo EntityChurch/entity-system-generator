@@ -155,11 +155,31 @@ def tally(arm: dict[str, list[str]]) -> dict[str, int]:
     return {k: v for k, v in counts.items() if v}
 
 
-def measure(bare: dict[str, list[str]], composed: dict[str, list[str]]) -> dict:
+def measure(bare: dict[str, list[str]], composed: dict[str, list[str]],
+            straddles: dict | None = None) -> dict:
     """The measured state of one (composition, stem), in the vocabulary the baseline
     declares. Module-level and pure, so `--self-test` and `--bless` drive THIS and never a
     re-derivation of it (D19; and the twice-in-one-session habit named in
     `HANDOFF-2026-09-07-c` §A4)."""
+    # A DECLARED STRADDLE IS EXCLUDED FROM THE BASELINE ENTIRELY, not just from
+    # `regressed` — and this is earned on the day after AP-23 was filed.
+    #
+    # Yesterday's blessing recorded `bare PASS=315 WARN=335` for `typescript`/`core`. Today
+    # the same command on the same tree reads `314 / 336`, because
+    # `concurrency.t1_1_concurrent_demux`'s verdict turns on whether a 50 ms floor is
+    # crossed and the box was under different load. Nothing about the composition changed.
+    #
+    # So a check whose verdict is UNATTRIBUTABLE cannot be part of a temporal baseline
+    # either: blessing it encodes machine load as a declared fact, and the gate then goes
+    # red on the weather. That is a false red on this repo's newest gate, which is how a
+    # gate gets switched off (AP-4). Excluded from BOTH arms and from `total`, listed in
+    # `excluded`, and printed — never silently dropped.
+    straddles = straddles or {}
+    excluded = sorted(k for k in set(bare) | set(composed) if k in straddles)
+    if excluded:
+        bare = {k: v for k, v in bare.items() if k not in straddles}
+        composed = {k: v for k, v in composed.items() if k not in straddles}
+
     improved, regressed, flaky = [], [], []
     for key in sorted(set(bare) & set(composed)):
         b, c = diff_arms.stable(bare[key]), diff_arms.stable(composed[key])
@@ -178,6 +198,7 @@ def measure(bare: dict[str, list[str]], composed: dict[str, list[str]]) -> dict:
         "flaky": flaky,
         "composed_only": sorted(set(composed) - set(bare)),
         "bare_only": sorted(set(bare) - set(composed)),
+        "excluded": excluded,
     }
 
 
@@ -289,7 +310,7 @@ def check_one(path: Path) -> tuple[list[str], list[str], dict]:
             refusals += [f"{comp}/{stem} {m.splitlines()[0]}" for m in stale]
             continue
         try:
-            m = measure(arm_state(bare_p), arm_state(composed_p))
+            m = measure(arm_state(bare_p), arm_state(composed_p), straddles)
         except Refusal as e:
             refusals.append(f"{comp}/{stem}: {e}")
             continue
@@ -371,6 +392,9 @@ def main() -> int:
                   f"regressed={len(m['regressed'])}  flaky={len(m['flaky'])}")
             if m["flaky"]:
                 print(f"      flaky, attributable to neither arm: {', '.join(m['flaky'])}")
+            if m["excluded"]:
+                print(f"      excluded from the baseline as DECLARED STRADDLES (AP-23): "
+                      f"{', '.join(m['excluded'])}")
             if args.bless:
                 blessed.append(bless(comp, stem, m))
 
@@ -473,6 +497,21 @@ def self_test() -> int:
     expect("a changed check total fails",
            any("check SET changed" in f for f in evaluate(
                "history", dict(declared, total=99), m_before)))
+
+    # ── a DECLARED STRADDLE is out of the baseline entirely (AP-23, the day after).
+    st_bare = {"c.k": ["PASS", "PASS"], "c.other": ["FAIL", "FAIL"]}
+    st_comp = {"c.k": ["WARN", "WARN"], "c.other": ["PASS", "PASS"]}
+    m_plain = measure(st_bare, st_comp)
+    m_excl = measure(st_bare, st_comp, {"c.k": {"routed": "r.md"}})
+    expect("without a declaration the straddle is a regression and IS in the tally",
+           m_plain["regressed"] == ["c.k"] and m_plain["total"] == 2)
+    expect("declared: dropped from BOTH arms, from `total`, and named in `excluded`",
+           m_excl["total"] == 1 and m_excl["excluded"] == ["c.k"]
+           and m_excl["regressed"] == [] and m_excl["bare"] == {"FAIL": 1})
+    expect("...and the real improvement beside it still counts",
+           m_excl["improved"] == ["c.other"])
+    expect("a straddle for a check that is not present excludes nothing",
+           measure(st_bare, st_comp, {"c.absent": {}})["total"] == 2)
 
     # ── flaky belongs to neither arm and is excluded from `improved`.
     flaky_bare = {"c.k": ["FAIL", "FAIL"]}

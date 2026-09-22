@@ -32,6 +32,21 @@ nothing), and querying the history of the head-pointer path for P returns none (
 recorder's own write was excluded).
 """
 
+# ── the wire types this check sends, and who defines each ────────────────────────────────
+#
+# ADDED 2026-09-08, AND THE FIRST ENTRY IS WHY THE BLOCK EXISTS. This check sent
+# `system/tree/put-params` from the day it was written, carrying a `path` field as well.
+# There is no such type: `ENTITY-CORE-PROTOCOL` §3.9 defines `system/tree/put-request`
+# {entity, expected_hash, tree_id}, the path travels in the resource target, and EXTENSION-
+# HISTORY §6.1's own worked example spells it correctly four lines from where this check was
+# derived. Nothing anywhere could say so — no peer validates a params type against the
+# registry — so it passed both arms and read as evidence. Corrected, and `schema.py` now
+# refuses an undeclared type name (D16, third instance's remedy).
+[check.types]
+"system/tree/put-request"    = "core — ENTITY-CORE-PROTOCOL §3.9 Tree Types; fields {entity, expected_hash, tree_id}"
+"system/history/query-params" = "spec — EXTENSION-HISTORY §2.3"
+"system/content/probe"        = "ours — an arbitrary payload entity. §6.3 structural admission never checks `data` against the type it names, so any well-formed type is admissible; this one is named for the check that writes it"
+
 [[check.step]]
 op = "connect"
 
@@ -43,7 +58,7 @@ uri       = "system/tree"
 operation = "put"
 capture   = "put"
 resource  = ["system/history/probe/local-namespace-excluded"]
-params    = { type = "system/tree/put-params", data = { path = "system/history/probe/local-namespace-excluded", entity = { "$entity" = { type = "system/content/probe", data = { marker = "local-namespace-excluded" } } } } }
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "local-namespace-excluded" } } } } }
 
 # The POSITIVE half. Without it, "the head-pointer path has no history" passes on a peer
 # that records nothing at all — which is the vacuity this check's own [check.control] block

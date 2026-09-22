@@ -50,10 +50,45 @@ rather than by review.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
+import sys
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+# ── the corpus travels as canonical ECF, and the codec is a peer's ──────────────────────
+#
+# NOT JSON. The ecosystem's data language is CBOR in Entity Canonical Form, and a build that
+# emitted JSON so a third arm could read a corpus would be introducing a second data model
+# with no canonical form, no byte strings and no map-ordering rule — the three things
+# `content_hash` is computed from. `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md` is the whole
+# argument; this is the first consumer.
+#
+# NOT A HAND-ROLLED ENCODER EITHER. Every peer ships a conformant one, byte-verified against
+# the locked ECF corpus in a cross-impl round. Using one as a library is what a library is
+# for. WHICH one is a value, declared in `tools/tooling.toml` rather than written here: a
+# neutral file that names an implementation is one edit from being a dispatch over all of
+# them, and `tools/check-glue.py` fails it on sight.
+def ecf_decoder():
+    """The declared decoder alone, for consumers that only read (the comparer)."""
+    return _ecf_codec()[1]
+
+
+def _ecf_codec():
+    decl = tomllib.loads((ROOT / "tools" / "tooling.toml").read_text())["ecf_codec"]
+    src = (ROOT / decl["peer"]).resolve()
+    if not src.is_dir():
+        raise SchemaError(
+            f"REFUSING: no ECF codec at {src} (tools/tooling.toml [ecf_codec].peer). "
+            f"The corpus is canonical ECF and this repo does not hand-roll a codec."
+        )
+    sys.path.insert(0, str(src))
+    mod = __import__(decl["package"])
+    return mod.encode, mod.decode
 
 # ── the vocabulary ──────────────────────────────────────────────────────────────────────
 #
@@ -92,7 +127,51 @@ REF_PREFIX = "$"
 # out per arm is how a per-target file starts holding protocol.
 PARAM_WRAPPERS = ("$entity", "$envelope")
 
+# ── the SECOND indirection, and it is a different kind from the first ────────────────────
+#
+# `$capture.result.field` names a value the PEER RETURNED. `{local_peer_id}` names a value
+# the peer IS, and no response has to carry it: every arm already learns it in the §4.1
+# handshake, because it is what the peer identifies itself as.
+#
+# It exists because HISTORY §3.1 puts the head pointer at `system/history/head/{path}` where
+# `{path}` is the FULL peer-namespaced path — so the address of the recorder's own output
+# embeds the peer's id twice over, and a check that cannot spell the peer's id cannot read
+# what the recorder wrote. The alternative was to observe recording through
+# `system/history:query`, which is the HANDLER face — and the whole reason to author a check
+# for §6.2 is that it is the first one whose subject is the RECORDER, on a face
+# `entity-core-protocol-rust` actually hosts.
+#
+# The spelling is the spec's own (§3.1: `system/history/head/{local_peer_id}/docs/report`),
+# so a resource line in a check is character-for-character the path the spec names.
+#
+# AN UNKNOWN `{...}` TOKEN IS A REFUSAL, never a literal. A path substituted with nothing
+# resolves to a real, wrong, absent path, and the assertion then fails — or worse, PASSES,
+# when the assertion is that nothing is there. That is the failure mode of the whole check
+# below: two of its three head reads assert a 404, and a mis-substituted path 404s for free.
+PLACEHOLDERS = ("{local_peer_id}",)
+
 REQUIRED_CHECK_FIELDS = ("id", "requirement", "spec", "snapshot", "level", "kind", "face")
+
+# ── every type a check names is DECLARED with the authority that defines it ──────────────
+#
+# D16's remedy, third time in this tree, on an axis nobody had looked at: the type names a
+# check puts on the wire. Found 2026-09-08 while authoring the §6.2 checks —
+# `local-namespace-excluded` had been sending `system/tree/put-params` since it was written,
+# and the core registry defines `system/tree/put-request`. It also carried a `path` field
+# `put-request` does not have.
+#
+# NOTHING COULD HAVE SAID SO, and that is the finding rather than the typo. No peer validates
+# a params entity's `type` against the §9.5 registry — `data` is never checked against the
+# type it names (§6.3 structural admission) — so a check with an invented request type
+# behaves identically to one with the right name, passes both arms, and reads as evidence.
+# The check that was wrong is the one measuring a MUST nothing upstream measures.
+#
+# The remedy is `[error_surface]`'s, which is the one this repo has already paid for: an
+# undeclared name is a FAILURE, and the declaration must name an AUTHORITY. It does not prove
+# the name is right. It forces someone to go and look for the document that defines it, which
+# is exactly the step that was skipped — the same mechanism that surfaced `path_required`,
+# MUST-ed twice and defined in no code set.
+CHECK_TYPE_AUTHORITIES = ("core", "spec", "ours", "unresolved")
 
 # D13's face amendment, arriving on this axis. `<peer> is a host` is not a proposition;
 # `<peer> hosts <face>` is. A check drives ONE of an extension's four faces, and a target
@@ -115,6 +194,38 @@ MIN_CHECKS = 3
 
 class SchemaError(Exception):
     pass
+
+
+def _type_names(value) -> set[str]:
+    """Every entity type a step puts on the wire — params types and `$entity`/`$envelope` roots."""
+    out: set[str] = set()
+    if isinstance(value, dict):
+        t = value.get("type")
+        if isinstance(t, str) and t:
+            out.add(t)
+        for v in value.values():
+            out |= _type_names(v)
+    elif isinstance(value, list):
+        for v in value:
+            out |= _type_names(v)
+    return out
+
+
+def _tokens(value) -> set[str]:
+    """Every `{...}` substitution appearing in a step's addressable parts, at any depth."""
+    if isinstance(value, str):
+        return set(re.findall(r"\{[^{}]*\}", value))
+    if isinstance(value, dict):
+        out: set[str] = set()
+        for k, v in value.items():
+            out |= _tokens(k) | _tokens(v)
+        return out
+    if isinstance(value, list):
+        out = set()
+        for v in value:
+            out |= _tokens(v)
+        return out
+    return set()
 
 
 def load_checks(root: Path | None = None) -> list[dict]:
@@ -166,6 +277,14 @@ def validate(chk: dict) -> None:
                 f"{where}: step {i} op={s.get('op')!r} is not in the vocabulary "
                 f"({', '.join(sorted(VERBS))}). An unknown verb is a failure, never a skip."
             )
+        for tok in _tokens(s.get("resource")) | _tokens(s.get("params")):
+            if tok not in PLACEHOLDERS:
+                raise SchemaError(
+                    f"{where}: step {i} uses the substitution {tok} , which no arm resolves "
+                    f"(known: {', '.join(PLACEHOLDERS)}). An unresolved token is substituted "
+                    f"with nothing and the request goes to a real, wrong path — which a "
+                    f"404-asserting check reports as a PASS."
+                )
     if steps[0].get("op") != "connect":
         raise SchemaError(f"{where}: the first step must be `connect`")
 
@@ -190,6 +309,33 @@ def validate(chk: dict) -> None:
                 f"or it is not a citation."
             )
 
+    # ── the types, declared with an authority (see CHECK_TYPE_AUTHORITIES) ───────────────
+    used = set()
+    for s in steps:
+        used |= _type_names(s.get("params"))
+    declared = chk.get("types") or {}
+    if not isinstance(declared, dict):
+        raise SchemaError(f"{where}: [check.types] must be a table of type -> authority")
+    for name in sorted(used - set(declared)):
+        raise SchemaError(
+            f"{where}: the step wire type {name!r} is declared nowhere in [check.types]. "
+            f"No peer validates a params entity's type against the §9.5 registry, so an "
+            f"invented request type passes both arms and reads as evidence — which is how "
+            f"`system/tree/put-params` survived in this corpus. Name the authority."
+        )
+    for name in sorted(set(declared) - used):
+        raise SchemaError(
+            f"{where}: [check.types] declares {name!r}, which no step sends. A declaration "
+            f"that outlived its call site is the citation-rot D18 is about, one file over."
+        )
+    for name, auth in sorted(declared.items()):
+        head = str(auth).split(None, 1)[0].rstrip(":")
+        if head not in CHECK_TYPE_AUTHORITIES:
+            raise SchemaError(
+                f"{where}: [check.types].{name!r} begins {head!r}; it must begin with one of "
+                f"{', '.join(CHECK_TYPE_AUTHORITIES)} and then cite the document."
+            )
+
     arms = chk.get("arms") or {}
     if arms.get("composed") != "pass" or arms.get("bare") != "fail":
         raise SchemaError(
@@ -203,6 +349,60 @@ def validate(chk: dict) -> None:
         raise SchemaError(f"{where}: [check.arms].bare_why must say WHY the bare arm fails")
 
 
+def self_test() -> int:
+    """D15's executed control for the ONE rule in this file that can go red on real input.
+
+    The vocabulary rules (verb, assertion kind, face) have been red in anger — every one of
+    them was written after an arm or an author got it wrong. The placeholder rule has not,
+    so it ships with the planted defect instead: a token no arm resolves, which is the
+    failure that would otherwise present as a PASSING check, because an unsubstituted path
+    is a real path with nothing at it and two of the head reads below assert exactly that.
+    """
+    base = {
+        "_path": "<self-test>", "id": "x/y", "requirement": "R", "spec": "S", "snapshot": "s",
+        "level": "MUST", "kind": "independent", "face": "handler", "reading": "r",
+        "step": [{"op": "connect"},
+                 {"op": "execute", "uri": "system/tree", "operation": "get", "capture": "c",
+                  "resource": ["system/history/head/{local_peer_id}/p"],
+                  "params": {"type": "t", "data": {}}}],
+        "assert": [{"kind": "status", "capture": "c", "equals": 200}],
+        "arms": {"composed": "pass", "bare": "fail", "bare_why": "w"},
+        "types": {"t": "core — a citation"},
+    }
+    try:
+        validate(base)
+    except SchemaError as e:
+        print(f"SELF-TEST FAILED: the clean definition was rejected: {e}", file=sys.stderr)
+        return 1
+
+    # Each planted defect is one an author actually made, or one whose failure mode is a
+    # PASSING check. A control that plants something nobody would write proves nothing.
+    planted = [
+        ("an unresolvable substitution `{peer}`",
+         lambda c: c["step"][1].__setitem__("resource", ["system/history/head/{peer}/p"])),
+        ("an undeclared wire type",
+         lambda c: c["step"][1]["params"].__setitem__("type", "system/tree/put-params")),
+        ("a [check.types] entry no step sends",
+         lambda c: c["types"].__setitem__("system/tree/put-params", "core — nothing")),
+        ("an authority outside the vocabulary",
+         lambda c: c["types"].__setitem__("t", "probably core")),
+    ]
+    for label, mutate in planted:
+        c = json.loads(json.dumps(base))
+        mutate(c)
+        try:
+            validate(c)
+        except SchemaError:
+            continue
+        print(f"SELF-TEST FAILED: {label} validated clean. Its failure mode is a check that "
+              f"PASSES having measured something other than what it names.", file=sys.stderr)
+        return 1
+
+    print(f"ext-checks schema self-test: OK — clean definition accepted, "
+          f"{len(planted)} planted defects refused")
+    return 0
+
+
 def verbs_used(checks: list[dict]) -> set[str]:
     return {s["op"] for c in checks for s in c.get("step", [])}
 
@@ -213,13 +413,16 @@ def assertions_used(checks: list[dict]) -> set[str]:
 
 if __name__ == "__main__":
     import argparse
-    import json
-    import sys
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--emit", metavar="PATH",
                     help="write the validated definitions as JSON for the arms to consume")
+    ap.add_argument("--self-test", action="store_true",
+                    help="plant an unresolvable substitution and require it to be refused")
     opts = ap.parse_args()
+
+    if opts.self_test:
+        sys.exit(self_test())
 
     try:
         checks = load_checks()
@@ -232,23 +435,42 @@ if __name__ == "__main__":
               file=sys.stderr)
         sys.exit(3)
 
-    # TOML TO AUTHOR, JSON TO CONSUME — and the second arm is what forced it.
+    # TOML TO AUTHOR, CANONICAL ECF TO CONSUME.
     #
-    # The `python` arm globbed the TOML directly, which worked and was wrong: `node` has no
-    # TOML parser in its standard library and none of these images may fetch one
-    # (`--network=none`). An arm-side parser per language would put the DEFINITION FORMAT in
-    # the per-target half — the exact inversion this axis exists to avoid, and one that gets
-    # worse per target rather than better.
+    # The `python` arm globbed the TOML directly, which worked and was wrong: an arm-side
+    # parser per language puts the DEFINITION FORMAT in the per-target half — the inversion
+    # this axis exists to avoid, and one that gets worse per target rather than better. So
+    # the neutral half validates once and emits, and every arm reads one artifact.
     #
-    # So the neutral half validates once and emits JSON, which every target reads. The arms
-    # now consume ONE artifact rather than each re-deriving the corpus, which also closes a
-    # gap nobody had noticed: two arms globbing independently could disagree about which
-    # checks exist, and `compare.py` would have refused on the set mismatch with no way to
-    # say why.
+    # THAT ARTIFACT WAS JSON FOR ONE DAY AND SHOULD NEVER HAVE BEEN. It was chosen because
+    # `node` has no TOML parser, which is true and beside the point: this ecosystem's data
+    # language is CBOR in Entity Canonical Form, every arm links a conformant ECF codec BY
+    # CONSTRUCTION — an arm is a wire client — and JSON is a second data model with no
+    # canonical form, no byte strings and no map-ordering rule. The corpus now travels in
+    # the form everything else here travels in, and a new target's arm needs a client and
+    # nothing else. `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`.
     if opts.emit:
+        encode, decode = _ecf_codec()
+        payload = {"checks": checks}
+        blob = encode(payload)
+
+        # D15's refusal, and it is not ceremony: this is the first artifact in this tree
+        # whose PRODUCER and one CONSUMER are the same codec (`python` is both our tooling
+        # and a peer under test). A round trip here catches the encoder losing something
+        # before two arms are asked to agree about it — and the arms that do NOT share this
+        # codec are the control that catches what a round trip cannot.
+        if decode(blob) != payload:
+            print("REFUSING: the corpus does not survive its own encode/decode round trip. "
+                  "An arm would execute a corpus that is not the one that was validated.",
+                  file=sys.stderr)
+            sys.exit(3)
+
         Path(opts.emit).parent.mkdir(parents=True, exist_ok=True)
-        Path(opts.emit).write_text(json.dumps({"checks": checks}, indent=1))
-        print(f"ext-checks: emitted {len(checks)} validated definitions -> {opts.emit}")
+        Path(opts.emit).write_bytes(blob)
+        # D14: the number cites the artifact. Canonical encoding makes these bytes a
+        # function of the corpus alone, so this digest identifies exactly what ran.
+        print(f"ext-checks: emitted {len(checks)} validated definitions -> {opts.emit}\n"
+              f"  {len(blob)} bytes canonical ECF, sha256 {hashlib.sha256(blob).hexdigest()}")
 
     print(f"ext-checks: {len(checks)} definitions, all valid")
     for c in checks:

@@ -221,3 +221,74 @@ fn the_comparator_is_a_strict_total_order_over_the_constructible_shapes() {
         );
     }
 }
+
+// ── v1.8's REQUIRED vectors, as the spec now writes them ────────────────────────
+//
+// v1.8 REWROTE `HIST-CONFIG-SPECIFICITY-1` and ADDED `-2`. The test above implements
+// v1.7's version, and its doc comment derives — two days before the spec did — exactly
+// why v1.7's worked pair could not be built and why a scalar and the tuple cannot
+// disagree. **v1.8 says both in its own words** and retracts the pair: "v1.7's worked
+// pair ... used `a/*/c/*/e`, which is not a pattern, so no path distinguishes the
+// readings," and "under §5.4's grammar a scalar and the tuple agree on every pair a peer
+// can construct." The old test is kept: it asserts real behaviour and it is the record.
+//
+// Kept assertion-for-assertion in step with the `python` and `typescript` cells.
+
+/// §6.2 `find_history_config`'s selection, over an explicit candidate ORDER.
+///
+/// A slice rather than a set because insertion order is the whole point of both vectors:
+/// "an implementation that returns the first match rather than the most specific one
+/// passes exactly one order, by luck."
+fn select(candidates: &[&Specificity]) -> String {
+    let mut best = candidates[0];
+    for c in &candidates[1..] {
+        if compare_specificity(c, best) > 0 {
+            best = c;
+        }
+    }
+    best.canonical.clone()
+}
+
+/// `HIST-CONFIG-SPECIFICITY-1` (REQUIRED, v1.8). Configure `a/b/*` and `a/*`, write at
+/// `a/b/c`. Both match; key 1 is 3 against 2, so `a/b/*` MUST be selected. Both orders.
+#[test]
+fn hist_config_specificity_1_v1_8_key_1_separates() {
+    let path = format!("/{PEER}/a/b/c");
+    let specific = spec("a/b/*"); // /{PEER}/a/b/* : literals PEER,a,b = 3, depth 4
+    let general = spec("a/*"); //    /{PEER}/a/*   : literals PEER,a   = 2, depth 3
+
+    assert!(pattern_matches(&path, &specific.canonical), "both must match");
+    assert!(pattern_matches(&path, &general.canonical), "both must match");
+    assert_eq!(specific.literals, 3);
+    assert_eq!(general.literals, 2);
+
+    assert_eq!(select(&[&specific, &general]), specific.canonical);
+    assert_eq!(select(&[&general, &specific]), specific.canonical);
+}
+
+/// `HIST-CONFIG-SPECIFICITY-2` (REQUIRED, new in v1.8). Configure `*` (canonicalizes to
+/// `/{local}/*` — 1 literal, depth 2) and `/*/a/*` (1 literal, depth 3) and write at
+/// `a/b`. **Key 1 TIES at 1 and only key 2 separates them.**
+///
+/// This is the pair that fails an implementation comparing literal counts alone and never
+/// consulting depth — the case v1.7's text had no equivalent of.
+#[test]
+fn hist_config_specificity_2_v1_8_key_2_is_load_bearing() {
+    let path = format!("/{PEER}/a/b");
+    let everything = spec("*"); //   /{PEER}/* : literals PEER = 1, depth 2
+    let peer_wild = spec("*/a/*"); // /*/a/*   : literals a    = 1, depth 3
+
+    assert_eq!(everything.canonical, format!("/{PEER}/*"));
+    assert_eq!(peer_wild.canonical, "/*/a/*");
+    assert!(pattern_matches(&path, &everything.canonical), "both must match");
+    assert!(pattern_matches(&path, &peer_wild.canonical), "both must match");
+
+    // The tie is the point: assert it exists before asserting what breaks it.
+    assert_eq!(everything.literals, peer_wild.literals);
+    assert_eq!(everything.literals, 1);
+    assert_eq!(everything.depth, 2);
+    assert_eq!(peer_wild.depth, 3);
+
+    assert_eq!(select(&[&everything, &peer_wild]), peer_wild.canonical);
+    assert_eq!(select(&[&peer_wild, &everything]), peer_wild.canonical);
+}

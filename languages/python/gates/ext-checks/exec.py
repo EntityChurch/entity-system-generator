@@ -24,12 +24,18 @@ mount and writes nothing into it.
 
 INVOKED BY `tools/host-launch` as `$CLIENT`, with the host already booted and asserted:
 
-    ADDR=127.0.0.1:7777  ARM=composed|bare  TARGET=python  COMP=<composition>
-    EXT_CHECKS_OUT=<path to write the JSON verdict>
+    ADDR=127.0.0.1:7777  ARM=composed|bare  TARGET=<target>  COMP=<composition>
+    EXT_CHECKS_DEFS=<the corpus, canonical ECF>
+    EXT_CHECKS_OUT=<path to write the verdict, canonical ECF>
 
-It writes JSON and exits 0 even when checks fail — the VERDICT is the output, and a
-non-zero exit here would be read by `host-launch` as a launcher failure. The comparer
-decides; this arm only reports.
+**Both sides of this arm speak ECF and neither speaks JSON.** The corpus arrives as canonical
+ECF and the verdict leaves as canonical ECF, decoded and encoded with the peer library this
+arm already links. That is not tidiness: JSON on either side is a per-target parser or writer
+in the half of the tree that multiplies by the target count, and the next arm's language has
+neither in its offline closure. `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`.
+
+It exits 0 even when checks fail — the VERDICT is the output, and a non-zero exit here would
+be read by `host-launch` as a launcher failure. The comparer decides; this arm only reports.
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ if not PEER_SRC.is_dir():
     sys.exit(0)
 sys.path.insert(0, str(PEER_SRC))
 
+from entity_core import decode as ecf_decode, encode as ecf_encode  # noqa: E402
 from entity_core.peer import (  # noqa: E402
     Entity,
     Identity,
@@ -62,7 +69,28 @@ SEED = bytes([0x22] * 32)  # a caller distinct from the host's 0x11 identity
 
 # ── the reference indirection ───────────────────────────────────────────────────────────
 
-def _resolve(value, captures):
+def _substitute(text: str, peer_id: str) -> str:
+    """`{local_peer_id}` -> the id this peer identified itself as in the handshake.
+
+    The second indirection (`gates/ext-checks/schema.py`), and it points the other way from
+    the first: `$capture.result.field` names something the peer RETURNED, this names
+    something the peer IS. HISTORY §3.1 addresses the recorder's own output at
+    `system/history/head/{local_peer_id}/...`, so without it a check cannot read what the
+    recorder wrote except through the handler face — which is the one face the `rust` peer
+    cannot host.
+
+    Substituting an EMPTY id would produce a real, wrong path, and a check asserting `404`
+    there would pass for free. So it raises. `schema.py` refuses an unknown token before any
+    arm runs; this refuses a known token with nothing to put in it.
+    """
+    if "{local_peer_id}" not in text:
+        return text
+    if not peer_id:
+        raise ValueError("{local_peer_id} used before the handshake yielded a peer id")
+    return text.replace("{local_peer_id}", peer_id)
+
+
+def _resolve(value, captures, peer_id=""):
     """`$capture.result.field` -> the value from an earlier response.
 
     The only indirection in the format. Without it a scenario cannot use a hash the PEER
@@ -88,14 +116,16 @@ def _resolve(value, captures):
         if got is None:
             raise ValueError(f"reference {value!r}: result has no field {field!r}")
         return got
+    if isinstance(value, str):
+        return _substitute(value, peer_id)
     if isinstance(value, list):
-        return [_resolve(v, captures) for v in value]
+        return [_resolve(v, captures, peer_id) for v in value]
     if isinstance(value, dict):
-        return {k: _resolve(v, captures) for k, v in value.items()}
+        return {k: _resolve(v, captures, peer_id) for k, v in value.items()}
     return value
 
 
-def _materialise(value, captures):
+def _materialise(value, captures, peer_id=""):
     """TOML -> the peer's own types, for the two reserved wrappers.
 
     `$entity` and `$envelope` exist because an entity and an envelope are protocol
@@ -105,24 +135,24 @@ def _materialise(value, captures):
     """
     if isinstance(value, dict):
         if "$entity" in value:
-            spec = _resolve(value["$entity"], captures)
+            spec = _resolve(value["$entity"], captures, peer_id)
             # `.to_cbor()`, not the Entity: an entity nested inside another entity's data
             # travels in its WIRE form `{type, data, content_hash}` (§1.8), which is what
             # `core/entity` means as a field type. Passing the object encodes nothing —
             # measured, on the first run: `cannot ECF-encode value of type Entity`.
             return Entity.make(spec["type"], _bytes_fields(spec.get("data", {}))).to_cbor()
         if "$envelope" in value:
-            spec = _resolve(value["$envelope"], captures)
+            spec = _resolve(value["$envelope"], captures, peer_id)
             root = spec.get("root")
             root_e = Entity.make(root["type"], _bytes_fields(root.get("data", {}))) if root else None
             inc = [Entity.make(e["type"], _bytes_fields(e.get("data", {})))
                    for e in spec.get("included", [])]
             from entity_core.peer import Envelope
             return Envelope.of(root_e, *inc).to_cbor() if root_e else None
-        return {k: _materialise(v, captures) for k, v in value.items()}
+        return {k: _materialise(v, captures, peer_id) for k, v in value.items()}
     if isinstance(value, list):
-        return [_materialise(v, captures) for v in value]
-    return _resolve(value, captures)
+        return [_materialise(v, captures, peer_id) for v in value]
+    return _resolve(value, captures, peer_id)
 
 
 def _bytes_fields(data: dict) -> dict:
@@ -156,6 +186,7 @@ def run_check(chk: dict, host: str, port: int) -> dict:
     captures: dict[str, dict] = {}
     identity = Identity.of_seed(SEED)
     conn = None
+    peer_id = ""
     step_error = None
     try:
         for i, step in enumerate(chk.get("step", [])):
@@ -163,12 +194,18 @@ def run_check(chk: dict, host: str, port: int) -> dict:
             if op == "connect":
                 conn = dial(host, port)
                 conn.handshake(identity)
+                # The peer's own id, as IT stated it. Not read from the composition, the
+                # profile or a log line: `{local_peer_id}` addresses the peer's namespace,
+                # and the only non-circular source for that is the peer.
+                peer_id = conn.remote_peer_id
             elif op == "execute":
                 if conn is None:
                     raise RuntimeError("execute before connect")
-                params_spec = _materialise(step["params"], captures)
+                params_spec = _materialise(step["params"], captures, peer_id)
                 params = Entity.make(params_spec["type"], params_spec.get("data", {}))
-                resource = resource_target(*step["resource"]) if step.get("resource") else None
+                resource = resource_target(
+                    *(_substitute(r, peer_id) for r in step["resource"])
+                ) if step.get("resource") else None
                 env = conn.execute(identity, step["uri"], step["operation"], params, resource)
                 if env is None:
                     raise RuntimeError(f"step {i}: no response envelope (connection broken)")
@@ -295,16 +332,21 @@ def main() -> int:
     arm = os.environ.get("ARM", "?")
     out_path = os.environ.get("EXT_CHECKS_OUT")
 
-    # The VALIDATED definitions, emitted once by the neutral half. Not a glob over the TOML:
-    # an arm that re-derives the corpus can disagree with the other arms about which checks
-    # exist, and `node` cannot parse TOML at all without a dependency these offline images
-    # may not fetch. One artifact, every arm.
+    # The VALIDATED definitions, emitted once by the neutral half as CANONICAL ECF and
+    # decoded here with THIS PEER'S OWN CODEC. Not a glob over the TOML (an arm that
+    # re-derives the corpus can disagree with the other arms about which checks exist), and
+    # not JSON (a second data model with no canonical form, no byte strings and no map
+    # ordering — see `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`).
+    #
+    # An arm needs no parser for this: it is a wire client, so it links a conformant ECF
+    # codec by construction. That is the property that makes a new target's arm a client and
+    # nothing else.
     defs_path = os.environ.get("EXT_CHECKS_DEFS")
     if not defs_path or not Path(defs_path).is_file():
         print(json.dumps({"arm_error": f"no emitted definitions at {defs_path!r}; "
                                        f"run gates/ext-checks/schema.py --emit first"}))
         return 0
-    checks = json.loads(Path(defs_path).read_text())["checks"]
+    checks = ecf_decode(Path(defs_path).read_bytes())["checks"]
 
     report = {
         "target": os.environ.get("TARGET", "?"),
@@ -314,9 +356,13 @@ def main() -> int:
         "definitions": len(checks),
         "checks": [run_check(c, host, int(port)) for c in checks],
     }
-    blob = json.dumps(report, indent=1)
+    # The REPORT is canonical ECF too, and that is not symmetry for its own sake: a JSON
+    # report needs a JSON WRITER in every arm, and the arm being written next is on a target
+    # whose offline crate closure has none. Keeping JSON on the output side would put a
+    # hand-rolled serializer in the per-target half — the same defect the corpus side just
+    # removed, in the other direction.
     if out_path:
-        Path(out_path).write_text(blob)
+        Path(out_path).write_bytes(ecf_encode(report))
     print(f"ext-checks[{arm}]: {len(checks)} checks -> "
           + " ".join(f"{c['id'].split('/')[-1]}={c['verdict']}" for c in report["checks"]))
     return 0

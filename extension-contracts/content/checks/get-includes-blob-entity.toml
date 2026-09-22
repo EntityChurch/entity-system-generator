@@ -34,6 +34,14 @@ neither section and leaves the caller with no way to obtain the blob — §5.2's
 reason, since the blob is in the content store and there is no separate by-hash operation.
 """
 
+# The wire types this check sends, and who defines each (`gates/ext-checks/schema.py`). An
+# undeclared name is a failure: no peer validates a params entity's type against the §9.5
+# registry, so a wrong one behaves exactly like a right one.
+[check.types]
+"system/content/ingest-request" = "spec — EXTENSION-CONTENT §6.3, and §1's type inventory"
+"system/content/get-request"    = "spec — EXTENSION-CONTENT §6.2"
+"system/content/probe"          = "ours — an arbitrary payload entity; §6.3 structural admission never checks `data` against the type it names"
+
 [[check.step]]
 op   = "connect"
 note = "dial + §4.1 handshake. The peer's open debug grant; this check does not exercise capability scoping."

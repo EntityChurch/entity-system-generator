@@ -256,10 +256,18 @@ EXTCHECK_TARGETS = $(patsubst languages/%/gates/ext-checks/run,%,$(wildcard lang
 EXTCHECK_OUT     = output/ext-checks
 EXTCHECK_COMP   ?= content-history
 
+# The corpus travels as CANONICAL ECF, not JSON, and the encoder is a peer's own codec
+# (`tools/tooling.toml [ecf_codec]`, `docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`). The emit
+# step therefore runs IN A CONTAINER: `import entity_core` pulls the peer's Ed25519
+# dependency through its package `__init__`, so the codec cannot be loaded on a bare host --
+# which is a finding about the library's separability, recorded where it was measured.
+ECF_TOOLCHAIN = $(shell python3 -c "import tomllib;print(tomllib.load(open('tools/tooling.toml','rb'))['ecf_codec']['toolchain'])")
+ECF_IMAGE     = $(call image_of,$(ECF_TOOLCHAIN))
+
 ext-checks:
 	@echo "ext-checks arms: $(EXTCHECK_TARGETS)  composition: $(EXTCHECK_COMP)"
 	@mkdir -p $(EXTCHECK_OUT)
-	./gates/ext-checks/schema.py --emit $(EXTCHECK_OUT)/checks.json
+	$(PODMAN_RUN) $(ECF_IMAGE) ./gates/ext-checks/schema.py --emit $(EXTCHECK_OUT)/checks.cbor
 	@for t in $(EXTCHECK_TARGETS); do \
 		img=$$(python3 -c "import tomllib;print(tomllib.load(open('languages/$$t/profile.toml','rb'))['toolchain']['image'])"); \
 		for arm in composed bare; do \
@@ -267,19 +275,20 @@ ext-checks:
 			bare_env=""; [ "$$arm" = bare ] && bare_env="-e BARE=1"; \
 			$(PODMAN_RUN) $$bare_env \
 				-e CLIENT=./languages/$$t/gates/ext-checks/run \
-				-e EXT_CHECKS_DEFS=/church/$(REPO)/$(EXTCHECK_OUT)/checks.json \
-				-e EXT_CHECKS_OUT=/church/$(REPO)/$(EXTCHECK_OUT)/$$t-$$arm.json \
+				-e EXT_CHECKS_DEFS=/church/$(REPO)/$(EXTCHECK_OUT)/checks.cbor \
+				-e EXT_CHECKS_OUT=/church/$(REPO)/$(EXTCHECK_OUT)/$$t-$$arm.cbor \
 				$$img ./tools/host-launch $$t $(EXTCHECK_COMP) || exit 1; \
 		done; \
 	done
-	./gates/ext-checks/compare.py \
+	$(PODMAN_RUN) $(ECF_IMAGE) ./gates/ext-checks/compare.py \
 		--expect-arms "$(shell echo '$(EXTCHECK_TARGETS)' | tr ' ' ',')" \
 		--all-targets "$(shell echo '$(TARGETS)' | tr ' ' ',')" \
 		--composition $(EXTCHECK_COMP) \
-		$(EXTCHECK_OUT)/*-composed.json $(EXTCHECK_OUT)/*-bare.json
+		$(EXTCHECK_OUT)/*-composed.cbor $(EXTCHECK_OUT)/*-bare.cbor
 
 ext-checks-control:
 	./gates/ext-checks/compare.py --self-test
+	./gates/ext-checks/schema.py --self-test
 
 # ── the temporal baseline ───────────────────────────────────────────────────────
 # AP-18's owed enforcement point. `conformance` and `regression` are two-arm diffs and

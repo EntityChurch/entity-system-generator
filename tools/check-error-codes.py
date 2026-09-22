@@ -78,7 +78,12 @@ CORE_CODES = {
 #: definition and none of its call sites.
 MIN_SITES = 4
 
-CLASSES = {"spec", "core", "unresolved"}
+CLASSES = {"spec", "core", "unresolved", "spec_named_not_emitted"}
+
+#: The class that holds the OTHER direction. A code in it is one the extension's own
+#: transcribed code set names and that NO port emits — so it appears in no emit site and was,
+#: until 2026-09-08, outside this gate's corpus entirely.
+NOT_EMITTED = "spec_named_not_emitted"
 
 
 def targets() -> list[str]:
@@ -162,6 +167,129 @@ def declared_surface(ext: str) -> dict[str, str]:
     return surface
 
 
+def spec_code_set(ext: str) -> dict[str, str]:
+    """`code -> "op.code"` from the extension's transcribed `[contract.error_codes]`.
+
+    The keys are `"<op>.<code>"` (`"rollback.not_in_history"`), because a code set is defined
+    PER OPERATION — Appendix A's own framing is "a more-specific code is conformant only
+    where one is defined FOR THE OPERATION in a spec code set". The value is kept so a
+    failure can name the row rather than only the token.
+
+    Empty when the extension has no code set. That is a real state — HISTORY had none until
+    v1.8 — and it is reported by the caller rather than refused here, because refusing would
+    make the gate red on an extension whose spec has not got one yet.
+    """
+    manifest = load_toml(ROOT / "extension-contracts" / ext / "EXTENSION.toml")
+    block = manifest.get("contract", {}).get("error_codes") or {}
+    out: dict[str, str] = {}
+    for key, val in block.items():
+        # A ROW IS A DOTTED KEY, and this is a corpus assertion rather than a style rule.
+        # `[contract.error_codes]` also carries non-row entries -- CONTENT's
+        # `internal_predicate_on_wire = {status, code, cite}` records Appendix A's ruling that
+        # three pseudocode returns are an internal predicate and NOT wire codes, which is the
+        # exact opposite of a code-set row. Its first draft read every dict as a row and
+        # reported `internal_predicate_on_wire` as a code no port emits: a FALSE RED, on the
+        # entry whose whole content is "this is not a code". Instrument eighteen, defect
+        # eighteen, found by running it.
+        if not isinstance(val, dict) or "." not in key:
+            continue
+        out[key.split(".", 1)[1]] = key
+    if block and not out:
+        raise Refusal(
+            f"{ext}: [contract.error_codes] has {len(block)} entries and none is a dotted "
+            f"`op.code` row -- the transcription shape changed and this gate would report a "
+            f"clean surface over an empty code set"
+        )
+    return out
+
+
+def unemitted(ext: str, code_set: dict[str, str], emitted: set[str],
+              declared: dict[str, str]) -> list[str]:
+    """THE OTHER DIRECTION, in one place so `--self-test` drives it and not a copy.
+
+    Until 2026-09-08 this gate walked emit sites and asked whether each code was declared.
+    A code the SPEC's own code set names and that NO port emits appears in no emit site, so
+    it was not in the corpus at all — and one had been sitting there since v1.7:
+    `EXTENSION-HISTORY` §4.2 and §4.3.2 both `return error(403, "access_denied")`, all three
+    ports emit `capability_denied`, and the deviation was undeclared and invisible through the
+    entire CONTENT v3.6 -> v3.7 re-pin that earned this gate.
+
+    D16's sentence, fifth instance: the thing we own is the thing nothing watches — and here
+    it was half of an axis we already owned, which is worse, because the covered half is what
+    stopped anyone asking about the other one.
+
+    A code in the set that no port emits is a FAILURE unless it is declared in
+    `spec_named_not_emitted`, which is a named, dated, routed class exactly like `unresolved`
+    — not a blessing.
+    """
+    return sorted(
+        f"{code!r} (code set row {code_set[code]!r}) is named by the spec's own code set and "
+        f"is emitted by NO port; declare it in [error_surface].{NOT_EMITTED}, or emit it"
+        for code in code_set
+        if code not in emitted and declared.get(code) != NOT_EMITTED
+    )
+
+
+#: A `spec_named_not_emitted` entry says one of exactly two things, and they are different
+#: claims with different obligations. The gate makes you pick, because the first run of this
+#: rule turned up one of each and putting them in one undifferentiated list would have been
+#: the "declared without deciding" failure the class exists to prevent.
+NOT_EMITTED_KINDS = {
+    # We emit a DIFFERENT code for the condition the row names. A disagreement with the
+    # spec, so it needs somewhere it was sent.
+    "deviation": ("routed",),
+    # The condition has no wire path in what we build, so no port can emit it. A statement
+    # about scope, not about the spec, so no packet -- but `why` still has to say which
+    # operation would emit it and why ours does not.
+    "unreachable": (),
+}
+
+
+def not_emitted_detail(ext: str, declared: dict[str, str], detail: dict) -> list[str]:
+    """Every `spec_named_not_emitted` entry carries a dated, kinded reason.
+
+    Module-level so `--self-test` drives THIS and not a copy (D19). An entry with no detail
+    block is a bare name on a list, which is what `unresolved` would have been without
+    `unresolved_detail` -- and a list of bare names is indistinguishable from a list of
+    things somebody stopped thinking about.
+    """
+    out = []
+    for code, cls in sorted(declared.items()):
+        if cls != NOT_EMITTED:
+            continue
+        d = detail.get(code)
+        if not d:
+            out.append(f"{code!r} is declared {NOT_EMITTED} with no "
+                       f"[error_surface.spec_named_detail.\"{code}\"] block -- a bare name on "
+                       f"a list is not a decision")
+            continue
+        kind = d.get("kind")
+        if kind not in NOT_EMITTED_KINDS:
+            out.append(f"{code!r}: kind={kind!r} is not one of "
+                       f"{', '.join(sorted(NOT_EMITTED_KINDS))} -- 'we emit something else' "
+                       f"and 'nothing here can emit it' are different claims")
+            continue
+        for field in ("dated", "why") + NOT_EMITTED_KINDS[kind]:
+            if not d.get(field):
+                out.append(f"{code!r} (kind={kind}): missing `{field}`")
+    return out
+
+
+def stale_not_emitted(ext: str, emitted: set[str], declared: dict[str, str]) -> list[str]:
+    """A `spec_named_not_emitted` entry that a port HAS started emitting.
+
+    The reassuring direction, and therefore the one that needs a gate: the deviation was
+    resolved, the declaration outlived it, and the class quietly becomes a list of things
+    that are fine. AP-2's mechanism with a declaration as the artifact.
+    """
+    return sorted(
+        f"{code!r} is declared {NOT_EMITTED} but a port now emits it -- the deviation is "
+        f"closed and the declaration is stale; move it to its real class"
+        for code, cls in declared.items()
+        if cls == NOT_EMITTED and code in emitted
+    )
+
+
 def run(strict: bool) -> int:
     exts, tgts = extensions(), targets()
     if not exts or not tgts:
@@ -174,6 +302,7 @@ def run(strict: bool) -> int:
 
     for ext in exts:
         surface = declared_surface(ext)
+        emitted_by_any: set[str] = set()
         for target in tgts:
             profile = load_toml(ROOT / "languages" / target / "profile.toml")
             pattern = profile.get("error_surface", {}).get("emit_pattern")
@@ -193,6 +322,7 @@ def run(strict: bool) -> int:
                 return 2
             cells += 1
             seen = sorted({c for c, _, _ in sites})
+            emitted_by_any.update(seen)
             print(f"  {ext} x {target}: {len(sites)} sites, {len(seen)} distinct codes")
             for code in seen:
                 cls = surface.get(code)
@@ -201,6 +331,27 @@ def run(strict: bool) -> int:
                     failures.append(f"{ext} x {target}: {code!r} is UNDECLARED ({where})")
                 elif cls == "unresolved":
                     unresolved_hits.append(f"{ext} x {target}: {code!r} ({where})")
+                elif cls == NOT_EMITTED:
+                    failures.append(
+                        f"{ext} x {target}: {code!r} is declared {NOT_EMITTED} and this port "
+                        f"EMITS it ({where}) -- the declaration contradicts the code"
+                    )
+
+        # ── THE OTHER DIRECTION, once per extension rather than per cell: the question is
+        # ── "does any port emit this", and a per-cell answer would report a code as missing
+        # ── on two ports because the third has it.
+        code_set = spec_code_set(ext)
+        if not code_set:
+            print(f"  {ext}: no [contract.error_codes] -- the spec has no code set to check "
+                  f"the emitted surface against (this was HISTORY's state until v1.8)")
+        else:
+            print(f"  {ext}: code set {len(code_set)} rows vs {len(emitted_by_any)} codes "
+                  f"emitted by at least one port")
+            failures += [f"{ext}: {m}" for m in unemitted(ext, code_set, emitted_by_any, surface)]
+            failures += [f"{ext}: {m}" for m in stale_not_emitted(ext, emitted_by_any, surface)]
+        manifest = load_toml(ROOT / "extension-contracts" / ext / "EXTENSION.toml")
+        failures += [f"{ext}: {m}" for m in not_emitted_detail(
+            ext, surface, manifest.get("error_surface", {}).get("spec_named_detail", {}))]
 
     if cells == 0:
         print("REFUSING: zero (extension x target) cells parsed")
@@ -223,7 +374,8 @@ def run(strict: bool) -> int:
             print(f"    {f}")
     if failures or (strict and unresolved_hits):
         return 1
-    print("\nOK -- every emitted code is declared with an authority")
+    print("\nOK -- every emitted code is declared with an authority, and every code the "
+          "spec's own set names is emitted or declared as a deviation")
     return 0
 
 
@@ -250,7 +402,56 @@ def self_test() -> int:
         if got != "planted_bogus_code":
             ok = False
         print(f"  {target}: pattern vs planted line -> {got!r} [{verdict}]")
-    print("\nself-test " + ("PASS -- every pattern extracts a planted code" if ok
+    # ── THE OTHER DIRECTION (2026-09-08), both ways, over synthetic inputs so the control
+    # ── drives `unemitted` / `stale_not_emitted` / `not_emitted_detail` and not a copy.
+    def expect(label, cond):
+        nonlocal ok
+        print(f"  {'ok  ' if cond else 'FAIL'}  {label}")
+        ok = ok and cond
+
+    print()
+    cs = {"access_denied": "query_rollback.access_denied", "not_in_history": "rollback.not_in_history"}
+    expect("a code-set row no port emits and nothing declares -> FAILS",
+           len(unemitted("x", cs, {"not_in_history"}, {})) == 1)
+    expect("...and the failure NAMES the row, not only the token",
+           "query_rollback.access_denied" in unemitted("x", cs, {"not_in_history"}, {})[0])
+    expect("declared spec_named_not_emitted -> not a failure",
+           unemitted("x", cs, {"not_in_history"}, {"access_denied": NOT_EMITTED}) == [])
+    expect("every row emitted -> nothing to report",
+           unemitted("x", cs, {"access_denied", "not_in_history"}, {}) == [])
+    expect("a declaration a port has started emitting is STALE (the reassuring direction)",
+           len(stale_not_emitted("x", {"access_denied"}, {"access_denied": NOT_EMITTED})) == 1)
+    expect("...and a declaration nobody emits is not stale",
+           stale_not_emitted("x", {"other"}, {"access_denied": NOT_EMITTED}) == [])
+
+    # The false red this rule shipped on its first run: `internal_predicate_on_wire` is a
+    # `{status, code, cite}` entry recording that three tokens are NOT wire codes, and the
+    # first draft read it as a code-set row and reported it as a code no port emits.
+    real = spec_code_set("content")
+    expect(f"a non-dotted entry is not a code-set row ({len(real)} rows in CONTENT)",
+           "internal_predicate_on_wire" not in real and len(real) >= 5)
+    expect("HISTORY's code set is transcribed and has the six Appendix A rows",
+           len(spec_code_set("history")) == 6)
+
+    d_ok = {"kind": "deviation", "dated": "2026-09-08", "why": "w", "routed": "r.md"}
+    expect("a kinded, dated, routed deviation passes",
+           not_emitted_detail("x", {"c": NOT_EMITTED}, {"c": d_ok}) == [])
+    expect("a deviation with no `routed` FAILS (a disagreement needs a destination)",
+           len(not_emitted_detail("x", {"c": NOT_EMITTED},
+                                  {"c": {k: v for k, v in d_ok.items() if k != "routed"}})) == 1)
+    expect("an `unreachable` needs no packet but still needs `why`",
+           not_emitted_detail("x", {"c": NOT_EMITTED},
+                              {"c": {"kind": "unreachable", "dated": "d", "why": "w"}}) == []
+           and len(not_emitted_detail("x", {"c": NOT_EMITTED},
+                                      {"c": {"kind": "unreachable", "dated": "d"}})) == 1)
+    expect("a bare name with no detail block FAILS",
+           len(not_emitted_detail("x", {"c": NOT_EMITTED}, {})) == 1)
+    expect("an unknown kind FAILS ('we emit something else' != 'nothing can emit it')",
+           len(not_emitted_detail("x", {"c": NOT_EMITTED},
+                                  {"c": {"kind": "waived", "dated": "d", "why": "w"}})) == 1)
+
+    print("\nself-test " + ("PASS -- every pattern extracts a planted code, and both "
+                            "directions of the code-set rule go red on a planted defect" if ok
                             else "FAIL -- a pattern cannot see a code it should"))
     return 0 if ok else 1
 

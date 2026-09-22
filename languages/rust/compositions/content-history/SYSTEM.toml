@@ -248,10 +248,16 @@ config_events  = ["created", "updated", "deleted"]
 max_depth      = 0
 max_depth_note = """
 0 means ABSENT, not zero-retention: the field is `optional: true` (§2.2) and the
-composition omits it. Pruning is a SHOULD (§9.1) and we do not implement it — §3.3's
-algorithm describes severing an immutable content-addressed chain, which cannot be done
+composition omits it. Pruning is a SHOULD (§9.1) and we do not implement it — v1.7's §3.3
+algorithm described SEVERING an immutable content-addressed chain, which cannot be done
 without rewriting every transition's hash. `internal/recorder.rs`'s `prune_history` walks
 and reports rather than pretending.
+
+**SETTLED BY v1.8, AND IT SETTLED OUR WAY (2026-09-08).** §3.3 now reads "`max_depth` is a
+retention policy. The chain is never rewritten and the head is never re-pointed", with the
+same argument we routed, and annotates the pseudocode "It MUTATES NOTHING" — which is what
+`prune_history` already did. v1.8 also adds "A peer that collects nothing is conformant", so
+omitting `max_depth` is not a shortfall against the SHOULD. No code changes.
 """
 
 # ── the two things this peer cannot supply, declared where a reader will look ───────

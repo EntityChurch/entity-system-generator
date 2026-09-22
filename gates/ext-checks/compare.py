@@ -68,7 +68,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from schema import MIN_CHECKS, SchemaError, load_checks  # noqa: E402
+from schema import MIN_CHECKS, SchemaError, ecf_decoder, load_checks  # noqa: E402
+
+# The arms report in canonical ECF, so the comparer decodes with the same declared codec the
+# corpus was encoded with (`tools/tooling.toml [ecf_codec]`). LAZY, because `--self-test` and
+# every schema path must keep working on a host that has no codec at all: the import pulls the
+# peer's Ed25519 dependency through its package `__init__`, which is why the gate's decoding
+# steps run in a container. Recorded as a finding, not worked around
+# (`docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md` §3).
+_decode = None
+
+
+def ecf_decode(blob: bytes):
+    global _decode
+    if _decode is None:
+        _decode = ecf_decoder()
+    return _decode(blob)
 
 
 def decide(composed_verdict: str, bare_verdict: str, face_state: str | None = None) -> str:
@@ -164,7 +179,7 @@ def main() -> int:
 
     arms: dict[tuple[str, str], dict] = {}
     for p in args.reports:
-        doc = json.loads(Path(p).read_text())
+        doc = ecf_decode(Path(p).read_bytes())
         arms[(doc["target"], doc["composition"], doc["arm"])] = doc
 
     pairs = sorted({(t, c) for t, c, _ in arms})
@@ -341,6 +356,10 @@ def _first_failed(c: dict) -> str:
     return "no assertion failed but the verdict is not pass"
 
 
+def real_ids(defs: list[dict]) -> list[str]:
+    return [d["id"] for d in defs]
+
+
 def self_test() -> int:
     """The comparer's own controls. Both directions and one refusal, over synthetic arms."""
     ok = True
@@ -384,11 +403,27 @@ def self_test() -> int:
            face_state("nosuchtarget", "content-history", "content", "handler") is None)
 
     # ── the no-arm reachability computation, over the real tree, both directions.
+    #
+    # THIS CONTROL ASSERTED A STATE AND HAD TO BE REWRITTEN AS A PROPERTY, on 2026-09-08, the
+    # day the state changed. It read `r_reach == []` with the message "every authored check is
+    # handler-face" — true when it was written and false the moment a check was authored for a
+    # face `rust` hosts, which is the event the whole `NO ARM` block exists to announce. So the
+    # gate's own control went red on the gate working as designed: a false red, on the newest
+    # thing in the file, with an obvious-looking fix (re-bless the `0`) that would have
+    # suppressed the trigger permanently. AP-23's second day, one axis over.
+    #
+    # The property, which does not move when the corpus does: on this peer a check is reachable
+    # exactly when its face is not the one the composition declares `not-installable`.
     real = load_checks()
     r_reach, r_unknown = reachable("rust", "content-history", real)
-    expect(f"an arm on `rust` would measure {len(r_reach)} of {len(real)} — every authored "
-           f"check is handler-face and that peer hosts no handler body",
-           r_reach == [] and r_unknown == [])
+    r_expected = [d["id"] for d in real
+                  if face_state("rust", "content-history", d["id"].split("/")[0], d["face"])
+                  != "not-installable"]
+    expect(f"an arm on `rust` would measure {len(r_reach)} of {len(real)} — exactly the checks "
+           f"whose face that composition does not declare not-installable",
+           r_reach == r_expected and r_unknown == [])
+    expect("…and the handler-face checks are the excluded ones, by face and not by count",
+           {d["id"] for d in real if d["face"] == "handler"} == set(real_ids(real)) - set(r_reach))
     t_reach, t_unknown = reachable("typescript", "content-history", real)
     expect(f"an arm on `typescript` reaches all {len(t_reach)} — the same computation, "
            f"the other answer",

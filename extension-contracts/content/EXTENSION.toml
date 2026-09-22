@@ -114,6 +114,41 @@ core = ["unexpected_params", "unsupported_operation"]
 # flag is the switch that gets flipped once upstream pins them.
 unresolved = ["path_required"]
 
+# ── Class 4 — SPEC-NAMED AND EMITTED BY NO PORT. NEW 2026-09-08 ─────────────────────────
+#
+# The direction `tools/check-error-codes.py` could not see until the HISTORY v1.8 re-pin:
+# it walked emit sites and asked whether each code was DECLARED, so a code the spec's own
+# code set names and no port emits was outside its corpus entirely. Adding the reverse
+# check found two here, on an extension whose surface we had already measured and published
+# as "36 emit sites, 7 distinct codes, and the codes AGREE across all three ports."
+#
+# Both are `unreachable` rather than `deviation`, and the distinction is the gate's: we do
+# not emit a different code for these conditions, we have no wire path that reaches them.
+spec_named_not_emitted = ["blob_not_found", "blob_pending_sync"]
+
+[error_surface.spec_named_detail."blob_not_found"]
+kind  = "unreachable"
+dated = "2026-09-08"
+why   = """Appendix A cites it at §3.4 / §7.1 — the blob REASSEMBLY path, not the `get` op. \
+§6.2's `get` is a 200 carrying `found` / `missing` arrays: a hash the store does not hold is a \
+FIELD IN A SUCCESSFUL RESPONSE, not an error status, so the handler this composition installs \
+has no branch that could emit a 404 here. All three ports do produce the token — as an internal \
+predicate verdict in the SDK's reassembly (`ReassembleResult` / `ClosureVerdict`), whose caller \
+maps it to a terminal 404 — and that caller is an application, which this composition does not \
+have. So the code is reachable through the SDK face and not through the handler face; a \
+composition that installs a reassembling caller would emit it and this entry would go stale, \
+which `stale_not_emitted()` is what catches."""
+
+[error_surface.spec_named_detail."blob_pending_sync"]
+kind  = "unreachable"
+dated = "2026-09-08"
+why   = """Same path as `blob_not_found`, and this one is DECLARED ABSENT ELSEWHERE ALREADY — \
+`handler.ts` §6.2's own comment: "`pending` is OPTIONAL and SHOULD be populated only by an \
+implementation with sync-state visibility — an active subscription on the namespace plus an \
+inbox feeding the content store. This composition has neither, so the field is OMITTED." The \
+503 is the status form of that same absent capability. Recorded here so the two statements are \
+in one place: we already decided this, in a comment, where no gate could read it."""
+
 [error_surface.unresolved_detail."path_required"]
 dated  = "2026-09-06"
 routed = "ROUTING-2026-09-06-b-arch-the-code-set-that-omits-the-code-it-musts"

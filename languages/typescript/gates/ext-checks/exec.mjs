@@ -65,14 +65,56 @@ if (!defsPath) {
   console.log(JSON.stringify({ arm_error: "EXT_CHECKS_DEFS unset" }));
   process.exit(0);
 }
-const CHECKS = JSON.parse(readFileSync(defsPath, "utf8")).checks;
+
+// The corpus is CANONICAL ECF, decoded with THIS PEER'S OWN CODEC — not JSON, which is a
+// second data model with no canonical form, no byte strings and no map-ordering rule
+// (`docs/DESIGN-THE-CBOR-INTERCHANGE-LAYER.md`). An arm needs no parser for this: it links a
+// conformant ECF codec by construction, because an arm is a wire client.
+//
+// `plain()` lowers the decoded value tree into this language's ordinary values so everything
+// below is unchanged. That is a codec doing its job, not a translation layer: the thing that
+// was removed is a second SERIALIZATION, and nothing here re-encodes.
+function plain(v) {
+  switch (v.kind) {
+    case "map": return Object.fromEntries(Ecf.entries(v).map(([k, x]) => [k, plain(x)]));
+    case "array": return Ecf.asArray(v).map(plain);
+    case "text": return Ecf.asText(v);
+    case "bytes": return Ecf.asBytes(v);
+    case "bool": return Ecf.asBool(v);
+    // `int` carries both signs in this peer's value model (`{kind:"int", negative, argument}`);
+    // `asUint` is the unsigned reader and the corpus has no negative integers, so a negative
+    // one must raise rather than be coerced.
+    case "int": return Number(Ecf.asUint(v));
+    case "null": return null;
+    // Never a silent fallthrough. A major type this arm does not lower would arrive as
+    // `undefined` and read downstream as an absent field — a check quietly measuring less
+    // than it names, which is the failure this whole gate exists to make unauthorable.
+    default: throw new Error(`ext-checks: corpus carries an ECF value this arm does not lower: ${v.kind}`);
+  }
+}
+const CHECKS = plain(Ecf.decodeEcf(new Uint8Array(readFileSync(defsPath)))).checks;
 
 // ── the reference indirection ─────────────────────────────────────────────────────────────
 //
 // `$capture.result.field`. Unresolvable RAISES rather than falling through as a literal: a
 // reference silently compared as text fails the assertion for the wrong reason, and a check
 // that fails for the wrong reason is worse than one that does not exist.
-function resolve(value, captures) {
+// `{local_peer_id}` — the second indirection, and it points the other way from the first.
+// `$capture.result.field` names what the peer RETURNED; this names what the peer IS, learned
+// in the §4.1 handshake. HISTORY §3.1 addresses the recorder's own output at
+// `system/history/head/{local_peer_id}/...`, so without it a check can only observe recording
+// through the handler face — the one face `entity-core-protocol-rust` cannot host.
+//
+// An EMPTY id would substitute into a real, wrong path, and a check asserting `404` there
+// would pass for free. So it throws. `schema.py` refuses an unknown token before any arm
+// runs; this refuses a known token with nothing to put in it.
+function substitute(text, peerId) {
+  if (!text.includes("{local_peer_id}")) return text;
+  if (!peerId) throw new Error("{local_peer_id} used before the handshake yielded a peer id");
+  return text.replaceAll("{local_peer_id}", peerId);
+}
+
+function resolve(value, captures, peerId = "") {
   if (typeof value === "string" && value.startsWith("$")) {
     const parts = value.slice(1).split(".");
     if (parts.length !== 3 || parts[1] !== "result") {
@@ -88,9 +130,12 @@ function resolve(value, captures) {
     }
     return got;
   }
-  if (Array.isArray(value)) return value.map((v) => resolve(v, captures));
+  if (typeof value === "string") return substitute(value, peerId);
+  if (Array.isArray(value)) return value.map((v) => resolve(v, captures, peerId));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolve(v, captures)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, resolve(v, captures, peerId)]),
+    );
   }
   return value;
 }
@@ -132,26 +177,28 @@ function entityWire(e) {
   );
 }
 
-function materialise(value, captures) {
-  if (Array.isArray(value)) return value.map((v) => materialise(v, captures));
+function materialise(value, captures, peerId = "") {
+  if (Array.isArray(value)) return value.map((v) => materialise(v, captures, peerId));
   if (value && typeof value === "object") {
     if ("$entity" in value) {
-      const spec = resolve(value.$entity, captures);
+      const spec = resolve(value.$entity, captures, peerId);
       return entityWire(Entity.create(spec.type, ecfOf(spec.data ?? {})));
     }
     if ("$envelope" in value) {
       // `system/envelope` on the wire is `{root, included}` (§3.1). The check's envelopes
       // carry no `included` today; an empty map is the honest encoding of that rather than
       // an omitted field, because §6.3's algorithm iterates it.
-      const spec = resolve(value.$envelope, captures);
+      const spec = resolve(value.$envelope, captures, peerId);
       const root = spec.root
         ? entityWire(Entity.create(spec.root.type, ecfOf(spec.root.data ?? {})))
         : null;
       return Ecf.map(["root", root], ["included", Ecf.emptyMap()]);
     }
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, materialise(v, captures)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, materialise(v, captures, peerId)]),
+    );
   }
-  return resolve(value, captures);
+  return resolve(value, captures, peerId);
 }
 
 // ── the verbs ─────────────────────────────────────────────────────────────────────────────
@@ -170,14 +217,17 @@ async function runCheck(chk, hostPeerIdRef) {
         hostPeerIdRef.value ??= session.remotePeerId ?? null;
       } else if (step.op === "execute") {
         if (!session) throw new Error("execute before connect");
-        const spec = materialise(step.params, captures);
+        const spec = materialise(step.params, captures, hostPeerIdRef.value ?? "");
         const params = Entity.create(spec.type, ecfOf(spec.data ?? {}));
         // §2 of the header: the definition names the PATTERN; this peer's client wants the
         // full URI. Rendered here, where it is one target's business.
         const uri = step.uri.includes("://")
           ? step.uri
           : `entity://${hostPeerIdRef.value}/${step.uri}`;
-        const resource = step.resource ? new ResourceTarget(step.resource, null) : undefined;
+        const resource = step.resource
+          ? new ResourceTarget(
+              step.resource.map((r) => substitute(r, hostPeerIdRef.value ?? "")), null)
+          : undefined;
         const response = await session.execute(uri, step.operation, params, resource);
         captures[step.capture] = {
           status: response.statusCode,
@@ -305,8 +355,29 @@ const report = {
   definitions: CHECKS.length,
   checks,
 };
+// The verdict leaves as canonical ECF, like the corpus arrived. A JSON report would need a
+// JSON WRITER in every arm, and the arm being written next has none in its offline closure —
+// the same per-target burden the corpus side just shed, in the other direction.
+//
+// `toEcf` lifts ordinary values back into the peer's value model. It is the exact inverse of
+// `plain()` above and refuses the same way: an unrepresentable value raises rather than
+// encoding as something else, because a verdict that quietly changed shape in transit is a
+// measurement nobody made.
+function toEcf(v) {
+  if (v === null || v === undefined) return Ecf.nullValue;
+  if (typeof v === "string") return Ecf.text(v);
+  if (typeof v === "boolean") return Ecf.bool(v);
+  if (typeof v === "number") {
+    if (!Number.isInteger(v) || v < 0) throw new Error(`report carries a non-uint number: ${v}`);
+    return Ecf.uint(BigInt(v));
+  }
+  if (v instanceof Uint8Array) return Ecf.bytes(v);
+  if (Array.isArray(v)) return Ecf.array(v.map(toEcf));
+  if (typeof v === "object") return Ecf.map(...Object.entries(v).map(([k, x]) => [k, toEcf(x)]));
+  throw new Error(`report carries a value this arm cannot encode: ${typeof v}`);
+}
 if (process.env.EXT_CHECKS_OUT) {
-  writeFileSync(process.env.EXT_CHECKS_OUT, JSON.stringify(report, null, 1));
+  writeFileSync(process.env.EXT_CHECKS_OUT, Ecf.encodeEcf(toEcf(report)));
 }
 console.log(
   `ext-checks[${report.arm}]: ${checks.length} checks -> `

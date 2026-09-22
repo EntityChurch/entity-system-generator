@@ -1,0 +1,380 @@
+## CHECK — HISTORY §6.2 `HIST-CONFIG-SPECIFICITY-2`: key 2 is load-bearing
+##
+## Kind C. The spec wrote this vector FOR an implementer and marked it REQUIRED; nothing
+## upstream runs it. `req-coverage` reports H-R13 — a §9.1 MUST — measured by nothing in a
+## 764-check corpus, and no check in that corpus configures two overlapping patterns at all.
+##
+## THE FIRST AUTHORED CHECK WHOSE SUBJECT IS THE RECORDER RATHER THAN THE HANDLER, and that
+## is why it exists in this shape. The other three drive a handler body over the wire, so on
+## `entity-core-protocol-rust` they read `not-applicable` — that peer cannot host a handler
+## body at any visibility (D13, amended). §6.2's selection happens in the emit consumer, the
+## face that peer DOES host, and every observation below goes through `system/tree`, which is
+## core. So this is the first check that peer could run.
+##
+## WHAT MAKES IT OBSERVABLE FROM OUTSIDE. §3.1: "Head pointers are tree bindings at
+## `system/history/` paths" — `system/history/head/{path}`, a plain tree binding, readable by
+## `system/tree:get` with no history handler in the picture. A `200` there means a transition
+## was recorded for that path; a `404 not_found` means none was. The whole check is that one
+## observation, three times, against two configs whose ONLY difference in §6.2's ordering is
+## key 2.
+
+[check]
+id          = "history/config_specificity_key2"
+requirement = "H-R13"
+spec        = "EXTENSION-HISTORY §6.2 (HIST-CONFIG-SPECIFICITY-2)"
+snapshot    = "history-v1.8"
+level       = "MUST"
+kind        = "independent"
+# THE FACE. Not `handler`: nothing here calls `system/history:query` or `:rollback`. The
+# subject is §6.2's `find_history_config`, which runs inside the emit consumer, and the
+# read-back is core's tree handler. A composition declaring `emit_consumer = "installed"`
+# and `handler = "not-installable"` is in scope for this check and out of scope for the
+# other three, which is the whole point of naming a face rather than a peer.
+face        = "emit_consumer"
+
+reading = """
+§6.2: "Configure `*` (canonicalizes to `/{local}/*` — 1 literal, depth 2) and `/*/a/*`
+(1 literal, depth 3) and write at `a/b`. Key 1 ties at 1 and only key 2 separates them, so
+the `/*/a/*` config MUST be selected. Both insertion orders."
+
+The pair is spelled here as `*` against `/*/gskey2a/*`, written at `gskey2a/probe`, which is
+the vector's shape with a probe-unique second segment. Selection is made OBSERVABLE by
+giving the two configs the distinguishable setting §2.2 already has: the deeper config is
+`enabled = false` and the broad one `enabled = true`. §5.1 tests `config is null or not
+config.data.enabled` AFTER selection, so a correctly-selecting peer picks the deeper config
+and records NOTHING — a specific `enabled: false` shadows a general `enabled: true`, which
+is the only way "turn history off for this subtree" can be expressed at all.
+
+So: no head pointer at `system/history/head/{local_peer_id}/gskey2a/probe` is the MUST being
+satisfied, and a head pointer there means a broad config was selected where a deeper one
+matched.
+
+**A NEGATIVE IS NOT A MEASUREMENT ON ITS OWN.** "No head pointer" is also what a peer that
+records nothing produces, which is AP-19's shape and the reason four of the oracle's own
+`content` checks pass against a peer with no content extension. The last two steps are the
+positive control, in the same run, on the same connection: a path only the broad enabled
+config matches MUST have a head pointer, and the entity at it MUST be a transition.
+"""
+
+# ── BOTH INSERTION ORDERS, and what "insertion order" turned out to mean ─────────────────
+#
+# §6.2 requires the same selection with the two configs written in both orders, because "an
+# implementation that returns the first match rather than the most specific one passes
+# exactly one order, by luck." What the peers actually enumerate is `list_entities` order,
+# and MEASURED it is not the same discipline on all three:
+#
+#   python  `store.listing` sorts by segment          (`rows.sort(key=...)`)
+#   rust    `store.listing` sorts by segment          (`out.sort_by(|a, b| a.seg.cmp(...))`)
+#   typescript  `EntityTree.list` returns a Map in the underlying index's INSERTION order
+#
+# So neither write order nor name order alone controls enumeration across the cohort. The two
+# scenarios below invert BOTH at once — scenario A writes the broad config first AND names it
+# to sort first; scenario B writes and names the deeper one first — which puts the deeper
+# config LAST in scenario A and FIRST (python/rust) or mid (typescript) in scenario B, on
+# every peer, without the check knowing which discipline it is talking to.
+#
+# WHAT EACH SCENARIO CATCHES, stated rather than implied:
+#
+#   A   deeper config enumerated LAST  -> catches "first match wins" (it lands on a broad
+#                                        enabled config, records, and the 404 assertion goes red)
+#   B   deeper config enumerated FIRST -> catches "last match wins" (same, at the other end)
+#
+# and both catch the defect the vector is named for: a comparator that reads key 1, ties at
+# 1 literal, and never consults depth — which is order-dependent by construction and lands on
+# a broad config in at least one of the two scenarios on all three enumeration disciplines.
+#
+# THE ORDER THIS CHECK CANNOT REACH, recorded rather than left for a reader to discover: the
+# composition writes `system/history/config/everything` (`*`, enabled) at boot as POLICY, so
+# no config this check writes can precede it in a typescript insertion-ordered listing. A
+# check's discriminating power is bounded by the composition it runs in, and that bound is a
+# fact about this axis rather than about this check.
+
+# The wire types this check sends, and who defines each. An undeclared name is a failure
+# (`gates/ext-checks/schema.py`): no peer validates a params entity's type against the §9.5
+# registry, so a wrong one behaves exactly like a right one — which is how
+# `system/tree/put-params` survived in this corpus until 2026-09-08.
+[check.types]
+"system/tree/put-request" = "core — ENTITY-CORE-PROTOCOL §3.9 Tree Types; fields {entity, expected_hash, tree_id}"
+"system/tree/get-request" = "core — ENTITY-CORE-PROTOCOL §3.9 Tree Types; fields {limit, mode, offset, tree_id}, all optional"
+"system/history/config"   = "spec — EXTENSION-HISTORY §2.2, and §9.2's installed-type list"
+"system/content/probe"    = "ours — an arbitrary payload entity; §6.3 structural admission never checks `data` against the type it names"
+
+[[check.step]]
+op = "connect"
+
+# ── scenario A — the deeper config is enumerated LAST ────────────────────────────────────
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "cfg_a_broad"
+resource  = ["system/history/config/gate-key2-1-broad"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/history/config", data = { pattern = "*", enabled = true } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "cfg_a_deep"
+resource  = ["system/history/config/gate-key2-2-deep"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/history/config", data = { pattern = "/*/gskey2a/*", enabled = false } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "write_a"
+resource  = ["gskey2a/probe"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "config-specificity-key2-a" } } } } }
+
+# §3.1's address, spelled the way §3.1 spells it. `{local_peer_id}` is the peer's own id from
+# the handshake — the head pointer for a local path embeds it twice, once as the namespace it
+# is stored in and once as part of `{path}`.
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "get"
+capture   = "head_a"
+resource  = ["system/history/head/{local_peer_id}/gskey2a/probe"]
+params    = { type = "system/tree/get-request", data = { } }
+
+# ── scenario B — the deeper config is enumerated FIRST ───────────────────────────────────
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "cfg_b_deep"
+resource  = ["system/history/config/aa-gate-key2-3-deep"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/history/config", data = { pattern = "/*/gskey2b/*", enabled = false } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "cfg_b_broad"
+resource  = ["system/history/config/zz-gate-key2-4-broad"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/history/config", data = { pattern = "*", enabled = true } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "write_b"
+resource  = ["gskey2b/probe"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "config-specificity-key2-b" } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "get"
+capture   = "head_b"
+resource  = ["system/history/head/{local_peer_id}/gskey2b/probe"]
+params    = { type = "system/tree/get-request", data = { } }
+
+# ── scenario C — THE SAME SHAPE WITH ONE BIT FLIPPED ─────────────────────────────────────
+#
+# The fault-injection control D15 asks for, built out of data instead of out of a mutated
+# port. `/*/gskey2c/*` is scenario A's pattern with `enabled = true`, over an identically
+# shaped path. It is the only construction that makes the two 404s above ATTRIBUTABLE: on its
+# own, "no head pointer at `gskey2a/probe`" is also what a peer produces if a `/*/x/*` pattern
+# matches nothing, if a three-segment path is excluded for some unrelated reason, or if
+# `canonicalize_pattern` mangles the peer-wildcard spelling — all of which would be true here
+# too, and all of which this 200 rules out.
+#
+# It does NOT discriminate selection, and saying so is the point: with the deeper config
+# enabled, both candidates record, so a peer that picked either passes. Scenario A and B carry
+# the discrimination; this carries the attribution.
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "cfg_c_deep"
+resource  = ["system/history/config/gate-key2-5-deep-enabled"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/history/config", data = { pattern = "/*/gskey2c/*", enabled = true } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "write_c"
+resource  = ["gskey2c/probe"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "config-specificity-key2-c" } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "get"
+capture   = "head_c"
+resource  = ["system/history/head/{local_peer_id}/gskey2c/probe"]
+params    = { type = "system/tree/get-request", data = { } }
+
+# ── the positive control, LAST, so it also witnesses that the recorder survived the run ──
+#
+# `gskey2p/probe` is matched only by broad enabled configs — no deeper pattern in this check
+# covers it — so a peer whose recorder works records it whichever config it selects. Without
+# this, every assertion above is satisfied by a peer that records nothing at all.
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "put"
+capture   = "write_p"
+resource  = ["gskey2p/probe"]
+params    = { type = "system/tree/put-request", data = { entity = { "$entity" = { type = "system/content/probe", data = { marker = "config-specificity-key2-positive" } } } } }
+
+[[check.step]]
+op        = "execute"
+uri       = "system/tree"
+operation = "get"
+capture   = "head_p"
+resource  = ["system/history/head/{local_peer_id}/gskey2p/probe"]
+params    = { type = "system/tree/get-request", data = { } }
+
+# ── assertions ───────────────────────────────────────────────────────────────────────────
+
+[[check.assert]]
+kind    = "status"
+capture = "cfg_a_broad"
+equals  = 200
+why     = "precondition — §6.1: configuration is a standard tree `put` and needs no handler operation"
+
+[[check.assert]]
+kind    = "status"
+capture = "cfg_a_deep"
+equals  = 200
+why     = "precondition — without both configs stored there is no pair to select between"
+
+[[check.assert]]
+kind    = "status"
+capture = "write_a"
+equals  = 200
+why     = "precondition — no write, no tree-change event, nothing for §6.2 to select a config for"
+
+[[check.assert]]
+kind    = "status"
+capture = "head_a"
+equals  = 404
+why     = """THE REQUIREMENT, scenario A. Key 1 ties at 1 literal; only key 2 separates \
+`/*/gskey2a/*` (depth 3) from `/{local}/*` (depth 2). The deeper config MUST be selected and \
+it is `enabled = false`, so no transition may exist for this path — and therefore no head \
+pointer is bound at it."""
+
+[[check.assert]]
+kind    = "error_code"
+capture = "head_a"
+equals  = "not_found"
+why     = """The 404 must be the tree's "nothing is bound here", not some other 404. A status \
+assertion alone cannot tell an absent binding from an absent handler, and those are different \
+facts about a different subject."""
+
+[[check.assert]]
+kind    = "status"
+capture = "cfg_b_deep"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "cfg_b_broad"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "write_b"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "head_b"
+equals  = 404
+why     = """THE REQUIREMENT, scenario B — the same pair with the enumeration order inverted. \
+§6.2 requires the same selection both ways: "an implementation that returns the first match \
+rather than the most specific one passes exactly one order, by luck.\""""
+
+[[check.assert]]
+kind    = "error_code"
+capture = "head_b"
+equals  = "not_found"
+
+[[check.assert]]
+kind    = "status"
+capture = "cfg_c_deep"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "write_c"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "head_c"
+equals  = 200
+why     = """THE ATTRIBUTION CONTROL — scenario A's pattern and path shape with `enabled` \
+flipped to true. A head pointer MUST exist here. Without it, both 404s above are also \
+explained by a peer for which `/*/x/*` matches nothing at all, and a check whose central \
+assertion is satisfied by a pattern that never matched is measuring the wrong thing."""
+
+[[check.assert]]
+kind    = "result_field_present"
+capture = "head_c"
+field   = "path"
+
+[[check.assert]]
+kind    = "status"
+capture = "write_p"
+equals  = 200
+
+[[check.assert]]
+kind    = "status"
+capture = "head_p"
+equals  = 200
+why     = """THE POSITIVE CONTROL, inside the check. A path only the broad ENABLED config \
+matches MUST have a head pointer. Without it, both assertions above are satisfied by a peer \
+whose recorder does nothing — which is exactly how four of the oracle's `content` checks pass \
+against a peer with no content extension installed (AP-19)."""
+
+[[check.assert]]
+kind    = "result_field_present"
+capture = "head_p"
+field   = "path"
+why     = "§3.1 — the head pointer binds the path to the LATEST TRANSITION ENTITY, so what is bound must be one (§2.1 `path`)"
+
+[[check.assert]]
+kind    = "result_field_present"
+capture = "head_p"
+field   = "event"
+why     = "§2.1 — and a second required field, so `result_field_present` is not satisfied by any entity that happens to carry a `path`"
+
+[check.arms]
+composed = "pass"
+bare     = "fail"
+bare_why = """no history extension is installed, so no emit consumer runs and NO head pointer \
+is ever written. The two 404 assertions pass in the bare arm — a peer that records nothing \
+satisfies them trivially, which is the point of stating it here — and the check fails on the \
+POSITIVE CONTROL: `head_p` is 404 where composed is 200. The arm difference is carried \
+entirely by the control, which is the honest description of what this check measures."""
+
+# ── the honest limits ────────────────────────────────────────────────────────────────────
+
+[check.control]
+strength = "arm-differential + an in-check positive control + an in-check ATTRIBUTION control (scenario C) + two enumeration orders"
+missing  = """A control proving the two 404s can go red for §6.2's ORDERING reason \
+specifically — that is, a port that compares literal counts alone. It means mutating a port to \
+make a check fail, which this repo does not do. What stands in for it is the ARGUMENT, written \
+out above: each scenario names the enumeration discipline it defeats, and between them they \
+cover first-match and last-match on both sorted and insertion-ordered stores."""
+mitigation = """Scenario C closes the half of that gap that data CAN close. `enabled` is the \
+only difference between it and scenario A — same pattern family, same path shape, same peer, \
+same connection — and it is 200 where A is 404. So the 404 is attributable to the config that \
+was selected rather than to the pattern never having matched, which is the failure mode an \
+emptiness assertion cannot tell apart on its own. The four observations are not independent: a \
+peer that records nothing fails C and P, a peer that records everything fails A and B, and no \
+state satisfies all four without §6.2's selection being performed."""
+not_measured = """WHICH config was selected, directly. The wire exposes the OUTCOME of \
+selection (a transition exists, or does not), never the choice. A peer that selected the broad \
+config and then declined to record for an unrelated reason would pass — so this check bounds \
+the observable behaviour, not the pseudocode's internal state. Naming that is cheaper than \
+discovering it later from a disagreement with a unit test."""
