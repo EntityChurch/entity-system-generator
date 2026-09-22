@@ -135,3 +135,29 @@ comparison isolates is the transcription, not the encoder.
 - **FastCDC cross-impl convergence.** Our unit tests pin the gear table against an independent
   derivation and pin edit-stability, which catches *our* mistakes. They say nothing about anyone
   else's. §3.6.5's vectors do not exist yet.
+
+---
+
+## Re-measured at the CONTENT v3.6 → v3.7 re-pin — 2026-09-06
+
+**Appended, not rewritten.** Everything above is the record of the **v3.6** run and stays as
+written; a measurement is dated by when it was taken, and a document that edits its own numbers
+when the input moves is not a record. This stanza is the **v3.7** run.
+
+**Every verdict above reproduces.** The re-pin changed one thing this composition can emit —
+§6.4's `403 forbidden` → `403 capability_denied` — and **no check in the `content` category
+asserts that code**, which is exactly why the change needed a gate rather than a test
+(`tools/check-error-codes.py`; AP-11; D16's third instance).
+
+```
+snapshot   shared/spec-data/content-v3.7/EXTENSION-CONTENT.md
+           sha256 2a40b22b859b2a74f7de4d1c43b4655cb6ece2b791d7769f27fcc87efa65ee87
+command    make check-all          (exit 0)
+           content      12 PASS · 1 SKIP   (13 declared)
+artifact
+           content-report-2026-09-06-v3.7.json
+           sha256 81ae02902a56f62c2610fbda289b71996cf60d666c8bef40bebda2d9478a8489
+```
+
+Unchanged: **content 8 improved**, `REGRESSIONS ATTRIBUTABLE TO THE COMPOSITION: 0`, `FLAKY: 0`.
+Core profile both rounds: 0 regressions, 6 improvements.

@@ -153,7 +153,10 @@ test("§6.4 a resource target outside the namespace -> 403", async () => {
     const params = Entity.create(ContentTypes.GetRequest, Ecf.map(["hashes", Ecf.array([])]));
     const { status, result } = await r.exec("get", params, new ResourceTarget(["local/files"], null));
     assert.equal(status, 403);
-    assert.equal(errorCode(result), "forbidden");
+    // v3.7 §6.4: `capability_denied`, not `forbidden`. Asserted on the CODE and not on the
+    // status alone, because the status was already right under v3.6 and the code was not —
+    // a test that checked only `403` would have survived the re-pin without noticing.
+    assert.equal(errorCode(result), "capability_denied");
   } finally {
     await r.close();
   }

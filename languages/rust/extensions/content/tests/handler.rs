@@ -94,7 +94,10 @@ fn a_target_outside_the_namespace_is_403() {
     let e = exec("get", get_params(&[]), Some(targets(&["system/tree/x"])));
     let out = h.handle_op("get", &req(&e, &store));
     assert_eq!(out.status, 403);
-    assert_eq!(code_of(&out.result), "forbidden");
+    // v3.7 §6.4: `capability_denied`, not `forbidden`. Asserted on the CODE and not on the
+    // status alone, because the status was already right under v3.6 and the code was not —
+    // a test that checked only `403` would have survived the re-pin without noticing.
+    assert_eq!(code_of(&out.result), "capability_denied");
 }
 
 #[test]

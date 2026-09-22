@@ -110,3 +110,14 @@ frame_budget         = "wire::MAX_FRAME (a public const, NOT configurable)"
                                        # truth. Degenerate satisfaction, not a violation.
                                        # Routed as "make it configurable", not as K-1's
                                        # "unimplementable". Different packet, on purpose.
+
+# ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
+# D17: a per-target VALUE lives in the profile. The type name is left open (`\w+::err`)
+# because the outcome type is per-EXTENSION here — `ContentOutcome` today, and the second
+# extension will name its own. Binding the pattern to `ContentOutcome` would make this
+# field silently stop matching at the first cell that is not CONTENT, which is the exact
+# false green MIN_SITES and the self-test exist to refuse.
+[error_surface]
+emit_pattern = '\b\w+::err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"'
+# D15's control, as data — see `--self-test`.
+self_test_line = 'return ContentOutcome::err(400, "planted_bogus_code", "x");'

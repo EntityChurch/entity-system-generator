@@ -123,7 +123,10 @@ def test_a_resource_target_outside_the_namespace_is_403(rig):
         "get", Entity.make(GET_REQUEST, {"hashes": []}), resource=resource_target("local/files")
     )
     assert response_status(env) == 403
-    assert error_code(env) == "forbidden"
+    # v3.7 §6.4: `capability_denied`, not `forbidden`. Asserted on the CODE and not on the
+    # status alone, because the status was already right under v3.6 and the code was not —
+    # a test that checked only `403` would have survived the re-pin without noticing.
+    assert error_code(env) == "capability_denied"
 
 
 # ── §6.2 get ─────────────────────────────────────────────────────────────────

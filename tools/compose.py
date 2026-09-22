@@ -251,29 +251,81 @@ FACE_STATES = {
 }
 
 
-def check_faces(sys_block: dict, comp_name: str) -> dict:
-    """Validate `[system.faces]`, and REFUSE a composition that claims a face it also
-    declares unavailable.
-
-    Optional: the two compositions that predate it declare no block and resolve exactly
-    as before, which is what keeps this from being a retroactive rewrite of their plans.
-    """
-    faces = sys_block.get("faces")
-    if faces is None:
-        return {}
+def _check_face_map(faces: dict, comp_name: str, where: str) -> dict:
+    """Validate one `{face: state}` map."""
     unknown = set(faces) - FACES
     if unknown:
         raise Refusal(
-            f"{comp_name}: [system.faces] names {sorted(unknown)}, which are not faces. "
+            f"{comp_name}: {where} names {sorted(unknown)}, which are not faces. "
             f"The four are {sorted(FACES)} (DESIGN-THE-SDK-LAYER §1)."
         )
     for face, state in faces.items():
         if state not in FACE_STATES:
             raise Refusal(
-                f"{comp_name}: [system.faces].{face} = {state!r} is not a declared state. "
+                f"{comp_name}: {where}.{face} = {state!r} is not a declared state. "
                 f"One of {sorted(FACE_STATES)}."
             )
     return dict(faces)
+
+
+def check_faces(sys_block: dict, comp_name: str, extensions: list[str]) -> dict:
+    """Validate `[system.faces]` and return `{extension: {face: state}}`.
+
+    TWO FORMS, AND THE SECOND ARRIVED WITH THE SECOND EXTENSION.
+
+    The flat form -- `[system.faces]` as a bare `{face: state}` map -- was written when a
+    composition held exactly one extension, so "the composition's handler face" named one
+    thing. It is still accepted and the three cycle-1 compositions still use it; it means
+    "these states apply to every extension in this composition", which is TRUE when there
+    is one of them and an assumption the moment there are two.
+
+    The per-extension form is `[system.faces.<EXTENSION>]`. It exists because
+    `content-history` is the first composition where the flat form is a category error in
+    exactly the way D13's amendment describes one level down: CONTENT registers no emit
+    consumer and HISTORY registers one, so `emit_consumer = "installed"` is true of the
+    composition and false of half of it. **A face is per (peer x extension x face)**, and
+    the middle coordinate is the one this repo only just earned the right to see.
+
+    Refuses a per-extension block naming an extension the composition does not install --
+    a face declared for something absent is a claim about nothing, and it is the shape a
+    stale block takes after an extension is removed.
+    """
+    faces = sys_block.get("faces")
+    if faces is None:
+        return {}
+
+    per_extension = {k: v for k, v in faces.items() if isinstance(v, dict)}
+    flat = {k: v for k, v in faces.items() if not isinstance(v, dict)}
+
+    if per_extension and flat:
+        raise Refusal(
+            f"{comp_name}: [system.faces] mixes the flat form ({sorted(flat)}) with the "
+            f"per-extension form ({sorted(per_extension)}). Pick one -- a half-qualified "
+            "face table is read as whichever the reader expected."
+        )
+
+    if not per_extension:
+        shared = _check_face_map(flat, comp_name, "[system.faces]")
+        if len(extensions) > 1 and shared:
+            raise Refusal(
+                f"{comp_name}: [system.faces] is the flat form but the composition installs "
+                f"{len(extensions)} extensions {sorted(extensions)}. The flat form asserts "
+                "one face state for all of them, which is a claim about the composition "
+                "that is false of its parts as soon as they differ (D13, amended). Use "
+                "[system.faces.<EXTENSION>]."
+            )
+        return {ext: dict(shared) for ext in extensions}
+
+    unknown_ext = set(per_extension) - set(extensions)
+    if unknown_ext:
+        raise Refusal(
+            f"{comp_name}: [system.faces] declares faces for {sorted(unknown_ext)}, which "
+            f"the composition does not install ({sorted(extensions)})."
+        )
+    return {
+        ext: _check_face_map(per_extension.get(ext, {}), comp_name, f"[system.faces.{ext}]")
+        for ext in extensions
+    }
 
 
 def build_plan(comp_dir: Path) -> dict:
@@ -311,7 +363,7 @@ def build_plan(comp_dir: Path) -> dict:
         )
 
     profile = load_profile(target)
-    faces = check_faces(sys_block, comp_dir.name)
+    faces = check_faces(sys_block, comp_dir.name, [item["name"] for item in resolved])
 
     installs = []
     for item in resolved:
@@ -332,7 +384,8 @@ def build_plan(comp_dir: Path) -> dict:
         # handler_not_found` to `501 no_handler_body`. Measured, both arms:
         # `gates/host-seam/rust/`. The pattern is dropped from the plan instead, so the
         # thing that would have been generated cannot be.
-        if surfaces.get("handler") and faces.get("handler") == "not-installable":
+        ext_faces = faces.get(item["name"], {})
+        if surfaces.get("handler") and ext_faces.get("handler") == "not-installable":
             surfaces = dict(surfaces)
             surfaces["handler"] = None
         installs.append(

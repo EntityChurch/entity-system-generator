@@ -185,11 +185,16 @@ impl ContentHandler {
         // resource against the grant's `resources` scope (§6.4 step 1), so this is
         // defence-in-depth: it refuses a target outside the namespace this instance
         // serves even if a grant somehow covered it.
+        //
+        // `capability_denied`, NOT `forbidden`. v3.7 corrected §6.4's pseudocode:
+        // `forbidden` was defined in no code set — it is ENTITY-CORE-PROTOCOL §3.3's
+        // *fallback* for the 403 status, not a code — and §3.3's 403 row names
+        // `capability_denied` as the default.
         for target in &targets {
             if !within_namespace(target, &self.namespace) {
                 return ContentOutcome::err(
                     403,
-                    "forbidden",
+                    "capability_denied",
                     &format!(
                         "resource target '{target}' is outside namespace '{}' (§6.4)",
                         self.namespace

@@ -92,11 +92,15 @@ export class ContentHandler implements Handler {
     // resource against the grant's `resources` scope (§6.4 step 1), so this is
     // defence-in-depth: it refuses a target outside the namespace this instance
     // serves even if a grant somehow covered it.
+    //
+    // `capability_denied`, NOT `forbidden`. v3.7 corrected §6.4's pseudocode: `forbidden`
+    // was defined in no code set — it is ENTITY-CORE-PROTOCOL §3.3's *fallback* for the
+    // 403 status, not a code — and §3.3's 403 row names `capability_denied` as the default.
     const outside = ctx.resource.targets.find((t) => !withinNamespace(t, this.#namespace));
     if (outside !== undefined) {
       return errorResult(
         Status.Forbidden,
-        "forbidden",
+        "capability_denied",
         `resource target '${outside}' is outside namespace '${this.#namespace}' (§6.4)`,
       );
     }

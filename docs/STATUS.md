@@ -6,9 +6,91 @@ The rolling log. One file, not dated — the dated snapshots under `docs/status/
 
 ## Where this is
 
-**Three substrates. `CONTENT` v3.6 runs on `typescript`, on `python` and on `rust`, composed onto
+**Two extensions now. `HISTORY` v1.7 is built, composed and measured on `typescript` and
+`python` — 33 PASS · 1 WARN of 34 in the oracle's `history` category on both, `content`
+unchanged at 12P/1S, 0 core regressions.** The composition `content-history` is the first
+with two extensions in it, and the first that installs an **emit consumer** — the fourth
+face `DESIGN-THE-SDK-LAYER` §1 named and nothing had exercised.
+
+**The headline finding is what the emit face measured: the peer delivers no execution
+context, on any target.** `typescript` declares an `EmitContext` carrying almost exactly
+SYSTEM-COMPOSITION §1.4's inventory and constructs it at **zero sites**; `python` and
+`rust` have no context field on the tree-change event at all. HISTORY §2.1 makes `author`
+and `capability` non-optional and §9.1 MUSTs them, so every transition records §2.1's
+**autonomous-case** values — the local peer and our own grant — for writes that arrived
+over the wire from a remote caller.
+
+**And the four oracle checks that read those fields PASS.** They are presence checks and
+the values whose presence they confirm are ours. So the module records a `provenance` field
+outside the spec-declared entity, the composition prints `context_available=false`, and the
+unit test asserts the fallback FIRES rather than asserting the fields are non-empty.
+**33/34 is a count of checks passed and not a claim that §9.1's MUST is satisfied** — the
+D13 distinction, one level up. Routed as `ROUTING-2026-09-06-d-keystone-*` H8.
+
+**Four defects in `EXTENSION-HISTORY`, all found by emitting rather than by reading**
+(`ROUTING-2026-09-06-c-arch-*`): a REQUIRED conformance vector that cannot be constructed
+(§6.2's worked pair needs a mid-path wildcard core §5.4's grammar does not have, and the
+scalar-vs-tuple tie it defends against is unreachable under that grammar — a parity
+argument); §2.2's pattern table contradicting §2.2's pseudocode, with the pseudocode's
+reading matching nothing at all and failing silently; §3.3's pruning algorithm describing an
+in-place mutation of immutable content-addressed entities; and no error-code table, so
+`not_in_history` — the §7.5 refusal that stops `rollback` being an unrestricted write — is
+defined nowhere.
+
+**The §3.3 header gap did not block anything.** HISTORY is one of the 24 specs without
+GUIDE §3.3's declaration header, so `[contract]` is **derived** with a
+`[contract.derived_from]` block naming the section for every field, and the two fields that
+are readings of *absence* say so. §9.2 is an explicit six-type list; §9.3 is the manifest.
+The filled-in header went to arch as a draft rather than as a request.
+
+**D16 paid for itself twice in one build.** `make error-codes` REFUSED the new extension
+until it declared an `[error_surface]`; and `sdk-parity` caught the second port starting
+down CONTENT's exact drift — bundled constants in `typescript`, flat in `python` — at
+**22 names in both, 20 differing**. Because the gate existed the decision got made instead
+of accumulating: the flat names are the contract in every port, the grouped objects survive
+as aliases, and the surface is now **39 in both, 3 differing**. D16's promotion criterion was
+"if it survives a second extension"; it did not survive, so the upstream proposal still
+lacks its second incident.
+
+
+**Three substrates. `CONTENT` v3.7 runs on `typescript`, on `python` and on `rust`, composed onto
 keystone peers and gated by the same oracle. The first two are identical check for check. The third
 is not, and the difference is the result.**
+
+**Re-pinned v3.6 → v3.7 on 2026-09-06, and every number below was re-measured after it rather than
+carried across.** `make check-all` exit 0: three targets, four category runs, `content` 8/8/3
+improvements, `type_system` 6, core-profile 6 improvements and **0 regressions** on all three,
+`chunking-parity` 3 ports agreeing on all 6 fields. The snapshot is
+`shared/spec-data/content-v3.7/` (`2a40b22b…`); `content-v3.6/` is retained because the three
+cycle-1 reports were measured against it.
+
+**The re-pin is the whole story of this session, and its 38-line diff carried one behaviour
+change into three ports.** §6.4's `403 forbidden` became `403 capability_denied` — `forbidden` was
+`ENTITY-CORE-PROTOCOL` §3.3's *fallback* for the status and a code defined in no code set — and
+**nothing in this tree or upstream could have said so.** The oracle's `content` category asserts
+two of the seven codes the handler emits and the 403 is not one of them. That is **AP-11**, and
+it is **D16's third instance**: an axis with no upstream authority, and the first one that had
+*camouflage* rather than lateness, because a category named `content` reads like it covers the
+content handler. Gate: `tools/check-error-codes.py`, in `make check`.
+
+**And its first run found something we then routed rather than fixed.** `path_required` is
+MUST-ed twice by CONTENT §6.2/§6.3, asserted by two live oracle checks, emitted by all three of
+our ports and by the references — and defined in **neither** code set a handler may draw on
+(`grep -c path_required specs/ENTITY-CORE-PROTOCOL.md` → `0`; absent from v3.7's Appendix A,
+which declares itself closed). Two readings of core §3.3 are in the corpus at once: GUIDE §4.1
+reads the 400 row as an open category and calls itself the authority; Appendix A reads it as a
+closed set. **We did not pick** — the ports still emit `400 path_required`, and the contradiction
+is `ROUTING-2026-09-06-b-arch-*` A-1 plus `SPEC-AMBIGUITIES` C-3, with
+`[error_surface].unresolved` carrying it locally and `--strict` ready to fail the build the day
+it is pinned.
+
+**A third way to find a spec ambiguity, and it retires half of what cycle 1 concluded.** C-3 came
+from neither a new port nor a new extension: it came from **a new kind of artifact appearing in a
+snapshot we already had three ports against**. Appendix A did not change §6.2's MUST — it supplied
+a *second document* to check that MUST against, and the gap had been in the corpus the whole time.
+So the list is three long: a new **extension** forces a different part of the corpus to a value; a
+new **snapshot** supplies something to check an existing reading against; a new **language port**
+finds substrate facts and essentially no spec ambiguities.
 
 | | `ts-content` | `py-content` | `rs-content` |
 |---|---|---|---|
@@ -18,6 +100,7 @@ is not, and the difference is the result.**
 | core-profile regressions | **0** (756 checks, 3 rounds) | **0** (756 checks, 2 rounds) | **0** (756 checks, 2 rounds) |
 | core-profile improvements | 6 | 6 | 6 |
 | unit tests | 31 | 38 | 40 + a compile that must fail |
+| wire error codes | 7, all declared | identical | identical |
 
 **The `rs-content` row is not a worse result. It is a different measurement, and the composition
 is built so it cannot pretend otherwise.** On that peer an extension's four faces do not all
@@ -98,8 +181,8 @@ the same questions already answered. **So a new language port is not how you fin
 ambiguities — a new extension is.** That retires an assumption the build order rested on, and
 it is why the next move is `CONTENT` + `HISTORY` rather than a fourth language.
 
-**Two new gates, both on axes nobody upstream owns, and both found something on their first
-run.**
+**Three gates now, all on axes nobody upstream owns, and every one of them found something on
+its first run.**
 
 - **`tools/sdk-parity.py`** — the SDK surface standard. **Ours to set, and that is the
   operator's call rather than a gap in arch:** arch enforces what has to be enforced,
@@ -116,6 +199,18 @@ run.**
   agrees with them. §3.7 makes chunking a Conformance algorithm whose divergence *does not fail
   loudly*, and **nothing upstream measures it**: no oracle check chunks anything (`ed9b547`),
   and §3.6.5's cross-impl vectors do not exist yet.
+
+- **`tools/check-error-codes.py`** — the wire error-code surface, added at the v3.7 re-pin
+  (2026-09-06) because the re-pin is what produced the failure it catches. **The axis that
+  looked covered**: the handler emits **7** distinct codes and `entity-core-go`'s `content`
+  category asserts **2** of them, so a category named `content` was standing in for coverage it
+  never had. First run: **4 `spec` · 2 `core` · 1 `unresolved` · 0 undeclared** across 36 emit
+  sites in three ports — and unlike the SDK surface, **the codes agree across all three ports**.
+  The one `unresolved` is `path_required` (above). **That is D16 for the third time**, and the
+  gate's own first draft would have missed the two codes it exists for: it scanned line by line,
+  and the emits long enough to wrap are exactly `capability_denied` and `path_required`. Measured
+  after the fact — a line scan sees 5/5/4 distinct codes where there are 7 — and `MIN_SITES`
+  would not have caught it either. AP-11.
 
 **Is FastCDC standard to implement? Measured, and the answer is "yes, unsafely".** Four
 transcriptions agree byte for byte — but §3.6.3's inner loop `fp = (fp << 1) + gear[b]` fails

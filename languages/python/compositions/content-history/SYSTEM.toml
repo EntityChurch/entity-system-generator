@@ -1,0 +1,145 @@
+## SYSTEM.toml — languages/python/compositions/content-history
+##
+## THE FIRST COMPOSITION WITH TWO EXTENSIONS. Everything `compositions/` was built for and
+## nothing CONTENT alone could reach: a dependency closure with more than one node, I6/I7
+## checked against a real second namespace, and SYSTEM-COMPOSITION §2.2 consumer ordering.
+##
+## A composition NAMES things and DECLARES NOTHING NEW. Every fact about CONTENT lives in
+## `extension-contracts/content/EXTENSION.toml`, every fact about HISTORY in
+## `extension-contracts/history/EXTENSION.toml`, every fact about the toolchain in
+## `languages/typescript/profile.toml`.
+
+[system]
+name       = "content-history"
+extensions = ["CONTENT", "HISTORY"]
+
+[system.peer]
+generator = "entity-core-keystone"
+path      = "../entity-core-keystone/protocol-generator/python"
+
+# ── [system.consumers] — NEW, and the reason this composition exists ────────────────
+#
+# SYSTEM-COMPOSITION §2.2 fixes nine ordered consumer positions. HISTORY is position 4.
+# The peer's `EmitBus.registerConsumer` APPENDS to a list and takes no position argument,
+# so ordering is achieved ONLY by the order the wiring program calls it in — there is no
+# mechanism in the peer that could enforce or even check it.
+#
+# **With one consumer that is vacuous, and saying so is the point.** HISTORY is the only
+# emit consumer here, so it fires first and last and position 4 is satisfied by having
+# nowhere else to be. This block exists so that the day a second consumer arrives (CLOCK at
+# 2/3, COMPUTE at 5, SUBSCRIPTION at 8) the ordering is a declared fact that `compose.py`
+# can sort, rather than a property of the order someone happened to write two lines in.
+[system.consumers]
+order = ["HISTORY"]
+positions = { HISTORY = 4 }
+enforced_by = "the wiring program's call order — NOT by the peer"
+note = """
+No oracle category tests consumer ordering. 68 categories, none. That was logged in
+docs/STATUS.md during cycle 1 as the thing nothing measures, and building the first
+consumer has not changed it: this composition cannot demonstrate that position 4 is
+honoured, because with a single consumer every position produces identical behaviour.
+The first composition that CAN is CONTENT + CLOCK + HISTORY.
+"""
+
+# ── [system.faces] — per (extension x face), because a peer answers per face (D13) ──
+# VOCABULARY NOTE, found by writing the second one. `extension-contracts/*/EXTENSION.toml`
+# `[substrate.faces]` writes the SDK face as `usable` / `library-only`; `tools/compose.py`
+# enforces `installed | not-installed | not-installable | available-unused | library-only`
+# and has never seen `usable`. Two word sets for one concept, one of them checked and one
+# of them not — AP-9's family, in a vocabulary rather than a file. The composition uses the
+# ENFORCED set; the contract block is left alone for now and the drift is recorded rather
+# than quietly unified, because which set is right is a design question and not a typo.
+[system.faces.CONTENT]
+types = "installed"
+handler = "installed"
+emit_consumer = "not-installed"   # CONTENT registers none; its [surfaces].emit_consumers is []
+sdk = "installed"
+
+[system.faces.HISTORY]
+types = "installed"
+handler = "installed"
+emit_consumer = "installed"       # THE FIRST TIME THIS VALUE IS USED IN THIS REPO
+sdk = "installed"
+
+[gate]
+oracle     = "entity-core-go validate-peer"
+categories = ["content", "history"]
+profiles   = ["core"]
+
+[gate.expectation]
+# Pre-registered BEFORE the run, per the cycle-1 discipline. `rs-content` got its
+# prediction wrong and the miss is what produced a correction worth more than the
+# prediction; the same rule applies here.
+#
+# `content`: unchanged from the CONTENT-only composition — 8 measure our module, 4 measure
+# the oracle's own library, 1 declared skip.
+#
+# `history`: **34** declared checks.
+#   $ grep -c 'r\.Declare(' ../entity-core-go/cmd/internal/validate/history.go
+#   34
+#
+# **THIS NUMBER WAS 27 UNTIL THE RUN, AND THE 27 WAS READ BY EYE OFF GREP OUTPUT.**
+# That is AP-1, third instance, and it is ours in the same session that shipped a gate for
+# a different D14 shape. The command above prints the count; the earlier one printed the
+# LINES and the count was counted from them. D14 exists for exactly this and it still
+# happened — recorded rather than quietly corrected, because a pre-registered expectation
+# whose misses get edited away is not a pre-registration.
+#
+# Predicted (at 27) vs measured (at 34): the shape of the prediction held — every
+# manifest/type/record/chain/query/rollback check passes — and the two flagged as
+# uncertain resolved as flagged. Only the denominator was wrong.
+measures_us        = 33
+inattributable     = 4
+history_checks     = 34
+declared_skips     = ["frame-limit-respected"]
+skip_cause         = "needs a local/files root to seed >16 MiB of content; not installed in this composition"
+context_provenance = "fallback"
+context_note       = "Every transition this composition records carries provenance=autonomous-fallback. The peer's tree-change event carries no execution context on any of the three targets. Reported here so a green history category is not read as a satisfied §9.1 MUST."
+
+# ── [history] — what the composition configures, because the oracle assumes it ──────
+[history]
+# The oracle's history category writes to `system/validate/history-ext/*` and NEVER
+# configures history first (cmd/internal/validate/history.go:134,276,368,430). So a peer
+# with history installed but unconfigured records nothing and fails 20 of 27 checks.
+# §6.3's own worked example is `pattern: "*"` for "a peer that wants history for all
+# paths"; that is what this composition binds, at `system/history/config/everything`.
+config_name    = "everything"
+config_pattern = "*"
+config_events  = ["created", "updated", "deleted"]
+max_depth      = 0
+max_depth_note = """
+0 means ABSENT, not zero-retention: the field is `optional: true` (§2.2) and the composition
+omits it. Pruning is a SHOULD (§9.1) and we do not implement it -- §3.3's algorithm describes
+severing an immutable content-addressed chain, which cannot be done without rewriting every
+transition's hash. Routed. See extension-contracts/history/EXTENSION.toml and
+internal/recorder.ts's `pruneHistory`, which walks and reports rather than pretending.
+"""
+
+# ── MEASURED on `typescript`; this target is re-measured on its own run
+# ── MEASURED, 2026-09-06, after the run ─────────────────────────────────────────────
+#
+#   content   12 PASS ·  0 FAIL · 1 SKIP   of 13   (identical to the CONTENT-only composition)
+#   history   33 PASS ·  0 FAIL · 1 WARN   of 34
+#   core      0 regressions
+#
+# Command: `make conformance TARGET=typescript COMPOSITION=content-history ROUNDS=1`
+# Artifact: languages/typescript/output/content-history/reports/composed-history-1.json
+#
+# THE WARN IS THE PREDICTED ONE. `transition_clock_structured` reports "transition has no
+# clock field (clock extension may not be present)" — §2.1 makes `clock` absent when CLOCK
+# is not installed, and it is not. Predicted as a SKIP and it is a WARN; the oracle grades
+# it more softly than we expected and the outcome is the same.
+#
+# ── AND THE FOUR THAT PASSED WITHOUT MEANING WHAT THEY LOOK LIKE ───────────────────
+#
+# `context_author_present`, `context_capability_present`, `context_handler_present` and
+# `context_operation_present` all PASS. **They are presence checks, and the values whose
+# presence they confirm are fabricated by us.** The peer's tree-change event carries no
+# execution context on any target, so `author` is the local peer identity and `capability`
+# is our own handler grant on EVERY write — including the oracle's, which arrived over the
+# wire from a remote caller and is recorded as autonomous.
+#
+# So: 33/34 is an accurate count of checks passed and NOT a claim that §9.1's
+# author/capability MUST is satisfied. The distinction is exactly the one D13 was amended
+# for, one level up: a green check is evidence about the check, not about the property.
+# Routed as H8. See extension-contracts/history/EXTENSION.toml [substrate.execution_context].

@@ -1,7 +1,7 @@
 //! rs-content — the composition host.
 //!
 //! One core peer (`entity-core-protocol-rust`, keystone, read-only), one extension
-//! (CONTENT v3.6), and the wiring program that installs what CAN be installed.
+//! (CONTENT v3.7), and the wiring program that installs what CAN be installed.
 //!
 //! **Speaks keystone's host CLI verbatim** — `--port` / `--name` / `--validate` /
 //! `--debug-open-grants`, one `LISTENING ...` line on stdout — so the same
@@ -99,7 +99,7 @@ fn main() {
     // The proof-of-install line. It reports what was written AND what was refused,
     // because a report naming only what happened lets the absence read as an oversight.
     eprintln!(
-        "COMPOSED CONTENT v3.6 types={} of {} handler=NOT-INSTALLABLE (see gates/host-seam/rust)",
+        "COMPOSED CONTENT v3.7 types={} of {} handler=NOT-INSTALLABLE (see gates/host-seam/rust)",
         installed.type_paths.len(),
         ALL_TYPES.len()
     );

@@ -1,19 +1,27 @@
 ## EXTENSION.toml — CONTENT
 ##
 ## The machine-readable contract. EVERY field in [contract] is TRANSCRIBED from the
-## spec header in `shared/spec-data/content-v3.6/EXTENSION-CONTENT.md`
-## (sha256 4bf4a43bd7b99adf20cb989581743348bbf8edf9c2a64f52a03764ddca03c5af), not
+## spec header in `shared/spec-data/content-v3.7/EXTENSION-CONTENT.md`
+## (sha256 2a40b22b859b2a74f7de4d1c43b4655cb6ece2b791d7769f27fcc87efa65ee87), not
 ## authored here. GUIDE-EXTENSION-DEVELOPMENT §3.3 requires each spec to declare its
 ## depends / owned namespaces / owned kinds / owned ops / extension points; this file is a
 ## projection of that declaration, and the projection is checkable against its source.
+##
+## RE-PINNED v3.6 -> v3.7 on 2026-09-06. The [contract] block below is UNCHANGED by that
+## move and that is a measured fact, not an assumption: the 38-line diff touches the version
+## header, one status code in §6.4's pseudocode, and an appended Appendix A. It does not
+## touch a single §3.3 header field. See `shared/spec-data/content-v3.7/MANIFEST.md`.
 ##
 ## Everything below [contract] IS authored here, and each block says why it exists.
 
 [extension]
 name    = "CONTENT"
 spec    = "EXTENSION-CONTENT.md"
-version = "3.6"                      # + Amendments 1-3; see the snapshot's §12 history table
-snapshot = "content-v3.6"            # shared/spec-data/<snapshot>/ — the pinned input
+version = "3.7"                      # see the snapshot's §12 history table
+snapshot = "content-v3.7"            # shared/spec-data/<snapshot>/ — the pinned input
+                                     # `content-v3.6` stays on disk: it is the input the three
+                                     # cycle-1 conformance reports were measured against, and
+                                     # deleting it would make those numbers unreproducible.
 grade   = "draft"                    # spec header "Conformance grade: Draft" (GUIDE §9)
                                      # draft means: expect defects, and four have already been routed
 
@@ -43,6 +51,94 @@ points_consumed  = []                # spec header: "Extension points consumed: 
 protocol = ">=7.51"                  # request-side envelope-`included` preservation (v3.4 ingest
                                      # result pass-through + the §4 handler-mediated included map)
 cbor     = ">=1.4"                   # canonical ECF for blob/chunk entity-hash stability
+
+# ── [contract.error_codes] — TRANSCRIBED from Appendix A, arrived with v3.7 ─────────────
+# Appendix A is new in v3.7 and is the extension's first code set. Its own framing: "a
+# more-specific code is conformant only where one is DEFINED FOR THE OPERATION IN A SPEC
+# CODE SET, and this table is that set for this handler. An undefined spelling is
+# non-conformant and falls back to the status's default."
+#
+# Transcribed as the document states it. Where our ports emit something this table does not
+# contain, the discrepancy is recorded in [error_surface] below and routed — NOT reconciled
+# by widening this block. A transcription that quietly absorbs the thing it contradicts is
+# the failure mode D14 names: a number computed correctly, then copied into a document that
+# outlived it.
+[contract.error_codes]
+"ingest.ambiguous_input" = { status = 400, cite = "§6.3" }
+"ingest.missing_input"   = { status = 400, cite = "§6.3" }
+"ingest.hash_mismatch"   = { status = 400, cite = "§6.3" }
+"get.blob_not_found"     = { status = 404, cite = "§3.4, §7.1" }
+"get.blob_pending_sync"  = { status = 503, cite = "§3.4" }
+"any.capability_denied"  = { status = 403, cite = "§6.4" }
+
+# Appendix A also rules that `verify_content`'s three §3.3 pseudocode returns —
+# `missing_chunk`, `empty_chunk`, `size_mismatch` — are an INTERNAL PREDICATE and not wire
+# codes; where such a failure reaches the wire it is `500 storage_error`. All three ports
+# already use them exactly that way (they are `ensure_closure` verdicts, never an error
+# result), so the ruling cost no code. Recorded because "we already did it right" is only
+# knowable if the rule is written down next to the check that would catch it changing.
+internal_predicate_returns = ["missing_chunk", "empty_chunk", "size_mismatch"]
+internal_predicate_on_wire = { status = 500, code = "storage_error", cite = "Appendix A" }
+
+# ── [error_surface] — AUTHORED. What the ports emit, and where each code is DEFINED ─────
+#
+# The gate is `tools/check-error-codes.py`, in `make check`. Every code a handler body puts
+# on the wire is declared in exactly one class below; an UNDECLARED code is a failure,
+# because the failure this exists to catch is a code arriving — or OUTLIVING ITS SPEC —
+# without anyone deciding. `forbidden` did exactly that: correct under v3.6, dead under
+# v3.7, and nothing in this tree or in the oracle would have said so.
+#
+# Measured 2026-09-06 across three ports, 36 emit sites, 7 distinct codes, and the codes
+# AGREE across all three ports — which is the opposite of what the SDK surface did on its
+# first run (18 drifting names). Command:
+#   `./tools/check-error-codes.py`
+#
+# The site counts are not equal and that is expected rather than ignored: `typescript` 8,
+# `python` 14, `rust` 14. The two higher ports validate `envelope.included` entry by entry
+# with a distinct emit per failure mode where `typescript` funnels through one catch. Same
+# codes, different branch granularity — a procedure difference, not a value difference
+# (D17's distinction), so it is recorded and not gated.
+
+[error_surface]
+# Class 1 — SPEC. Defined in this extension's own code set, `[contract.error_codes]` above.
+spec = ["ambiguous_input", "missing_input", "hash_mismatch", "capability_denied"]
+
+# Class 2 — CORE. Defined in `ENTITY-CORE-PROTOCOL` §3.3's status table, which enumerates
+# its more-specific codes BY NAME. Both of these are in that enumeration:
+#   `unexpected_params`     — §3.3's 400 row, named alongside `invalid_path` / `invalid_params`
+#   `unsupported_operation` — §3.3's 501 row default; `unknown_operation` is a forbidden synonym
+core = ["unexpected_params", "unsupported_operation"]
+
+# Class 3 — UNRESOLVED. Emitted, MUST-ed by the spec, and defined in NO spec code set.
+# Named, dated, routed. NOT a blessing: `--strict` turns each entry into an error, and the
+# flag is the switch that gets flipped once upstream pins them.
+unresolved = ["path_required"]
+
+[error_surface.unresolved_detail."path_required"]
+dated  = "2026-09-06"
+routed = "ROUTING-2026-09-06-b-arch-the-code-set-that-omits-the-code-it-musts"
+emitted_by = "all three ports, and by the reference implementations"
+asserted_by = "entity-core-go `content` category, 2 checks (`get_path_required`, `ingest_path_required`)"
+note = """
+CONTENT §6.2 and §6.3 each MUST `400 path_required`. It is defined in neither code set the
+handler may draw on:
+
+  ENTITY-CORE-PROTOCOL §3.3   `grep -c path_required specs/ENTITY-CORE-PROTOCOL.md` -> 0
+  CONTENT v3.7 Appendix A     absent from the table
+
+and Appendix A declares itself closed — "this table is that set for this handler. An
+undefined spelling is non-conformant and falls back to the status's default."
+
+GUIDE-EXTENSION-DEVELOPMENT §4.1 (line 171) says "This section is the authority for that
+status" and reasons that §3.3's 400 row "sanctions them by name alongside `invalid_params`
+and `unexpected_params`". That is an OPEN-CATEGORY reading of the row; Appendix A adopts a
+CLOSED-SET reading of the same row. `path_required` is conformant under the first and
+non-conformant under the second, and both readings are in the corpus at once.
+
+WE DO NOT PICK. All three ports keep emitting `400 path_required` — it is what the two
+MUSTs say, what the oracle asserts, and what changing would break. The contradiction is
+routed to arch as a spec issue and recorded here so it cannot be mistaken for settled.
+"""
 
 # ── [surfaces] — which of the extension's faces an installed module actually uses ───────
 # CONTENT has THREE faces, not four. It registers no emit consumer: "consumer" in this spec

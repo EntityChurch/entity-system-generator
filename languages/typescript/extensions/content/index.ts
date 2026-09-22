@@ -1,5 +1,5 @@
 /**
- * `@entity-core/extension-content` — CONTENT v3.6 for the `typescript` peer.
+ * `@entity-core/extension-content` — CONTENT v3.7 for the `typescript` peer.
  *
  * **The public entry point. What is not exported here is not reachable by a
  * consumer**, and one omission is a MUST rather than a taste: `reassembleContent`

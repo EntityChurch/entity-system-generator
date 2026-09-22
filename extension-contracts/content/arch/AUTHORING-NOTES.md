@@ -4,6 +4,13 @@
 `typescript` port on 2026-09-05, against snapshot `content-v3.6`
 (`EXTENSION-CONTENT.md` sha256 `4bf4a43bd7b99adf20cb989581743348bbf8edf9c2a64f52a03764ddca03c5af`).
 
+**Re-pinned to `content-v3.7` on 2026-09-06** (`2a40b22b859b2a74f7de4d1c43b4655cb6ece2b791d7769f27fcc87efa65ee87`).
+**The v3.6 attribution above is left standing on purpose** — it is where these readings were
+*taken*, and rewriting it would claim they were re-derived against a document that did not exist
+yet. What the re-pin changed is one behaviour (§6.4's 403 code) and one new document (Appendix A);
+neither invalidates a reading below. See `shared/spec-data/content-v3.7/MANIFEST.md` for the
+38-line diff and what it cost.
+
 This is the file the second and third language ports read before they start. It is not a summary of
 the spec — read the spec — it is the record of every place the spec did not decide for us and what
 we did instead.

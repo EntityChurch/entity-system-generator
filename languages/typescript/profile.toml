@@ -80,3 +80,15 @@ host_entry = "dist/host.js"           # speaks keystone's host CLI verbatim: --p
 # timeout can only make a failure slower, never falser, so this is the safe direction.
 startup_ticks = 150
 
+
+# ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
+# D17: a per-target VALUE lives in the profile. The shape of the call that puts a code on
+# the wire differs per target — a symbolic `Status.` member here, a bare integer in the
+# other two — and that is a value, not a procedure, so the shared gate holds one copy of
+# the protocol and each profile declares its own pattern.
+[error_surface]
+emit_pattern = '\berrorResult\(\s*Status\.\w+\s*,\s*"(?P<code>[a-z_]+)"'
+# D15's control, as data. `--self-test` runs the pattern above against this line and
+# asserts it extracts `planted_bogus_code`. A pattern that silently stops matching reports
+# a clean surface, and a clean surface is this gate's most convincing wrong answer.
+self_test_line = 'return errorResult(Status.BadRequest, "planted_bogus_code", "x");'

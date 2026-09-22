@@ -73,3 +73,11 @@ frame_budget         = "ctx.frame_budget()"   # MEASURED BY VALUE, not by attrib
                                      # the §6.2 amendment names as the wrong answer.
                                      # Landed keystone 2026-09-06 (our K-1).
 handler_protocol     = "handle_op(op, ctx) -> Outcome"   # duck-typed; no base class
+
+# ── [error_surface] — the emit-call SHAPE, read by `tools/check-error-codes.py` ─────────
+# D17: a per-target VALUE lives in the profile. See the typescript profile for the reason
+# this is a profile field and not a constant in the shared gate.
+[error_surface]
+emit_pattern = '\b_err\(\s*\d+\s*,\s*"(?P<code>[a-z_]+)"'
+# D15's control, as data — see `--self-test`.
+self_test_line = 'return _err(400, "planted_bogus_code", "x")'

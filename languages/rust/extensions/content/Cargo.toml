@@ -1,4 +1,4 @@
-# languages/rust/extensions/content — CONTENT v3.6 for the `rust` keystone peer.
+# languages/rust/extensions/content — CONTENT v3.7 for the `rust` keystone peer.
 #
 # A member of the `languages/rust` workspace (by glob), and DELIBERATELY SELF-CONTAINED:
 # no `.workspace = true` anywhere, because this crate is staged out of the tree and

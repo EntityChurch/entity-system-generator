@@ -1,9 +1,9 @@
 # CONTENT
 
-Standard-extension implementations of `EXTENSION-CONTENT` v3.6, one per language.
+Standard-extension implementations of `EXTENSION-CONTENT` v3.7, one per language.
 
 **The spec is upstream and this is not a copy of it.** Read
-`shared/spec-data/content-v3.6/EXTENSION-CONTENT.md` — the pinned snapshot this port was written
+`shared/spec-data/content-v3.7/EXTENSION-CONTENT.md` — the pinned snapshot this port was written
 against. A gap or contradiction in it is routed to `entity-system-architecture` as a spec issue,
 never closed by a local decision and never worked around in generated output.
 

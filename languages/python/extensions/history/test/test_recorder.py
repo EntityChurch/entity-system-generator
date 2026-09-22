@@ -1,0 +1,268 @@
+"""§5.1 recording and §3.2's self-guard, through the REAL emit pathway.
+
+The recorder is registered on the peer's own store and driven by real ``store.bind``
+calls, never by calling ``record_transition`` directly. That is D13's Reach row applied to
+a consumer: a body that works when you call it and is never invoked by the pathway is the
+failure this ecosystem has already shipped once.
+"""
+
+from __future__ import annotations
+
+import pytest
+from entity_core.peer import Peer
+from entity_core.peer.model import Entity
+
+from entity_history import (
+    EVENT_CREATED,
+    EVENT_UPDATED,
+    HEAD_PREFIX,
+    config_path,
+    history_config,
+    install_history,
+    resolve_config,
+)
+
+TRACKED = "docs/report"
+
+
+def payload(v: str) -> Entity:
+    return Entity.make("system/validate/history-test", {"v": v})
+
+
+@pytest.fixture
+def rig():
+    """A peer with history installed and `*` configured — the composition's posture."""
+    peer = Peer(bytes([0x22] * 32), open_grants=True)
+    install = install_history(peer)
+    peer.store.bind(config_path(peer.local_peer, "everything"), history_config(pattern="*"))
+
+    class Rig:
+        def __init__(self):
+            self.peer = peer
+            self.install = install
+
+        def abs(self, rel: str) -> str:
+            return "/" + peer.local_peer + "/" + rel
+
+        def head_hex(self, abs_path: str) -> str:
+            return peer.store.hash_at("/" + peer.local_peer + "/" + HEAD_PREFIX + abs_path)
+
+        def transition_at(self, abs_path: str) -> Entity:
+            e = peer.store.get_at("/" + peer.local_peer + "/" + HEAD_PREFIX + abs_path)
+            assert e is not None, f"no head pointer for {abs_path}"
+            return e
+
+    return Rig()
+
+
+# ── §5.1 recording ──────────────────────────────────────────────────────────────
+
+
+def test_a_tracked_write_is_recorded_with_created(rig):
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    t = rig.transition_at(rig.abs(TRACKED))
+    assert t.type == "system/history/transition"
+    assert t.text("event") == EVENT_CREATED
+    assert t.text("path") == rig.abs(TRACKED)
+
+
+def test_the_event_vocabulary_is_historys_not_the_core_pathways(rig):
+    """The peer emits `modified`; §2.1's table says `updated`.
+
+    Asserted on the SECOND write, because the first is `created` in both vocabularies — a
+    test that wrote once would pass with the mapping deleted.
+    """
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v2"))
+    t = rig.transition_at(rig.abs(TRACKED))
+    assert t.text("event") == EVENT_UPDATED
+    assert t.text("event") != "modified"
+
+
+def test_created_has_no_previous_hash_and_updated_carries_it(rig):
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    first = rig.transition_at(rig.abs(TRACKED))
+    assert first.bytes_("previous_hash") is None
+    v1_hash = first.bytes_("hash")
+    assert v1_hash is not None
+
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v2"))
+    second = rig.transition_at(rig.abs(TRACKED))
+    assert second.bytes_("previous_hash") == v1_hash
+
+
+def test_the_chain_links_through_previous_and_the_head_advances(rig):
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    first_head = rig.head_hex(rig.abs(TRACKED))
+
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v2"))
+    second_head = rig.head_hex(rig.abs(TRACKED))
+
+    assert first_head != second_head
+    second = rig.transition_at(rig.abs(TRACKED))
+    prev = second.bytes_("previous")
+    assert prev is not None
+    assert prev.hex() == first_head
+
+
+def test_author_capability_and_timestamp_are_present(rig):
+    """§9.1's MUST, as a presence check — and see the test below for what it does NOT say."""
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    t = rig.transition_at(rig.abs(TRACKED))
+    assert t.bytes_("author") is not None
+    assert t.bytes_("capability") is not None
+    assert (t.uint("timestamp") or 0) > 0
+
+
+def test_the_provenance_of_that_author_and_capability_is_fallback(rig):
+    """THE MOST IMPORTANT ASSERTION IN THIS FILE.
+
+    The test above passes on presence and would keep passing if the values were
+    meaningless — which today they are. `python`'s ``TreeEvent`` has no context field at
+    all, so ``author`` is the local peer and ``capability`` is our own grant on EVERY
+    write, including one that arrived from a remote caller.
+
+    If this ever fails because ``fallback_contexts`` is 0, the peer started supplying a
+    context and the four oracle ``context_*`` checks became meaningful. That is the good
+    failure, and it is why this is asserted rather than commented.
+    """
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    stats = rig.install.recorder.stats
+    assert rig.install.context_available is False
+    assert stats.recorded > 0
+    assert stats.fallback_contexts == stats.observed - stats.skipped_self_guard
+    assert stats.fallback_contexts > 0
+    assert rig.install.recorder.recorded_transitions[0].provenance == "autonomous-fallback"
+
+
+def test_caller_capability_is_omitted_when_it_would_equal_capability(rig):
+    """§5.1 records it "only when it differs". The oracle's `w6_caller_cap_absent` too."""
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    t = rig.transition_at(rig.abs(TRACKED))
+    assert t.bytes_("caller_capability") is None
+
+
+def test_clock_is_absent_because_clock_is_not_installed(rig):
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    t = rig.transition_at(rig.abs(TRACKED))
+    assert t.field("clock") is None
+
+
+# ── §3.2 the self-guard ─────────────────────────────────────────────────────────
+
+
+def test_the_head_pointer_write_does_not_recurse(rig):
+    """Without the guard this is an unbounded loop.
+
+    Two recorded, not one: the config write in the fixture is itself a tracked write and
+    §3.2 says it SHOULD be recorded.
+    """
+    rig.peer.store.bind(rig.abs(TRACKED), payload("v1"))
+    stats = rig.install.recorder.stats
+    assert stats.skipped_self_guard > 0
+    assert stats.recorded == 2
+    tracked = [r for r in rig.install.recorder.recorded_transitions if r.path == rig.abs(TRACKED)]
+    assert len(tracked) == 1
+
+
+def test_the_guard_covers_head_not_the_whole_history_namespace(rig):
+    """The easy wrong implementation guards `system/history/` and silently stops auditing
+    configuration changes. §3.2 says config writes SHOULD be recorded."""
+    cfg = config_path(rig.peer.local_peer, "everything")
+    recorded = [r.path for r in rig.install.recorder.recorded_transitions]
+    assert cfg in recorded, recorded
+
+
+def test_a_bare_star_config_does_not_reach_another_peers_namespace(rig):
+    """`canonicalize_pattern("*")` resolves to `/{local}/*` per core §5.4, so a remote
+    path matches no config. A real scoping property, and the reason §6.3's
+    "match everything" example is narrower than it reads."""
+    remote = "z6MkfZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+    remote_path = "/" + remote + "/project/readme"
+    before = rig.install.recorder.stats.recorded
+    rig.peer.store.bind(remote_path, payload("synced"))
+    assert rig.install.recorder.stats.recorded == before
+    assert resolve_config(rig.peer, remote_path, rig.peer.local_peer)[0] is None
+
+
+def test_a_remote_history_path_is_trackable_and_its_head_write_is_guarded():
+    """§3.2: "Remote peers' `system/history/` paths ... MAY be tracked ... The local
+    peer's resulting head pointer update is ... excluded by the check above."
+
+    Needs a PEER-WILDCARD config, not `*` — see the test above.
+    """
+    peer = Peer(bytes([0x23] * 32), open_grants=True)
+    install = install_history(peer)
+    peer.store.bind(
+        config_path(peer.local_peer, "all-peers"),
+        history_config(pattern="*/system/history/*"),
+    )
+    remote = "z6MkfZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+    remote_history_path = "/" + remote + "/system/history/head/whatever"
+
+    before_guard = install.recorder.stats.skipped_self_guard
+    peer.store.bind(remote_history_path, payload("synced"))
+
+    head = peer.store.hash_at("/" + peer.local_peer + "/" + HEAD_PREFIX + remote_history_path)
+    assert head, "a remote history path is trackable (§3.2)"
+    assert install.recorder.stats.skipped_self_guard == before_guard + 1
+
+
+# ── §2.2 / §6.2 configuration ───────────────────────────────────────────────────
+
+
+def test_history_is_opt_in():
+    peer = Peer(bytes([0x24] * 32), open_grants=True)
+    install = install_history(peer)
+    peer.store.bind("/" + peer.local_peer + "/" + TRACKED, payload("v1"))
+    assert install.recorder.stats.recorded == 0
+    assert install.recorder.stats.skipped_unconfigured > 0
+
+
+def test_a_disabled_config_records_nothing_and_parses_as_disabled():
+    """The failure guarded: a `False` dropped by an omit-empty rule decodes as an ABSENT
+    required field, `_parse_config` skips the entity, and the path is un-audited BY
+    ACCIDENT rather than by instruction — silently re-enabling history for the path
+    somebody wrote a config to turn off."""
+    peer = Peer(bytes([0x25] * 32), open_grants=True)
+    install = install_history(peer)
+    peer.store.bind(config_path(peer.local_peer, "off"), history_config(pattern="*", enabled=False))
+    abs_path = "/" + peer.local_peer + "/" + TRACKED
+    peer.store.bind(abs_path, payload("v1"))
+
+    config, _considered, skipped = resolve_config(peer, abs_path, peer.local_peer)
+    assert config is not None, "the config must PARSE, not be skipped as malformed"
+    assert config.enabled is False
+    assert skipped == 0
+    assert install.recorder.stats.recorded == 0
+
+
+def test_an_event_outside_the_configs_list_is_not_recorded():
+    peer = Peer(bytes([0x26] * 32), open_grants=True)
+    install = install_history(peer)
+    peer.store.bind(
+        config_path(peer.local_peer, "creates-only"),
+        history_config(pattern="*", events=[EVENT_CREATED]),
+    )
+    abs_path = "/" + peer.local_peer + "/" + TRACKED
+    peer.store.bind(abs_path, payload("v1"))
+    after_create = install.recorder.stats.recorded
+    peer.store.bind(abs_path, payload("v2"))
+    assert install.recorder.stats.recorded == after_create
+
+
+def test_the_most_specific_matching_config_wins():
+    peer = Peer(bytes([0x27] * 32), open_grants=True)
+    install_history(peer)
+    abs_path = "/" + peer.local_peer + "/" + TRACKED
+
+    peer.store.bind(config_path(peer.local_peer, "everything"), history_config(pattern="*"))
+    peer.store.bind(
+        config_path(peer.local_peer, "docs"),
+        history_config(pattern="docs/*", events=[EVENT_CREATED]),
+    )
+
+    config, _c, _s = resolve_config(peer, abs_path, peer.local_peer)
+    assert config is not None
+    assert config.pattern == "docs/*"
+    assert config.events == (EVENT_CREATED,)

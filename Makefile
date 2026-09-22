@@ -9,10 +9,12 @@
 #   make conformance      validate-peer -category <ext> against the composed peer
 #   make regression       the two-arm core-profile diff (bare vs composed)
 #   make check            build + test + conformance + regression + plan-check + sdk-parity
+#                         + structure + drivers + error-codes
 #   make check-all        every (target, composition), then the cross-target gates
 #   make plan-check       assert the resolved plan is reproducible
 #   make probe            the host-seam probes (D13)
 #   make parity           the chunking-parity gate, one corpus through every target
+#   make error-codes      every wire code a port emits is declared with an authority (D16)
 #   make clean            remove every target's output/
 #
 # THE LAYOUT IS TARGET-MAJOR. A target is a unified bundle:
@@ -78,7 +80,8 @@ PLAN    = $(TDIR)/output/$(COMPOSITION)/PLAN.json
 CATEGORIES = $(shell python3 -c "import json;print(' '.join(json.load(open('$(PLAN)'))['gate'].get('categories',['content'])))" 2>/dev/null || echo content)
 
 .PHONY: all build test conformance regression check check-all plan plan-check probe \
-        parity clean sdk-parity structure drivers build-native test-native \
+        parity clean sdk-parity structure drivers error-codes error-codes-control \
+        build-native test-native \
         conformance-native probe-native
 
 all: check
@@ -170,7 +173,24 @@ EXTENSION ?= extension-contracts/content
 sdk-parity:
 	./tools/sdk-parity.py $(EXTENSION)
 
-check: build test conformance regression plan-check sdk-parity structure drivers
+# ── the error-code surface gate ─────────────────────────────────────────────────
+# The second axis with no upstream authority (D16), and the one that LOOKED covered: the
+# oracle's `content` category asserts exactly two codes and nothing anywhere asserts the
+# rest. Added at the CONTENT v3.6 -> v3.7 re-pin, which is the event that produced the
+# failure it catches -- three ports emitting `forbidden` after the spec had replaced it.
+#
+# `--strict` promotes every `unresolved` code to an error. Off by default so the gate is
+# honest on the day it was written rather than green because it was scoped around what
+# already passes; the flag is the switch that gets flipped when upstream pins them.
+error-codes:
+	./tools/check-error-codes.py
+
+# D15's control, separate on purpose: it plants a bogus code and asserts each target's
+# pattern extracts it. An instrument observed only passing is not an instrument.
+error-codes-control:
+	./tools/check-error-codes.py --self-test
+
+check: build test conformance regression plan-check sdk-parity structure drivers error-codes
 
 # Every (target, composition), then the cross-target gates LAST because they need every
 # port staged. Both loops are wildcards over the tree.

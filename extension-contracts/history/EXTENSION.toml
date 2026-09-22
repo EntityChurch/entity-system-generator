@@ -1,0 +1,439 @@
+## EXTENSION.toml — HISTORY
+##
+## The machine-readable contract, against `shared/spec-data/history-v1.7/EXTENSION-HISTORY.md`
+## (sha256 5980bdc96d4818edbc43dd73a1152292e306f126e62d5e4d007ca48bd5fa850b).
+##
+## [contract] IS DERIVED, NOT TRANSCRIBED, AND EVERY FIELD SAYS FROM WHERE.
+##
+## `EXTENSION-CONTENT` carries GUIDE-EXTENSION-DEVELOPMENT §3.3's declaration header, so its
+## `[contract]` is a projection of a declaration. This spec does not carry that header — it is
+## one of 24 that do not. That is a documentation gap and it stops nothing: the spec states
+## every fact the header would carry, in its body, normatively, and §9.2 in particular is an
+## explicit six-line list of installed types that is a declaration in all but placement.
+##
+## So: `derived_from` on every field, naming the section. **Two fields are inferred from
+## ABSENCE rather than read off a statement** — `points_exposed` and `owned_kinds` — and both
+## say so inline. That is the entire cost of the missing header, and it is written down rather
+## than smoothed over, because a derivation presented as a transcription is the failure this
+## whole file exists to prevent.
+##
+## The header is routed to arch as a filled-in draft (`ROUTING-2026-09-06-c-arch-*`), with the
+## derivation table in `shared/spec-data/history-v1.7/MANIFEST.md` as its proposed content.
+
+[extension]
+name     = "HISTORY"
+spec     = "EXTENSION-HISTORY.md"
+version  = "1.7"
+snapshot = "history-v1.7"
+grade    = "active"                  # spec header "**Status**: Active". NOTE: this spec has no
+                                     # "Conformance grade:" line at all — CONTENT and TYPE are the
+                                     # only two that do. `active` is the Status value, and it is a
+                                     # DIFFERENT axis from GUIDE §9's grade. Recorded as the
+                                     # document's own word rather than mapped onto CONTENT's scale.
+
+# ── [contract] — DERIVED. Every field names its section. ────────────────────────────────
+[contract]
+depends          = []                # §"Depends": ENTITY-CORE-PROTOCOL v7.19+ only. No extension
+                                     # prerequisite — see [core_depends]. §1.2 discusses TREE,
+                                     # SUBSCRIPTION and REVISION as RELATIONSHIPS, not dependencies,
+                                     # and §8.3 is explicit: "They're independent extensions sharing
+                                     # the emit pathway as the integration point."
+owned_namespaces = ["system/history/"]
+owned_ops        = ["system/history:query", "system/history:rollback"]
+owned_types      = [
+  "system/history/transition",       # §2.1
+  "system/history/config",           # §2.2
+  "system/history/query-params",     # §2.3
+  "system/history/query-result",     # §2.4
+  "system/history/rollback-params",  # §4.3.2
+  "system/history/rollback-result",  # §4.3.2
+]
+owned_kinds      = []
+points_exposed   = []
+points_consumed  = ["emit.tree_change"]
+
+[contract.derived_from]
+# Every [contract] field above, and the section it was read out of. Checkable against the
+# snapshot digest — which is the property that makes a derivation worth as much as a
+# transcription, and the reason this block exists rather than a sentence in a README.
+depends          = "the `**Depends**` header line + §8.3 Independence"
+owned_namespaces = "§3.1 (head pointers at `system/history/head/{path}`), §6.1 (config at `system/history/config/{name}`), §4.1 (handler at pattern `system/history`)"
+owned_ops        = "§4.1 handler manifest + §9.3 Handler Registered — `query` and `rollback`, with input/output types"
+owned_types      = "§9.2 Types Installed — an explicit six-entry list. The per-type section cites are §2.1, §2.2, §2.3, §2.4, §4.3.2, §4.3.2"
+points_consumed  = "§5.1 Recording Transitions + SYSTEM-COMPOSITION §2.2 position 4. HISTORY does not register a hook; it IS one"
+# ↓ the two that are readings rather than readings-off
+points_exposed   = "INFERRED FROM ABSENCE. Nothing in the document exposes a registration hook for another extension to plug into. §8.3 says extensions share the emit pathway as the integration point, which is the CORE's hook and not one HISTORY owns. If arch's header says otherwise this field is wrong and the gate that would have caught it does not exist."
+owned_kinds      = "INFERRED FROM ABSENCE. No `properties.kind` value appears anywhere in the document (`grep -c 'properties.kind' EXTENSION-HISTORY.md` -> 0). Same caveat as above."
+
+[core_depends]
+protocol = ">=7.19"                  # §"Depends". The emit pathway HISTORY consumes is §6.10 /
+                                     # v7.74 §6.13(c); 7.19 is the floor the spec names and we do
+                                     # not raise it on our own reading.
+cbor     = ">=1.0"                   # §"Encoding": ENTITY-CBOR-ENCODING (ECF). No minimum is
+                                     # stated in the header — recorded as the unconstrained floor
+                                     # rather than invented. §2.1's content-addressing of the
+                                     # transition entity is the only ECF dependence.
+
+# ── [surfaces] — FOUR faces, and the fourth is why this extension was chosen ────────────
+# CONTENT had three. HISTORY is the first extension this repo builds that registers an EMIT
+# CONSUMER, which is the face `DESIGN-THE-SDK-LAYER` §1 named and nothing had exercised.
+[surfaces]
+handler        = "system/history"    # §4.1 manifest at the pattern path; index at
+                                     # system/handler/system/history
+types          = true                # §9.2 — six types, published by the module
+sdk            = true                # the in-process surface — see [sdk]
+emit_consumers = ["tree_change"]     # §5.1. THE NEW FACE. Position 4 of SYSTEM-COMPOSITION §2.2,
+                                     # class "bounded reactive", self-guarded per §3.2.
+service_owning = false               # §11.6.9 start/stop not required; the recorder is stateless
+                                     # over the peer's tree and content store
+
+[install]
+model = "sdk-native"                 # same forcing as CONTENT: the wire `system/handler:register`
+                                     # op refuses `system/*` patterns (core §6.2) and this pattern
+                                     # IS `system/history`. Not a choice.
+
+# ── [emit_consumer] — the position, the class, and the self-guard ───────────────────────
+# All three are normative and NONE of them is in `EXTENSION-HISTORY.md` alone, which is why
+# SYSTEM-COMPOSITION.md is in this snapshot.
+[emit_consumer.tree_change]
+position   = 4                       # SYSTEM-COMPOSITION §2.2: "4. History — bounded reactive
+                                     # (record transition, self-guarded)"
+class      = "bounded-reactive"      # §2.2 ordering principle: transparent first, bounded next,
+                                     # unbounded last
+fires_after  = "clock context (2) and clock persistence (3)"
+fires_before = "compute (5), structural summaries (6), auto-version (7), subscription (8)"
+rationale  = "§2.2(4): 'Records the transition. Writes a history entity, which produces a new event, but the self-guard prevents history recording its own writes.'"
+self_guard = "system/history/head"   # §3.2 `is_local_history_path`. NARROWER THAN THE NAMESPACE
+                                     # ON PURPOSE: the guard targets engine-written paths
+                                     # (`system/history/head*`), NOT all of `system/history/`.
+                                     # §3.2: "Configuration paths (system/history/config/*) are
+                                     # handler-written via explicit EXECUTE and do not create
+                                     # recursion risk -- they SHOULD be recorded as normal
+                                     # transitions for audit purposes."
+guard_is_local_only = true           # §3.2: the guard fires only for the LOCAL peer's namespace.
+                                     # A remote peer's `system/history/` arriving via sync MAY be
+                                     # tracked; the resulting head pointer is at
+                                     # `/{local}/system/history/head/{remote}/...` and is excluded
+                                     # by the same check, so there is no recursion.
+
+# ── [sdk] — the in-process surface ──────────────────────────────────────────────────────
+# Same rule as CONTENT: no conformance gate on this face, so THE EXTENSION IS THE INSTRUMENT.
+# `reached_by` names the oracle check that exercises each entry.
+[sdk.RecordTransition]
+cite       = "§5.1 emit_entity"
+public     = false                   # module-private: it is the emit consumer's body, reachable
+                                     # only from the registered consumer, never from a caller
+reached_by = ["history/transition_recorded", "history/chain_two_transitions"]
+
+[sdk.FindHistoryConfig]
+cite       = "§6.2 find_history_config + §2.2 pattern specificity"
+public     = true
+reached_by = []                      # HONESTLY UNMEASURED by the oracle's history category, which
+                                     # never configures two competing patterns. The spec's OWN
+                                     # required vector HIST-CONFIG-SPECIFICITY-1 (§6.2) covers it
+                                     # and does not exist upstream -- so we built it as a unit test
+                                     # in both insertion orders. See [assumptions].specificity.
+
+[sdk.QueryHistory]
+cite       = "§4.3.1"
+public     = true
+reached_by = ["history/limit_returns_1", "history/limit_has_more", "history/event_filter_only_created"]
+
+[sdk.Rollback]
+cite       = "§4.3.2"
+public     = true
+reached_by = ["history/rollback_restored_hash", "history/rollback_verify_binding", "history/rollback_new_transition", "history/rollback_invalid_hash_rejected"]
+
+[sdk.IsInHistory]
+cite       = "§4.3.2 is_in_history + §7.5 exfiltration prevention"
+public     = true
+reached_by = ["history/rollback_invalid_hash_rejected"]
+note       = "§7.5 is the security clause: rollback may only restore an entity that was previously at that path. The check is what stops rollback being an arbitrary write primitive."
+
+# ── [assumptions] — where the spec did not decide, with the value we emitted ─────────────
+[assumptions]
+event_vocabulary = { value = "modified -> updated", cite = "§2.1 event table vs core §6.10", note = "THE SPEC AND THE PEER DISAGREE ON A STRING. HISTORY §2.1's event table is created/updated/deleted/accessed; the core emit pathway's TreeChangeEvent eventType is created/modified/deleted (all three peers, measured). `updated` and `modified` are the same event under two names. We map at the consumer boundary and record §2.1's spelling in the transition, because §2.1 is what the transition entity's schema says and the oracle's `chain_latest_event_updated` check reads it. Routed to arch as a naming-alignment note, NOT as a blocker." }
+default_events   = { value = ["created", "updated", "deleted"], cite = "§2.2 'Default events' + §5.1", note = "accessed is opt-in; see [substrate.accessed_event]" }
+
+default_limit    = { value = 50, cite = "§2.3 'Maximum transitions to return. Default: 50'" }
+timestamp_source = { value = "wall-clock ms since epoch, from the host", cite = "§2.1 timestamp + §5.1 system_clock_ms()", note = "§2.1's `clock` field is ABSENT in our transitions: it is `optional: true` and explicitly 'Absent when the clock extension is not installed'. CLOCK is not in this composition. The oracle's `transition_clock_structured` check is therefore expected to SKIP or pass vacuously -- recorded so a pass is not read as evidence we implemented it." }
+specificity      = { value = "three-key tuple (literal segments, total depth, lexicographic)", cite = "§6.2 v1.7 MUST", note = "§6.2 makes this a MUST *and ships its own required conformance vector* HIST-CONFIG-SPECIFICITY-1, which does not exist upstream: no check in the oracle's 27 configures two competing patterns. We implemented the vector as a unit test in BOTH insertion orders, which is what the spec asks for and what makes the test capable of failing -- a scalar-specificity implementation passes one order by luck." }
+
+# ── [substrate] — MUSTs whose satisfiability differs per peer, measured per peer ─────────
+#
+# THE ONE THAT DECIDED THE SHAPE OF THIS EXTENSION.
+#
+# §2.1 makes `author` and `capability` NON-OPTIONAL fields of the transition entity, and §9.1
+# makes recording them a MUST. Both come from the execution context that §5.1 says the emit
+# pathway delivers with the event. On all three peers, it does not.
+[substrate.execution_context]
+must = "§2.1 + §9.1 MUST -- record `author` and `capability` (and SHOULD `handler`, `operation`, `chain_id`) from the execution context delivered with the tree-change event (§5.1, SYSTEM-COMPOSITION §1.4)"
+typescript = "FIELD PRESENT, NEVER POPULATED"
+                                     # `EmitContext` (src/emit/emit-bus.ts:11) declares chainId,
+                                     # parentChainId, author, callerCapability, requestId, bounds,
+                                     # cascadeDepth, handlerGrant, handlerPattern, operation --
+                                     # the §1.4 inventory almost exactly. And it is CONSTRUCTED AT
+                                     # ZERO SITES.
+                                     #
+                                     # The decisive check is the type, not the call sites:
+                                     #   $ grep -rn 'EmitContext' src/ --include=*.ts
+                                     #   emit/emit-bus.ts:11   the interface declaration
+                                     #   emit/emit-bus.ts:42   the field on TreeChangeEvent
+                                     #   emit/emit-bus.ts:103  the parameter of emitTreeChange
+                                     #   store/entity-tree.ts:1,34,45  the import + two defaults
+                                     # Six occurrences, no constructor, no object literal, no
+                                     # caller. `put`/`remove` default it to `null` and
+                                     # `compareAndPut` hardcodes `null` at the emit call
+                                     # (entity-tree.ts:88).
+                                     #
+                                     # Call-site count, for extent rather than proof: 18 tree
+                                     # writes outside `entity-tree.ts`, none passing a third
+                                     # argument. (An earlier draft of this block said 23 and that
+                                     # a regex found 5 three-arg calls; the 5 were false positives
+                                     # -- the comma was inside `abs(ctx, pattern)`. Corrected, and
+                                     # the type-level check above is why the conclusion did not
+                                     # move.) So every event carries `context: null`.
+python     = "NO CONTEXT FIELD"      # `TreeEvent` is (event_type, path, new_hash, previous_hash).
+                                     # The dataclass is frozen+slots; there is no slot to fill.
+rust       = "NO CONTEXT FIELD"      # `TreeChangeEvent` is (event_type, path, new_hash,
+                                     # previous_hash). Same shape as python.
+probe      = "languages/<t>/gates/emit-context/probe-*.{mjs,py,sh}"
+consequence = """
+THE FOUR ORACLE CHECKS THAT READ THESE FIELDS CANNOT PASS FROM EVENT DATA ON ANY OF THE THREE:
+`context_author_present`, `context_capability_present`, `context_handler_present`,
+`context_operation_present` (entity-core-go cmd/internal/validate/history.go:43-46).
+
+WHAT WE EMIT, AND WHY IT IS A READING RATHER THAN A WORKAROUND. §2.1 defines the values for the
+autonomous case exactly: author = "For autonomous operations (no external request), the local
+peer's identity hash"; capability = "For autonomous operations, the handler grant". A tree-change
+event arriving with no execution context is, from the recorder's vantage, indistinguishable from
+an autonomous write -- so the recorder records the autonomous reading, which is the one the spec
+supplies for that state.
+
+AND IT IS WRONG DATA, WHICH IS THE POINT AND IS NOT SMOOTHED OVER. A `system/tree:put` that
+arrived over the wire from a remote caller is NOT autonomous, and the transition will say it was.
+§7.2 calls the capability field the answer to "under what authority?" -- and on these peers the
+answer is always "its own", for every write, including one it did not originate. That is a
+degraded audit trail, not a satisfied MUST, and reporting it as satisfied would be exactly the
+D13 failure one level up.
+
+SO THE MODULE REFUSES TO CLAIM IT. `provenance` is recorded on every transition as an explicit
+field of our own -- `"context"` when the event carried one, `"autonomous-fallback"` when it did
+not -- and the composition's SYSTEM.toml declares `context_provenance = "fallback"`. A reader of
+a transition can tell which it is. Routed to keystone as H8.
+"""
+
+
+# ── [substrate.path_permission] — the row the SECOND port added ─────────────────────
+[substrate.path_permission]
+must = "§4.2 check 2 -- the caller must hold capability over the TARGET PATH, checked with core's `check_path_permission` (§6.3) against handler pattern `system/tree`"
+typescript = "THE PEER'S OWN FUNCTION"
+                                     # `Permissions.checkPathPermission(operation, path,
+                                     # capability, handlerPattern, localPeerId)` is public
+                                     # and is exactly §4.2's named primitive. Called directly.
+python     = "REBUILT FROM check_permission"
+                                     # THERE IS NO `check_path_permission` ON THIS PEER.
+                                     # `entity_core.peer.capability` exposes
+                                     # `check_permission(local, granter, exec, token,
+                                     # handler_pattern)`, and every scope helper it uses --
+                                     # `_grants_of_token`, `_matches_scope`, `_covered`,
+                                     # `_canon` -- is leading-underscore.
+                                     #
+                                     # The port SYNTHESISES an EXECUTE entity describing the
+                                     # TARGET access (operation get/put, uri and resource =
+                                     # the target path) and calls the peer's own
+                                     # `check_permission` with `system/tree` as the pattern.
+                                     # Never signed, never dispatched -- an argument shaped
+                                     # the way the peer's predicate expects.
+rust       = "unknown"               # no port yet
+note = """
+THE FIRST DRAFT HAND-WALKED THE GRANTS and it is worth recording why that was wrong twice
+over. It denied every request the oracle made -- 23 of 34 checks failed on one root cause --
+and it was the wrong SHAPE regardless of the bug: re-transcribing part of core §5.2's scope
+logic inside an extension is what L18 and D12 warn about, and a second reading of a shared
+AUTHORIZATION algorithm is a security divergence waiting to be found by somebody else.
+
+L7 is the rule that applies -- check the toolkit before you build. The peer had a predicate
+that answers the question; it just did not have the one §4.2 names.
+
+**AND THIS IS A ROUTING ITEM, NOT A COMPLAINT.** §4.2 names `check_path_permission` as core
+§6.3's function. One peer exports it and one does not, so an extension author following §4.2
+literally can implement it on one substrate and not the other. Routed to keystone.
+"""
+
+[substrate.accessed_event]
+must = "§2.1 + §5.2 -- the `accessed` event is recorded on tree READS for paths whose config lists it. §9.1 grades it MAY."
+typescript = "NOT REACHABLE FROM AN EMIT CONSUMER"
+python     = "NOT REACHABLE FROM AN EMIT CONSUMER"
+rust       = "NOT REACHABLE FROM AN EMIT CONSUMER"
+note = """
+§5.2 puts read-audit inside `handle_get` -- the TREE HANDLER's body -- not in the emit pathway.
+The emit pathway fires on the Bind step (§6.10) and a read binds nothing, so no consumer on any
+of the three peers observes a read at all. Implementing `accessed` would require either replacing
+the peer's tree handler or patching it, and patching a peer is the one thing this repo does not do.
+
+It is a MAY (§9.1), so NOT implementing it is conformant, and `config.events` accepts "accessed"
+and simply never matches. Declared here rather than left as a silent hole: the difference between
+"we chose not to" and "the substrate cannot" is exactly what [substrate] blocks are for, and this
+one is the second.
+"""
+
+
+# ── [error_surface] — AUTHORED. And the finding is what is NOT in it. ───────────────
+#
+# **HISTORY HAS NO CODE SET AT ALL.** `EXTENSION-CONTENT` gained Appendix A in v3.7 —
+# a table that pins its handler's codes, written because "every code in this document was
+# undefined by construction of the corpus". `EXTENSION-HISTORY` v1.7 has no such appendix,
+# so the `spec` class below is EMPTY and every code this handler emits is either core
+# §3.3's or undefined.
+#
+# That is the second extension's evidence for the same defect, and it makes it a corpus
+# problem rather than one document's oversight. Routed as ROUTING-2026-09-06-c-arch-* A-1,
+# with this block as the proposed content of HISTORY's Appendix A.
+#
+# Measured: `./tools/check-error-codes.py`
+
+[error_surface]
+# Class 1 — SPEC. Defined in this extension's own code set. THERE IS NO CODE SET.
+spec = []
+
+# Class 2 — CORE. `ENTITY-CORE-PROTOCOL` §3.3's status table, which enumerates its
+# more-specific codes by name.
+#   unexpected_params      §3.3's 400 row, named
+#   capability_denied      §3.3's 403 row default; §4.2's dual check denies with it
+#   unsupported_operation  §3.3's 501 row default
+#   storage_error          §3.3's 500 row, named — "a content-store or tree bind/read
+#                          failed". Used for a rollback target that IS in the chain but
+#                          whose entity has been GC'd (§3.3), which is neither a 404 nor
+#                          CONTENT's `blob_not_found` — see handler.ts for why borrowing
+#                          another extension's code would be wrong under §8.3 independence.
+core = ["unexpected_params", "capability_denied", "unsupported_operation", "storage_error"]
+
+# Class 3 — UNRESOLVED. Emitted, named by the spec, defined in NO spec code set.
+unresolved = ["path_required", "not_in_history"]
+
+[error_surface.unresolved_detail."path_required"]
+dated  = "2026-09-06"
+routed = "ROUTING-2026-09-06-b-arch-the-code-set-that-omits-the-code-it-musts"
+note = """
+Identical to CONTENT's instance and carried for the same reason: GUIDE-EXTENSION-DEVELOPMENT
+§4.1 makes a resource-less directly-callable op a `400 path_required` and calls itself the
+authority; core §3.3's 400 row does not enumerate it. §4.3.1's and §4.3.2's EXECUTE examples
+both carry a `resource`, so the rule applies here.
+
+**The SECOND extension inheriting one unresolved code is the argument that it is a corpus
+fact rather than a CONTENT quirk.** Same routing packet, now with two call sites.
+"""
+
+[error_surface.unresolved_detail."not_in_history"]
+dated  = "2026-09-06"
+routed = "ROUTING-2026-09-06-c-arch-the-second-extension-and-what-the-emit-face-measured"
+emitted_by = "the rollback path, §4.3.2"
+asserted_by = "entity-core-go `history` category, `rollback_invalid_hash_rejected`"
+note = """
+§4.3.2's algorithm names it directly — `return error(404, "not_in_history", "Target hash not
+found in history for this path")` — so unlike `path_required` there is no ambiguity about
+what to emit. What is missing is a TABLE: the spec has no Appendix A, so under core §3.3's
+default-code force the string is a more-specific 404 that no spec code set defines, and
+§3.3's 404 default is `handler_not_found` — which would be actively wrong here.
+
+We emit `not_in_history` because the spec's own pseudocode does and the oracle asserts it.
+It is `unresolved` rather than `spec` because pseudocode is not a code set, and that
+distinction is the whole content of CONTENT v3.7's Appendix A.
+
+**§7.5 is why this code matters more than most.** It is the refusal that stops rollback
+being an unrestricted write primitive; a caller has to be able to tell it apart from a
+storage failure, and a code nothing defines is a code an implementation may spell
+differently.
+"""
+
+
+# ── [sdk_surface] — OUR standard (D16), and the second extension it has covered ──────
+#
+# `tools/sdk-parity.py`, in `make check`. Every public name in every port is declared in
+# exactly one class; an UNDECLARED name is a failure, because the failure this catches is
+# a name arriving without anyone deciding.
+#
+# **THE GATE PAID FOR ITSELF ON ITS FIRST RUN HERE, AND NOT BY FINDING DRIFT.** CONTENT's
+# first run reported 18 drifting names, almost all of it one decision — `typescript`
+# bundled the type-name and chunking constants into objects, `python` and `rust` exported
+# them flat — made once in the first port and never made again. This extension started
+# down the identical path: 22 names in both ports, 20 differing, the same bundle-vs-flat
+# split. **Because the gate existed, the decision got made instead of accumulating.** The
+# flat names are the contract in every port; the grouped objects survive as aliases.
+#
+# After: 39 in both ports, 3 differing. Command:
+#   `./tools/sdk-parity.py extension-contracts/history`
+#
+# D16's promotion criterion was "if it survives a second extension, that is two incidents
+# in two shapes and it goes upstream as a proposal". It did not survive — which is the
+# gate working, and it means the proposal still lacks its second incident. Recorded so
+# nobody reads 39-of-42 as the evidence D16 was waiting for.
+
+[sdk_surface]
+# Class 1 — THE CONTRACT. Every port exports every one of these.
+required = [
+  "const:all_types",
+  "const:config",
+  "const:config_prefix",
+  "const:default_events",
+  "const:default_query_limit",
+  "const:event_accessed",
+  "const:event_created",
+  "const:event_deleted",
+  "const:event_updated",
+  "const:head_prefix",
+  "const:history_pattern",
+  "const:query_params",
+  "const:query_result",
+  "const:rollback_params",
+  "const:rollback_result",
+  "const:transition",
+  "fn:build_context",
+  "fn:canonicalize_pattern",
+  "fn:compare_specificity",
+  "fn:config_path",
+  "fn:from_core_event_type",
+  "fn:history_config",
+  "fn:history_entity",
+  "fn:history_type_defs",
+  "fn:history_type_entities",
+  "fn:install_history",
+  "fn:pattern_matches",
+  "fn:pattern_specificity",
+  "fn:publish_history_types",
+  "fn:resolve_config",
+  "type:history_config",
+  "type:history_handler",
+  "type:history_installation",
+  "type:history_recorder",
+  "type:recorded_transition",
+  "type:recorder_identity",
+  "type:recorder_stats",
+  "type:specificity",
+  "type:transition_context",
+]
+
+# Class 2 — SUBSTRATE-CONDITIONAL. Present only where the substrate forces it.
+[sdk_surface.substrate."type:history_handler_options"]
+ports  = ["typescript"]
+reason = "the options-object constructor idiom. `python` takes `max_walk` as a keyword argument, which is the same configuration with no type to name. Not a choice either port can make differently without stopping being idiomatic."
+
+# Class 3 — DRIFT. Measured, dated, NOT blessed; `--strict-drift` makes each an error.
+#
+# **Both entries are the SAME decision and it is a decided one**, which is a distinction
+# this gate has no class for: `drift` means "measured, unresolved", and these are
+# resolved — the flat constants are the contract (see `required`) and these are ergonomic
+# groupings a `typescript` caller may prefer. They are filed here rather than in
+# `substrate` because nothing about the substrate forces them; a future port may add its
+# own grouping or none.
+#
+# **The missing class is the finding.** `sdk-parity` has required / substrate / drift and
+# no way to say "an alias, deliberately, in one port". Filing a decided difference as
+# undecided is the same shape as reporting `unknown` for a measured value — recorded here
+# rather than fixed, because a fourth class is a change to a shared instrument and this is
+# one extension's evidence for it.
+[sdk_surface.drift."type:history_types"]
+note = "ts grouping object over the six flat type-path constants, which are `required` and are the contract. Decided, not undecided — see the block comment above."
+[sdk_surface.drift."type:history_event"]
+note = "ts grouping object over the four flat EVENT_* constants; same decision, same reason."

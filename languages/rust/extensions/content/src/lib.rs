@@ -1,4 +1,4 @@
-//! `entity_content` — CONTENT v3.6 for the `rust` keystone peer.
+//! `entity_content` — CONTENT v3.7 for the `rust` keystone peer.
 //!
 //! **The public surface. What is not re-exported here is not part of it — and one
 //! omission is a MUST rather than a taste:** `reassemble_content` lives in a `mod
